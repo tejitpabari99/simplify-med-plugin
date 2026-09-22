@@ -4,6 +4,13 @@
 
 simplify-med is a Claude Code plugin that turns a clinical document into a plain-language, fact-checked care plan. A deterministic pipeline of scripts and LLM stages grounds every statement to a line of the original document, assembles a structured care plan, reviews and corrects it for fidelity and coverage, and renders it to Markdown and a single self-contained HTML page. Every interim file the pipeline writes is schema-validated and logged, so a full run leaves an auditable trail from source text to final output.
 
+## Documentation
+
+- [`docs/README.md`](docs/README.md) — index of the documentation suite.
+- [`docs/overview.md`](docs/overview.md) — what simplify-med is, how to install and run it, and what a report contains.
+- [`docs/architecture.md`](docs/architecture.md) — a deep dive: the run folder, the stage graph, every deterministic check, the data contracts, and testing.
+- [`docs/plugins.md`](docs/plugins.md) — for adding support for another platform.
+
 ## Layout
 
 ```
@@ -32,7 +39,7 @@ docs/agent_files/...           design brief and futures list (excluded from pack
 `SKILL.md` (`skills/simplify-med/SKILL.md`) is the entry point: it walks the
 model running the skill through unitizing the input, dispatching each LLM
 stage to its `agents/simplify-med-<stage>` agent (or running the stage
-in-context on a host without sub-agents), and running the deterministic
+in-context if sub-agents aren't available), and running the deterministic
 check script after each one, with one retry on a validation failure.
 
 1. **Unitize** (script) splits the input into numbered units and chunks.
@@ -82,10 +89,8 @@ line of the original document it came from.
 
 - One `.txt` file per source document.
 - Insert a form-feed character (`\f`) between pages when page boundaries are known.
-- Each input file has a declared extraction method: `native` (text layer extracted
-  directly from a digital document), `ocr` (extracted via optical character
-  recognition from a scan or image), or `pasted` (typed or pasted in by a person,
-  no reliable page/line structure guaranteed).
+- Optionally suffix a file with `:native` (default), `:ocr`, or `:pasted` to label
+  its extraction method in the audit trail.
 
 ## Run folder layout
 

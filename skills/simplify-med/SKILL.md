@@ -1,6 +1,6 @@
 ---
 name: simplify-med
-description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text the host has already extracted; produces report.html and report.md in a run folder.
+description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces report.html and report.md in a run folder.
 ---
 
 Resolve `<skill>` once, at the start, to the absolute path of the directory
@@ -22,14 +22,11 @@ audit trail from source text to final report.
 
 ## 2. Before you start
 
-- Confirm `python3 --version` works on this host.
+- Confirm `python3 --version` runs.
 - Get the input as one or more `.txt` files, one per source document. If
-  the user supplied a PDF, DOCX, image, or scan, extract its text with the
-  host's own tools first and save the result as `.txt`. If page boundaries
+  the user supplied a PDF, DOCX, image, or scan, extract its text with
+  your own tools first and save the result as `.txt`. If page boundaries
   are known, insert a form-feed character (`\f`) between pages.
-- For each file, decide its extraction method: `native` (a real text layer
-  or DOCX/HTML), `ocr` (an image or a scanned page), or `pasted` (text the
-  user typed or pasted, no reliable page/line structure).
 - Treat every file the user gave you for this request as one visit.
 - Do not ask the user about a simplification level -- there is exactly one.
 - Tell the user, in one line, that you are starting and that it takes
@@ -49,12 +46,12 @@ needs a retry. On exit 1, read stderr -- it is written for a human. On exit
 
 ## 4. How to dispatch an LLM stage
 
-On a host with sub-agents, dispatch the agent named `simplify-med-<stage>`
+If you can dispatch sub-agents, dispatch the agent named `simplify-med-<stage>`
 (defined under `agents/`) with this exact message shape. This plugin
 registers these agents; their definitions are at `<plugin>/agents/<stage>.md`
 (`<plugin>` being the parent directory of `skills/`, a sibling of `skills/`,
-not a child of `<skill>`), which a host that does not auto-register agents
-can read and use as the sub-agent's system prompt.
+not a child of `<skill>`) -- if agents are not auto-registered for you, read
+this file yourself and use it as the sub-agent's system prompt.
 
 ```
 Stage file: <skill>/stages/<stage>.md
@@ -64,9 +61,9 @@ Reference dir: <skill>/reference
 Schema dir: <skill>/schema
 ```
 
-Run every task of a parallel group at the same time when the host allows
-it, respecting any host concurrency limit. On a host without sub-agents:
-read the stage file yourself and perform the stage in the current context,
+Run every task of a parallel group at the same time when you can run tasks
+in parallel, respecting any concurrency limit you have. Otherwise, read
+the stage file yourself and perform the stage in the current context,
 writing the output file, one stage at a time, in the same order as below
 -- never skip a stage because it feels redundant.
 
@@ -85,8 +82,12 @@ section 12 and continue.
 ## 5. Stage 0 -- unitize (script)
 
 ```
-python3 <skill>/scripts/unitize.py --runs-dir <cwd>/simplify-runs --input <file>[:native|ocr|pasted] [--input <file>[:method] ...]
+python3 <skill>/scripts/unitize.py --runs-dir <cwd>/simplify-runs --input <file> [--input <file> ...]
 ```
+
+Append `:ocr` to a file you transcribed from an image or scanned page,
+`:pasted` to text the user typed or pasted; otherwise nothing (default
+`native`). This only labels the audit trail.
 
 The last line of stdout is `<run>` -- resolve it to an absolute path and
 use it for everything below. This is unitize's one exception to section
@@ -206,7 +207,7 @@ browser, works offline, and has tick-boxes that remember their state;
 verbatim; each notice verbatim; and one sentence that this is a reading
 aid, not medical advice. Do NOT paste the plan into chat, and do NOT
 mention fact ids, line numbers, chunk counts, or any other run internals.
-If the host can offer file downloads, offer `report.html` and
+If you can offer file downloads, offer `report.html` and
 `report.md`. If the user asks how a statement was verified, or wants
 sources, run:
 
