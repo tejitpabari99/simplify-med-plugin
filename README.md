@@ -27,10 +27,34 @@ tests/                         unittest modules and fixtures
 docs/agent_files/...           design brief and futures list (excluded from packages)
 ```
 
-Some of the directories above (`stages/`, `reference/`, `templates/`, `agents/`, and the
-non-`validate.py`/`runlog.py` scripts) are populated by later sub-projects; this
-sub-project lays down the metadata, schemas, validator, run logger, packaging, and
-tests that everything else builds on.
+## How a run works
+
+`SKILL.md` (`skills/simplify-med/SKILL.md`) is the entry point: it walks the
+model running the skill through unitizing the input, dispatching each LLM
+stage to its `agents/simplify-med-<stage>` agent (or running the stage
+in-context on a host without sub-agents), and running the deterministic
+check script after each one, with one retry on a validation failure.
+
+1. **Unitize** (script) splits the input into numbered units and chunks.
+2. **Ground** (one agent per chunk) `‖` **Glossary** (one agent) run in
+   parallel, then `merge_facts` verifies and renumbers the surviving facts.
+3. **Assemble** (one agent) turns the fact ledger into a typed care plan;
+   `cite_check` drops anything uncited and `numeric_parity` flags number
+   mismatches as hints for the next stage.
+4. **Review: fidelity** `‖` **Review: coverage** run in parallel, then
+   `sanitize_review` resolves both into a corrections list and a missing-facts
+   list.
+5. **Correct** (skipped if there are no corrections) `‖` **Assemble-missing**
+   (skipped if nothing is missing) run in parallel; `diff_guard` and
+   `cite_check --additions` verify their output stays inside its bounds.
+6. **Finalize** (script) merges everything, re-checks citations, re-detects
+   the glossary against the final text, sweeps for leaked names, scores
+   readability, and renders `report.md` / `report.html`. `render_audit.py`
+   builds `report.audit.md` on request, never automatically.
+
+Every stage's outcome (`ok` / `degraded` / `skipped` / `failed`) is recorded
+in `run.json`; ground and assemble failing stops the run, everything else
+degrades gracefully and the report carries a plain-language notice.
 
 ## Install for local dev
 
@@ -39,6 +63,20 @@ claude --plugin-dir /path/to/simplify-med-plugin
 ```
 
 Then invoke the `simplify-med` skill from within Claude Code.
+
+## Try it
+
+```
+claude --plugin-dir /path/to/simplify-med-plugin
+```
+
+Then ask Claude to simplify a clinical document, e.g. "simplify this visit
+note for me" with a `.txt` file attached or pasted. Each run is written to
+`simplify-runs/<run-id>/` in the current working directory (gitignored) --
+that folder is the full audit trail, from the numbered source units through
+`report.html`. Ask "how was this verified?" or "show your sources" to get
+`report.audit.md`, which pairs every statement in the plan with the exact
+line of the original document it came from.
 
 ## Input contract
 
