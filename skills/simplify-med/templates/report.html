@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title</title>
+<style>
+:root{
+  --bg:#ffffff;
+  --fg:#14171a;
+  --muted:#4b5563;
+  --card-bg:#f8fafc;
+  --card-border:#dfe3e8;
+  --accent:#1d4ed8;
+  --notice-bg:#fff7ed;
+  --notice-border:#fdba74;
+  --notice-fg:#7c2d12;
+  --pill-bg:#e5e7eb;
+  --pill-fg:#111827;
+  --pop-bg:#111827;
+  --pop-fg:#f9fafb;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f172a;
+    --fg:#f1f5f9;
+    --muted:#cbd5e1;
+    --card-bg:#1e293b;
+    --card-border:#334155;
+    --accent:#93c5fd;
+    --notice-bg:#422006;
+    --notice-border:#b45309;
+    --notice-fg:#fed7aa;
+    --pill-bg:#334155;
+    --pill-fg:#f1f5f9;
+    --pop-bg:#f1f5f9;
+    --pop-fg:#111827;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f172a;
+  --fg:#f1f5f9;
+  --muted:#cbd5e1;
+  --card-bg:#1e293b;
+  --card-border:#334155;
+  --accent:#93c5fd;
+  --notice-bg:#422006;
+  --notice-border:#b45309;
+  --notice-fg:#fed7aa;
+  --pill-bg:#334155;
+  --pill-fg:#f1f5f9;
+  --pop-bg:#f1f5f9;
+  --pop-fg:#111827;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;
+  line-height:1.65;
+}
+.page{max-width:720px;margin:0 auto;padding:28px 16px 64px;}
+h1{font-size:1.6em;margin:0 0 6px;}
+h3{font-size:1.05em;margin:18px 0 8px;}
+p{margin:0 0 12px;}
+.interactive-hint{color:var(--muted);font-size:0.9em;margin:0 0 20px;}
+.score-line{font-style:italic;color:var(--muted);margin:0 0 24px;}
+.notice{background:var(--notice-bg);border:1px solid var(--notice-border);color:var(--notice-fg);border-radius:10px;padding:14px 16px;margin:0 0 24px;}
+.notice p{margin:0 0 6px;}
+.notice p:last-child{margin-bottom:0;}
+details{border-bottom:1px solid var(--card-border);margin-bottom:10px;padding-bottom:8px;}
+details:last-of-type{border-bottom:none;}
+summary{cursor:pointer;font-weight:700;font-size:1.15em;padding:10px 0;list-style:revert;}
+summary::-webkit-details-marker{color:var(--muted);}
+.row{background:var(--card-bg);border:1px solid var(--card-border);border-radius:10px;padding:12px 14px;margin:10px 0;break-inside:avoid;page-break-inside:avoid;}
+.row label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;}
+.row input[type=checkbox]{margin-top:5px;width:18px;height:18px;flex:none;}
+.row-body{flex:1;}
+.row-title{font-weight:600;}
+.type-label{color:var(--muted);font-size:0.85em;}
+.row-detail{color:var(--muted);display:block;margin-top:2px;}
+.row details{border:none;margin:8px 0 0;padding:0;}
+.row details summary{font-size:0.85em;font-weight:400;color:var(--accent);padding:4px 0;}
+.row details ul{margin:4px 0 0;padding-left:20px;}
+.print-empty-box{display:none;margin-right:8px;}
+.watch-row .row-title{display:flex;align-items:center;gap:8px;font-weight:600;}
+.watch-row .row-detail{margin-top:4px;}
+.watch-extra{margin:6px 0 0;padding-left:20px;color:var(--muted);}
+.pill{display:inline-block;font-size:0.72em;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--pill-bg);color:var(--pill-fg);}
+.finding{margin:0 0 14px;}
+.finding-title{font-weight:600;}
+.finding-body{color:var(--muted);margin-top:2px;}
+.changed{color:var(--muted);}
+dl{margin:0;}
+dt{font-weight:600;margin-top:10px;}
+dd{margin:2px 0 0;color:var(--muted);}
+.term{border-bottom:1px dotted var(--accent);cursor:help;position:relative;}
+.term::after{
+  content: attr(data-def);
+  display:none;
+  position:absolute;
+  left:0;
+  top:100%;
+  background:var(--pop-bg);
+  color:var(--pop-fg);
+  padding:8px 10px;
+  border-radius:8px;
+  font-size:0.82em;
+  line-height:1.4;
+  width:max-content;
+  max-width:260px;
+  box-shadow:0 6px 16px rgba(0,0,0,.25);
+  z-index:30;
+  margin-top:4px;
+}
+.term:hover::after,.term:focus::after,.term.open::after{display:block;}
+footer{margin-top:36px;font-size:0.85em;color:var(--muted);}
+@media print{
+  .interactive-hint{display:none;}
+  input[type=checkbox]{display:none;}
+  .print-empty-box{display:inline-block;}
+  .row{break-inside:avoid;page-break-inside:avoid;}
+  summary{cursor:default;}
+  .term::after{display:none;}
+}
+</style>
+</head>
+<body>
+<div class="page">
+$body
+</div>
+<script type="application/json" id="simplify-med-plan">$plan_json</script>
+<script>
+(function () {
+  "use strict";
+
+  function beforePrintOpenAll() {
+    document.querySelectorAll("details").forEach(function (d) {
+      d.setAttribute("data-was-open", d.open ? "1" : "0");
+      d.open = true;
+    });
+  }
+  function afterPrintRestore() {
+    document.querySelectorAll("details").forEach(function (d) {
+      if (d.getAttribute("data-was-open") === "0") {
+        d.open = false;
+      }
+      d.removeAttribute("data-was-open");
+    });
+  }
+  window.addEventListener("beforeprint", beforePrintOpenAll);
+  window.addEventListener("afterprint", afterPrintRestore);
+
+  function storageAvailable() {
+    try {
+      var x = "__simplify_med_test__";
+      window.localStorage.setItem(x, x);
+      window.localStorage.removeItem(x);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  var canStore = storageAvailable();
+  var RUN_ID = $run_id;
+  var STORAGE_KEY = "simplify-med:" + RUN_ID;
+
+  function loadState() {
+    if (!canStore) { return {}; }
+    try {
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveState(state) {
+    if (!canStore) { return; }
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  var state = loadState();
+  var boxes = document.querySelectorAll('input[type="checkbox"][data-key]');
+  boxes.forEach(function (box) {
+    var key = box.getAttribute("data-key");
+    if (Object.prototype.hasOwnProperty.call(state, key)) {
+      box.checked = !!state[key];
+    }
+    box.addEventListener("change", function () {
+      state[key] = box.checked;
+      saveState(state);
+    });
+  });
+
+  document.querySelectorAll(".term").forEach(function (t) {
+    t.addEventListener("click", function (e) {
+      var wasOpen = t.classList.contains("open");
+      document.querySelectorAll(".term.open").forEach(function (o) { o.classList.remove("open"); });
+      if (!wasOpen) { t.classList.add("open"); }
+      e.stopPropagation();
+    });
+  });
+  document.addEventListener("click", function () {
+    document.querySelectorAll(".term.open").forEach(function (t) { t.classList.remove("open"); });
+  });
+})();
+</script>
+</body>
+</html>
