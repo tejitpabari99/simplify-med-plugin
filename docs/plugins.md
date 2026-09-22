@@ -41,6 +41,24 @@ before adding anything to `SKILL.md`'s frontmatter — this repo's own
 source of truth stops at the two fields above, enforced by
 `test_skill_consistency.py`.
 
+For reference, the standard Agent Skills frontmatter has six fields:
+
+| Field | Meaning |
+|---|---|
+| `name` | required; max 64 chars; lowercase letters, digits, hyphens |
+| `description` | required; what the skill does and when to use it; this is what triggers it |
+| `allowed-tools` | optional; tools the skill may use |
+| `license` | optional; license identifier or file |
+| `compatibility` | optional; runtime or platform requirements |
+| `metadata` | optional; free-form key/value map |
+
+Any other field (for example Claude Code's `context`, `agent`, `model`,
+`disable-model-invocation`) is platform-specific and must not be added to
+this skill's `SKILL.md`, because packaging for other platforms either
+fails or ignores it; put such settings in the platform wrapper instead.
+Source: the [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+and Claude Code's [skills reference](https://code.claude.com/docs/en/skills.md).
+
 **What must not be added to `SKILL.md`:** anything platform-specific
 (a Claude Code tool-permission field, a host-specific directive). Doing so
 would make the skill folder stop uploading cleanly to a plain Agent Skills
