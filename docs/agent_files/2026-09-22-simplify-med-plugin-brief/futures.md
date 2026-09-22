@@ -57,3 +57,11 @@ Route the assemble-missing agent's additions through a bounded fidelity review b
 ## Evaluation harness
 
 Fixture documents with hand-annotated ledgers and expected plans; injected-error catch-rate protocol for the reviewer; recall measurement per chunk size.
+
+## Agent reply discipline
+
+In both kill tests, some stage agents replied with more than the single line their agent file asks for (kill test 1 and kill test 2 both saw this recur in `ground` and `assemble`: a validation-summary sentence before the required status line). This is harmless -- the host only consumes the files the agent writes, never parses the reply for content -- but a host parsing agent replies programmatically would still need to defend against it. A host-level fix would be to have the orchestrator ignore agent replies entirely and read status only from the deterministic check scripts' stdout, which is already effectively what SKILL.md's driving procedure does.
+
+## Cross-document duplicate merging backstop
+
+Kill test 2's two-file bundle (a discharge summary and a standalone lab report covering some of the same analytes) showed cross-file duplicate lab facts merged correctly by the assemble agent's MERGE rule alone -- `merge_facts.py`'s dedupe key is `(unit_id, normalized quote, category)`, so two facts from different source files can never collide there even when they describe the identical value. This worked in kill test 2, but rests entirely on one LLM call's judgment with no deterministic check backing it up the way `cite_check` backs up citation presence. A deterministic backstop -- flag items whose source facts come from different files but have identical normalized text -- would make this checkable rather than trusted.

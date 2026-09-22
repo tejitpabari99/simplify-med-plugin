@@ -89,6 +89,26 @@ class TestAssembleNoNestedPhrasing(unittest.TestCase):
         self.assertIn("Say a thing once per item", self.text)
 
 
+class TestNotStatedIsAStatedReason(unittest.TestCase):
+    """Kill test 2 fix: `why` must be the clinician's stated reason for this
+    patient, never the item's usual purpose/class or a timing instruction,
+    and never mined from a fact that says the reason isn't documented."""
+
+    def test_assemble_md_has_stated_reason_and_ondansetron(self):
+        text = _read(os.path.join(STAGES_DIR, "assemble.md"))
+        self.assertIn("stated reason", text)
+        self.assertIn("ondansetron", text.lower())
+
+    def test_assemble_missing_md_has_stated_reason_and_ondansetron(self):
+        text = _read(os.path.join(STAGES_DIR, "assemble_missing.md"))
+        self.assertIn("stated reason", text)
+        self.assertIn("ondansetron", text.lower())
+
+    def test_review_fidelity_md_has_general_indication(self):
+        text = _read(os.path.join(STAGES_DIR, "review_fidelity.md"))
+        self.assertIn("general indication", text)
+
+
 class TestAgentsSingleLineReply(unittest.TestCase):
     """Fix #5: every agent file's reply instruction is strengthened to the
     exact one-line contract, and tools stay Read, Write."""

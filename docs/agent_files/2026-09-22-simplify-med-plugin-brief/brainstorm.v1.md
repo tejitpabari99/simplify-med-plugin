@@ -1,7 +1,7 @@
 # Simplify-med as a plugin — design brief
 
 Date: 2026-09-22
-Status: approved in a brainstorm session; implementation proceeds directly from this brief (no separate PRD/tasks pass, by owner decision).
+Status: approved and implemented (v0.1.0). Kill tests 1 and 2 in this folder; fixes from both applied.
 Source system: `/root/projects/juno-projects/simplify-med` at `origin/main` (commit `e0e1dce`, "Fidelity hardening: PRDs 10-18"). Read that repo's `docs/agent_files/2026-09-09-docs-fidelity-concision-brief/brainstorm.v1.md` and `backend/care_plan/prompts/*.txt` for the pipeline this plugin reproduces.
 
 ## 1. Problem

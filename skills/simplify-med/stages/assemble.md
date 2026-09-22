@@ -70,7 +70,9 @@ Every medications, tests, procedures, other, and follow_up item requires status:
 
 ### NOT STATED
 
-If a medications, tests, procedures, or other item's `why` is not given by its fact, set why to null. Do not invent a reason, and do not write an empty string ("") -- null is the only way to mark a genuinely unstated reason. The app fills in a clear message for the patient wherever why is null, so you do not need to write one yourself.
+`why` is the clinician's stated reason for adding, ordering, or continuing this item for this patient -- not the item's usual purpose, and not an instruction about when or how to use it. If a medications, tests, procedures, or other item's `why` is not given by its fact, set why to null. Do not invent a reason, and do not write an empty string ("") -- null is the only way to mark a genuinely unstated reason. `why` stays null even when the drug's usual purpose is obvious from its name or class (an antiemetic's purpose is nausea, a statin's purpose is cholesterol) and even when the fact only says when or how to take it -- a timing or dosing instruction is not a stated reason. Route that content to `timing` or `instructions` instead, never into `why`. If a fact says the reason is not documented, `why` is null no matter what else the fact states -- do not mine the rest of the fact for a plausible-sounding substitute. The app fills in a clear message for the patient wherever why is null, so you do not need to write one yourself.
+
+Worked example: a fact reads "Ondansetron 4 mg by mouth (PO) three times a day (TID) as needed (PRN) for nausea, new medication; no reason documented in the discharge chart for why PRN nausea coverage was added this admission." The fact says outright that no reason is documented, so `why: null` -- even though "nausea" appears right in the fact. "As needed for nausea" describes when to take the drug, not why it was added, so it goes in `timing` ("as needed for nausea"), not in `why`. Writing `why: "For nausea."` would restate the drug's mechanical PRN indication in place of an actual stated reason, which is exactly what this rule forbids.
 
 ### MERGE
 
