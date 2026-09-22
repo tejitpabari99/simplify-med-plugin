@@ -1,0 +1,76 @@
+# SYNTHETIC DOCUMENT -- fabricated for testing only, not a real patient record.
+CARDIOLOGY CLINIC -- VISIT NOTE
+
+Patient: Jordan A. Sample
+DOB: 1958-03-14
+Visit date: 2026-08-11
+Provider: Dr. Priya Nandakumar, MD
+
+CHIEF COMPLAINT
+Patient presents with intermittent chest tightness and shortness of breath (SOB) on exertion, present for approximately three weeks.
+
+HISTORY OF PRESENT ILLNESS
+Pt reports chest tightness radiating to the left arm, occurring after climbing two flights of stairs, resolving with rest within five minutes. Denies chest pain at rest. No prior cardiac history. Hx of hypertension, diagnosed 2019, managed with lifestyle changes only until now.
+
+REVIEW OF SYSTEMS
+Denies syncope, palpitations, orthopnea, or lower extremity edema. Reports occasional lightheadedness with exertion.
+
+PHYSICAL EXAM
+Blood pressure 148/92 mmHg, heart rate 78 bpm, regular rhythm. Lungs clear to auscultation bilaterally. No jugular venous distension. Trace bilateral ankle edema.
+
+ASSESSMENT
+1. Stable angina, new diagnosis, likely due to underlying coronary artery disease.
+2. Hypertension, poorly controlled on current regimen.
+3. Mild peripheral edema, likely medication-related, to be monitored.
+
+PLAN
+
+MEDICATIONS
+Start metoprolol 25mg BID for rate control and angina management.
+Continue lisinopril 10mg once daily (qd) for blood pressure control.
+Start aspirin 81mg once daily for cardiac protection.
+Start atorvastatin 40mg at bedtime (qhs) for cholesterol management.
+
+TESTS ORDERED
+Order exercise stress test to evaluate for inducible ischemia.
+Order fasting lipid panel and hemoglobin A1c prior to next visit.
+Order 12-lead ECG today in clinic to establish a baseline tracing.
+
+PROCEDURES
+Discussed possible coronary angiography if stress test is positive; deferred pending results.
+
+OTHER INSTRUCTIONS
+Reduce dietary sodium intake to less than 2 grams per day.
+Begin a supervised walking program, starting at ten minutes daily and increasing gradually as tolerated.
+Weigh yourself each morning and record the result in the log provided.
+
+FOLLOW UP
+Return to clinic in four weeks, on 2026-09-08, to review stress test results and reassess blood pressure control.
+Call the office if blood pressure readings at home exceed 160/100 on two separate occasions.
+
+WARNING SIGNS
+If chest tightness occurs at rest, lasts longer than fifteen minutes, or is accompanied by sweating or nausea, call 911 or go to the nearest emergency room immediately.
+If you experience new or worsening shortness of breath at rest, contact the office the same day.
+Dizziness or fainting with exertion should be reported to the office promptly.
+
+MEDICATION NOTES
+Atorvastatin may cause muscle aches in some patients; this is a known side effect to watch for but does not require immediate action unless severe.
+
+BILLING
+CPT 99214 -- established patient office visit, moderate complexity.
+Insurance authorization on file; no prior authorization required for prescribed medications.
+Next appointment scheduling handled by front desk staff.
+
+END OF VISIT NOTE, PAGE 1 OF 2.
+LABORATORY RESULTS -- ADDENDUM (PAGE 2)
+
+Specimen collected: 2026-08-11
+
+Total cholesterol: 238 mg/dL (high)
+LDL cholesterol: 156 mg/dL (high)
+HDL cholesterol: 42 mg/dL (low)
+Triglycerides: 178 mg/dL (borderline high)
+Fasting glucose: 101 mg/dL (borderline high)
+Hemoglobin A1c: 5.8 percent (prediabetic range)
+
+Result interpretation to be discussed at the follow-up visit on 2026-09-08.
