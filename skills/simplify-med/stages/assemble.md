@@ -44,7 +44,7 @@ Do these four things, in this order, and nothing else:
 
 1. Map each fact to a care-plan item of its category (see MAPPING), recording the id of every fact each item is built from in that item's `source_fact_ids` field as you go (see SOURCE_FACT_IDS). Facts are already at clause granularity, so this is close to a one-to-one map -- most facts become exactly one item.
 2. Split each item's fact content into that item's typed fields.
-3. Render every field in plain language -- apply every rule in style_rules.md -- a bounded rewrite of a few words at a time, e.g. "metoprolol 25mg BID" becomes "metoprolol 25 mg twice a day." Never rewrite a fact's meaning, only its wording.
+3. Render every field in plain language -- apply every rule in style_rules.md -- a bounded rewrite of a few words at a time, e.g. "metoprolol 25mg BID" becomes "metoprolol 25 mg twice a day." Never rewrite a fact's meaning, only its wording. `title` is the name as the note gives it; `plain_name` is the everyday name ONLY when it differs from `title`, otherwise `""`. Never nest one inside the other with parentheses in `description`, `what_it_means_for_you`, or any other field -- "high blood pressure (high blood pressure (hypertension))" is wrong; "hypertension" as `title` with `plain_name` "high blood pressure" is right. Say a thing once per item.
 4. Write `summary` from the assembled whole, and list the ids of every fact it draws from in `summary_fact_ids`.
 
 ### MAPPING -- a fact's category decides which care-plan array it becomes an item in

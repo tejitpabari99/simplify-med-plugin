@@ -149,6 +149,7 @@ def process_review(run_dir: str, run_id: str) -> bool:
         runlog.record(run_dir, "review_fidelity", "skipped", checks={
             "verdict": "pass", "corrections_in": 0, "corrections_kept": 0, "dropped_by_reason": {},
         })
+        print("review_fidelity: skipped | verdict=pass corrections_in=0 corrections_kept=0")
         return True
 
     try:
@@ -195,6 +196,10 @@ def process_review(run_dir: str, run_id: str) -> bool:
         "corrections_kept": len(kept),
         "dropped_by_reason": dropped_by_reason,
     })
+    print(
+        f"review_fidelity: ok | verdict={doc['verdict']} "
+        f"corrections_in={len(corrections_in)} corrections_kept={len(kept)}"
+    )
     return True
 
 
@@ -217,6 +222,7 @@ def process_coverage(run_dir: str, run_id: str) -> bool:
         runlog.record(run_dir, "review_coverage", "skipped", checks={
             "facts": 0, "present": 0, "missing": 0, "backfilled": 0, "unknown_dropped": 0,
         })
+        print("review_coverage: skipped | facts=0 present=0 missing=0 backfilled=0")
         return True
 
     try:
@@ -277,6 +283,10 @@ def process_coverage(run_dir: str, run_id: str) -> bool:
         "backfilled": backfilled,
         "unknown_dropped": unknown_dropped,
     })
+    print(
+        f"review_coverage: ok | facts={len(fact_ids)} present={present_count} "
+        f"missing={len(missing)} backfilled={backfilled}"
+    )
     return True
 
 

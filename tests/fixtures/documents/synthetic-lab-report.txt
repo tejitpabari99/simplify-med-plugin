@@ -1,0 +1,30 @@
+# SYNTHETIC DOCUMENT -- fabricated for testing only, not a real patient record.
+ST. ANSELM MEDICAL CENTER -- LABORATORY REPORT
+
+Patient: Morgan T. Rivera
+DOB: 1954-11-02
+MRN: 00-SYN-4471
+Visit date: 2026-07-05
+Ordering provider: Dr. Priya Raman, MD
+
+BASIC METABOLIC PANEL
+
+Specimen collected: 2026-07-05, fasting morning draw.
+
+Sodium 138 mmol/L (reference range 136-145 mmol/L)
+Potassium 5.1 mmol/L (mildly elevated; reference range 3.5-5.0 mmol/L)
+Chloride 101 mmol/L (reference range 98-107 mmol/L)
+Creatinine 1.4 mg/dL (reference range 0.6-1.2 mg/dL)
+Hemoglobin A1c 7.2 percent (reference range less than 5.7 percent)
+Brain natriuretic peptide 620 pg/mL (elevated; reference range less than
+100 pg/mL)
+
+INTERPRETATION
+
+Potassium is mildly elevated at 5.1 mmol/L, most likely related to
+spironolactone taken prior to admission and since discontinued. Creatinine
+remains mildly elevated at 1.4 mg/dL, improved from 1.6 mg/dL on
+admission. Hemoglobin A1c of 7.2 percent is consistent with known type 2
+diabetes mellitus. Brain natriuretic peptide remains elevated, consistent
+with recent heart failure exacerbation. Recommend repeat basic metabolic
+panel at the follow-up visit in one week.

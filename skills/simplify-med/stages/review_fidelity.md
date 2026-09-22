@@ -28,7 +28,7 @@ Find every place the care plan says something its fact(s) do not support: an add
 - `"not_stated"`: the plan asserts a reason the fact doesn't support. Valid ONLY for these four paths: `medications[N].why`, `tests[N].why`, `procedures[N].why`, `other[N].why`. Do not set a `value` -- the field is cleared to null downstream, and the app shows the patient a message when it renders a null `why`.
 - `"remove"`: an item with no supporting fact at all. Target the array item itself (e.g. `warning_signs[3]`), not one of its fields.
 
-Do NOT judge which array or section an item belongs to -- only whether its content is true to its fact(s). Do not flag style, tone, or word choice.
+Do NOT judge which array or section an item belongs to -- only whether its content is true to its fact(s). Do not flag style, tone, or word choice. Exception: a number, unit, date, frequency, or dose that differs from its fact, or a unit that was dropped (e.g. "148/92" rendered for a fact reading "148/92 mmHg"), or a label, range, or severity added to a number that its fact does not state, is a FIDELITY error under the NUMERACY rule, not style -- emit a `"correct"` correction whose value is the fact's own wording.
 
 ## Summary rule
 
@@ -42,7 +42,7 @@ Each entry in `questions` must not presuppose any clinical fact, diagnosis, or c
 
 `03_flags.json` lists two kinds of deterministic signal, each computed by a script that has no clinical judgment -- treat every entry as a place to look, not as an automatic correction:
 
-- `numeric_parity`: a field whose rendered value contains a number or unit token that does not appear among the facts it cites. Go read that field's cited fact(s) yourself. Emit a correction only if the plan really contradicts or exceeds what the fact(s) say -- a token mismatch can be a harmless rendering difference (e.g. spacing) that is not a fidelity problem.
+- `numeric_parity`: a field whose rendered value contains a number or unit token that does not appear among the facts it cites. Go read that field's cited fact(s) yourself. A `numeric_parity` hint is usually a genuine NUMERACY-rule fidelity error (see the exception above) -- you must either emit a `"correct"` correction for it, or confirm directly from the fact that the rendered value is genuinely equivalent (e.g. "25mg" vs "25 mg" is the same value, just respaced) before treating it as a non-issue. A dropped unit or an added label/range is never a harmless rendering difference.
 - `thin_fields`: a `why` or `description` field the script judged too short or generic to carry real content. Read the field and its fact(s). Emit a correction only if the field actually misstates or invents something; brevity alone is not a fidelity problem and is never itself grounds for a correction.
 
 A hint is never an automatic correction. Verify every hint against the facts before acting on it, and ignore any hint that turns out to be a non-issue.

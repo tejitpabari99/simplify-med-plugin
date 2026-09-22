@@ -272,6 +272,10 @@ def _run(raw_files, run_dir: str, run_id: str, chunk_size: int) -> int:
     }
     runlog.record(run_dir, "unitize", "ok", checks=checks)
 
+    print(
+        f"unitize: ok | files={checks['files']} units={checks['units']} "
+        f"chunks={checks['chunks']}"
+    )
     print(run_dir)
     return 0
 

@@ -202,5 +202,6 @@ Implemented directly from this brief, in this order, one commit each. Parallel w
 5. **Finalize and render** ‖ 4: `finalize.py`, `readability.py`, `render_md.py`, `render_html.py`, `templates/report.html`, `render_audit.py`, tests.
 6. **Orchestration**: `SKILL.md`, end-to-end deterministic test through the whole script chain on a synthetic fixture with hand-written agent outputs, `build.py` run for both platforms.
 7. **Kill test**: a sub-agent acting as the host runs the skill end to end on fixture documents and reports every friction point; fixes follow.
+8. Fixes from kill test 1 and a harder two-file fixture (done); 9. Kill test 2 on the discharge summary plus lab report.
 
 Owner-only: drop de-identified documents into `tests/fixtures/documents/` when available. Synthetic documents are used until then and are labelled synthetic.

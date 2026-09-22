@@ -344,6 +344,10 @@ def _run(run_dir: str) -> int:
     print(line if line else "Reading level: not enough text to estimate.")
     for n in notices:
         print(n)
+    print(
+        f"finalize: {status} | before_grade={score['before_grade']} "
+        f"after_grade={score['after_grade']} notices={len(notices)}"
+    )
 
     return 0
 

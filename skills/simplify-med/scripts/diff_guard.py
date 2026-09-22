@@ -177,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     if not corrections or not os.path.isfile(raw_corrected_path):
         _copy_file(draft_path, out_path)
         runlog.record(run_dir, "correct", "skipped", checks={"corrections": len(corrections)})
+        print(f"correct: skipped | corrections={len(corrections)}")
         return 0
 
     try:
@@ -226,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             "important details, like medicine doses, with your original document.",
         )
         runlog.record(run_dir, "correct", "degraded", checks={"violations": violations, "corrections": len(corrections)})
+        print(f"correct: degraded | corrections={len(corrections)} violations={len(violations)}")
         return 0
 
     applied = 0
@@ -269,6 +271,7 @@ def main(argv: list[str] | None = None) -> int:
         "unapplied": unapplied,
         "pii_substitutions": len(pii_hits),
     })
+    print(f"correct: ok | corrections={len(corrections)} applied={applied} unapplied={unapplied}")
     return 0
 
 

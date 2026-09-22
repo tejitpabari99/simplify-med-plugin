@@ -170,6 +170,10 @@ def main(argv: list[str] | None = None) -> int:
 
     status = "ok" if not dropped and not missing_chunks else "degraded"
     runlog.record(run_dir, "ground", status, checks=checks)
+    print(
+        f"ground: {status} | facts_in={facts_in} facts_kept={len(facts)} "
+        f"dropped={len(dropped)} duplicates_removed={duplicates_removed}"
+    )
     return 0
 
 

@@ -270,6 +270,9 @@ def _run_assemble(run_dir: str) -> int:
     runlog.record(run_dir, "assemble", status, checks=guard_checks)
 
     print(f"OK wrote {draft_path} ({items_kept}/{guard_checks['items_in']} items kept)")
+    print(
+        f"assemble: {status} | items_in={guard_checks['items_in']} items_kept={items_kept}"
+    )
     return 0
 
 
@@ -304,6 +307,7 @@ def _run_additions(run_dir: str) -> int:
             checks={"items_in": 0, "items_kept": 0, "dropped_not_missing": 0, "dropped_uncited": 0},
         )
         print(f"OK skipped (no 05_additions.raw.json found); wrote empty {out_path}")
+        print("assemble_missing: skipped | items_in=0 items_kept=0")
         return 0
 
     try:
@@ -402,6 +406,9 @@ def _run_additions(run_dir: str) -> int:
     runlog.record(run_dir, "assemble_missing", status, checks=checks)
 
     print(f"OK wrote {out_path} ({items_kept}/{items_in} items kept)")
+    print(
+        f"assemble_missing: {status} | items_in={items_in} items_kept={items_kept}"
+    )
     return 0
 
 

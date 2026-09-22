@@ -341,6 +341,10 @@ def _run(run_dir: str) -> int:
     runlog.record(run_dir, "numeric_parity", "ok", checks=checks)
 
     print(f"OK wrote {out_path} ({len(mismatches)} numeric mismatch(es), {len(thin_fields)} thin field(s))")
+    print(
+        f"numeric_parity: ok | fields_checked={fields_checked} "
+        f"numeric_mismatches={len(mismatches)} thin_fields={len(thin_fields)}"
+    )
     return 0
 
 

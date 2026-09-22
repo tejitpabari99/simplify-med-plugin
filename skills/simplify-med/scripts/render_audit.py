@@ -200,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         f.write(text)
 
     print(f"OK wrote {out_path}")
+    print("render_audit: ok | written=1")
     return 0
 
 

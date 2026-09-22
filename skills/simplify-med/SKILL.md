@@ -41,12 +41,20 @@ Always invoke a script as `python3 <skill>/scripts/<name>.py --run-dir
 <run> ...` (the one exception is Stage 0, which establishes `<run>`
 itself). Every script exits 0 whether its own outcome was ok, degraded, or
 skipped, and exits 1 only on a fatal error or an invalid agent output that
-needs a retry. On exit 1, read stderr -- it is written for a human.
+needs a retry. On exit 1, read stderr -- it is written for a human. On exit
+0, the last line of stdout is always a status line of the shape `<stage>:
+<status> | <key>=<value> ...`, where `<status>` is `ok`, `degraded`, or
+`skipped` -- read it to know what happened without inspecting output files
+(Stage 0's unitize is the one exception; see section 5).
 
 ## 4. How to dispatch an LLM stage
 
 On a host with sub-agents, dispatch the agent named `simplify-med-<stage>`
-(defined under `agents/`) with this exact message shape:
+(defined under `agents/`) with this exact message shape. This plugin
+registers these agents; their definitions are at `<plugin>/agents/<stage>.md`
+(`<plugin>` being the parent directory of `skills/`, a sibling of `skills/`,
+not a child of `<skill>`), which a host that does not auto-register agents
+can read and use as the sub-agent's system prompt.
 
 ```
 Stage file: <skill>/stages/<stage>.md
@@ -81,7 +89,10 @@ python3 <skill>/scripts/unitize.py --runs-dir <cwd>/simplify-runs --input <file>
 ```
 
 The last line of stdout is `<run>` -- resolve it to an absolute path and
-use it for everything below. Read `<run>/01_units.json`'s `chunks` array
+use it for everything below. This is unitize's one exception to section
+3's status-line rule: its status line is printed too, but as the
+second-to-last stdout line, immediately before `<run>`, so that `<run>`
+can stay the last line. Read `<run>/01_units.json`'s `chunks` array
 to learn the chunk count K. On exit 1, this is fatal: stop and explain the
 input problem in plain words (an empty file or a file with no usable
 text).
@@ -183,8 +194,9 @@ python3 <skill>/scripts/finalize.py --run-dir <run>
 ```
 
 Stdout gives, one per line: the HTML report path, the Markdown report
-path, the reading-level line, then any notices. Exit 1 is fatal -- show
-the user its stderr text.
+path, the reading-level line, then any notices, then (per section 3) the
+`finalize: ...` status line as the last line -- that last line is not a
+notice. Exit 1 is fatal -- show the user its stderr text.
 
 ## 11. What to tell the user
 

@@ -1,0 +1,206 @@
+# SYNTHETIC DOCUMENT -- fabricated for testing only, not a real patient record.
+ST. ANSELM MEDICAL CENTER -- DISCHARGE SUMMARY
+
+Patient: Morgan T. Rivera
+DOB: 1954-11-02
+MRN: 00-SYN-4471
+Admission date: 2026-07-01
+Discharge date: 2026-07-05
+Attending: Dr. Priya Raman, MD
+Service: Internal Medicine / Cardiology consult
+
+ADMITTING DIAGNOSIS
+1. Acute decompensated congestive heart failure (CHF), NYHA class III.
+2. Hypertension (HTN), longstanding, poorly controlled prior to adrnission.
+3. Type 2 diabetes mellitus (DM2), on oral therapy.
+4. Possible pulmonary embolism on presentation, evaluated during admission.
+
+DISCHARGE DIAGNOSIS
+1. Acute decompensated CHF, resolved with diuresis, now euvolemic.
+2. HTN, improved with medication adjustment.
+3. DM2, stable, no medication changes this admission.
+4. Acute pulmonary embolism, right lower lobe, confirmed by CT angiography.
+5. Mild acute kidney injury, resolving, attributed to diuresis.
+
+HISTORY OF PRESENT ILLNESS
+The patient presented to the Emergency Department (ED) with three days of
+progressive shortness of breath (SOB), orthopnea, and bilateral lower
+extremity edema. The patient also reported intermittent chest pain (CP)
+described as pressure-like, worse with exertion, without radiation.
+Initial workup in the ED included chest x-ray, which showed pulmonary
+vascular congestion consistent with CHF exacerbation, and no evidence of
+pneumonia. Given the acute SOB and CP, a CT chest was obtained to
+evaluate for possible pulmonary embolism; the CT chest showed a filling
+defect in the right lower lobe pulmonary artery, and a subsequent CT
+angiography study confirmed acute pulmonary embolism in that location.
+The patient was
+adrnitted to the general medicine service for further management, with a
+cardiology consult obtained given the CHF exacerbation and new PE.
+
+HOSPITAL COURSE
+The patient was diuresed with intravenous furosemide over the first 48
+hours, with a net negative fluid balance of approximately 6 liters and
+significant improvement in dyspnea. Home blood pressure medications were
+held on admission given borderline low blood pressures, then gradually
+resumed and adjusted prior to discharge. An echocardiogram was completed
+during this admission, showing a reduced ejection fraction of 35 percent,
+down from a prior known ejection fraction of 45 percent one year ago. The
+cardiology consult team recommended optimization of guideline-directed
+heart failure therapy prior to discharge. Anticoagulation was started for
+the newly confirmed pulmonary embolism, with a plan to continue for at
+least three months and reassess at follow-up. Renal function was
+monitored daily; the admission creatinine was mildly elevated at 1.6
+mg/dL, improving to 1.4 mg/dL by the day of discharge, attributed to a
+combination of diuresis and improved cardiac output rather than
+intrinsic kidney disease. Blood glucose was monitored throughout the
+admission and remained within the patient's usual range on the home DM2
+regimen; no adjustment to diabetes medications was required. The patient
+remained afebrile throughout admission with no evidence of active
+infection. A colonoscopy had been recommended by the patient's primary
+care physician prior to this admission and was not performed during this
+stay; it has been scheduled for 2026-08-15 as an outpatient procedure. By
+hospital day four the patient was ambulating without difficulty,
+saturating well on room air, and tolerating a low-sodium diet without
+symptoms, and was deemed appropriate for discharge home with services.
+
+PROCEDURES THIS ADMISSION
+1. Transthoracic echocardiogram, completed 2026-07-02, showing reduced
+   ejection fraction of 35 percent.
+2. CT angiography of the chest, completed 2026-07-02, confirming acute
+   pulmonary embolism in the right lower lobe.
+3. Outpatient colonoscopy, scheduled for 2026-08-15, not yet performed.
+
+DISCHARGE DISPOSITION
+Discharge disposition: Home with home health services for physical
+therapy and medication reconciliation support.
+DISCHARGE MEDICATIONS
+
+The following medication changes were made during this admission. Please
+review this list carefully and compare it against what you were taking
+before you came to the hospital.
+
+1. Lisinopril increased from 10 mg to 20 mg daily, PO, for improved blood
+   pressure control given persistent HTN.
+2. Metoprolol succinate 50 mg PO once daily, unchanged, for rate control
+   and cardioprotection.
+3. Furosemide 40 mg PO once daily, unchanged, continue for ongoing
+   diuresis and CHF management.
+4. Discontinued spironolactone 25 mg daily; stopped due to the mild acute
+   kidney injury noted during this admission.
+5. Metformin 500 mg PO BID, unchanged, for DM2.
+6. Apixaban 5 mg PO BID, new medication started this admission for the
+   newly diagnosed pulmonary embolism.
+7. Aspirin 81 mg PO once daily, unchanged, for cardiac protection.
+8. Atorvastatin 40 mg PO once daily at bedtime, unchanged, for
+   cholesterol management.
+9. Ondansetron 4 mg PO TID PRN nausea, new medication, no reason
+   documented in the discharge chart for why PRN nausea coverage was
+   added this admission.
+10. Acetaminophen 650 mg PO TID PRN for pain, unchanged.
+
+Take all medications exactly as prescribed. Do not resume any medication
+that was stopped during this admission unless your primary care provider
+or cardiologist specifically tells you to restart it.
+
+LABORATORY RESULTS AT DISCHARGE
+
+Specimen collected: 2026-07-05, fasting morning draw.
+
+Sodium 138 mmol/L (normal range 136-145 mmol/L)
+Potassium 5.1 mmol/L (mildly elevated; reference range 3.5-5.0 mmol/L)
+Chloride 101 mmol/L (normal range 98-107 mmol/L)
+Bicarbonate 24 mmol/L (normal range 22-29 mmol/L)
+Creatinine 1.4 mg/dL (reference range 0.6-1.2 mg/dL, improved from 1.6
+mg/dL on admission)
+Blood urea nitrogen 22 mg/dL (reference range 7-20 mg/dL)
+Hemoglobin A1c 7.2 percent (reference range less than 5.7 percent normal,
+consistent with known DM2)
+Hemoglobin 12.8 g/dL (reference range 13.5-17.5 g/dL, mildly low)
+White blood cell count 7.4 thousand/uL (normal range 4.5-11.0
+thousand/uL)
+Platelet count 245 thousand/uL (normal range 150-400 thousand/uL)
+Brain natriuretic peptide 620 pg/mL (elevated, reference range less than
+100 pg/mL, consistent with CHF)
+Troponin I less than 0.01 ng/mL x2, no evidence of acute myocardial
+injury.
+
+The potassium value of 5.1 mmol/L is flagged as mildly elevated; this is
+most likely related to the spironolactone taken prior to admission, which
+has since been discontinued. Recheck basic metabolic panel at the f/u
+visit in one week to confirm normalization.
+
+The patient's home glucometer readings during admission ranged from 110
+to 160 mg/dL, within an acceptable range for the current DM2 regimen; no
+change to diabetes medications is recommended at this time.
+RETURN PRECAUTIONS
+
+Call 911 or go to the nearest Emergency Department (ED) right away if you
+experience any of the following: chest pain (CP) that does not go away
+with rest, severe shortness of breath (SOB) at rest, fainting, or
+coughing up blood.
+
+Call St. Anselm Medical Center's cardiology clinic during business hours
+if you notice mild swelling in your legs that is new or getting worse, a
+weight gain of more than three pounds in one day, or if you have
+questions about your new blood thinner medication.
+
+FOLLOW-UP APPOINTMENTS
+
+f/u with primary care physician in 1 week to recheck basic metabolic
+panel and review the potassium result.
+f/u with cardiology in 2 weeks to reassess heart failure symptoms and
+review anticoagulation for the pulmonary embolism.
+f/u with primary care physician in 3 months for routine DM2 and HTN
+management.
+Outpatient colonoscopy scheduled for 2026-08-15; you will receive
+separate instructions for bowel preparation before that date.
+
+DIET AND ACTIVITY
+
+Continue a low-sodium diet, less than 2 grams of sodium per day. Weigh
+yourself each morning at the same time and record the result. Call the
+clinic if your weight increases by more than three pounds in a single
+day or five pounds in a week. Gradually increase walking distance as
+tolerated; avoid heavy lifting for two weeks.
+
+MEDICATION SAFETY NOTE
+
+Because you are now taking apixaban, a blood thinner, watch for unusual
+bruising, bleeding gums, blood in your urine or stool, or a headache
+that does not go away, and seek care promptly if any of these occur.
+
+PATIENT EDUCATION
+
+You were provided written and verbal education on heart failure
+self-management, including daily weights, sodium restriction, and
+recognizing early warning signs of fluid overload. You were also
+counseled on the purpose, dosing, and bleeding precautions for your new
+blood thinner, apixaban, and confirmed understanding by teach-back.
+
+IMMUNIZATIONS AND SCREENING
+
+Influenza vaccine status reviewed; up to date per patient report.
+Pneumococcal vaccine status reviewed; recommend discussing with primary
+care physician at the upcoming f/u visit if status is unclear.
+Colon cancer screening addressed; outpatient colonoscopy already
+scheduled as noted above.
+
+QUESTIONS OR CONCERNS
+
+If you have any questions about this discharge summary, your new
+medications, or your follow-up appointments, please call St. Anselm
+Medical Center's main line and ask for the discharge nurse line, or
+contact your primary care physician's office directly.
+
+BILLING AND CODING
+
+ICD-10: I50.9 (Heart failure, unspecified); I26.99 (Other pulmonary
+embolism without acute cor pulmonale); E11.9 (Type 2 diabetes mellitus
+without complications); I10 (Essential hypertension).
+CPT 99239 -- hospital discharge day management, more than 30 minutes.
+Insurance authorization on file for home health services.
+
+This document was reviewed and signed electronically by Dr. Priya Raman,
+MD, attending physician, St. Anselm Medical Center, on 2026-07-05.
+
+END OF DISCHARGE SUMMARY.

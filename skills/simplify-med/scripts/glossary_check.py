@@ -63,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             "terms_in": 0, "terms_kept": 0,
             "dropped_not_in_source": 0, "dropped_duplicate": 0, "dropped_cap": 0,
         })
+        print("glossary: skipped | terms_in=0 terms_kept=0")
         return 0
 
     try:
@@ -145,6 +146,9 @@ def main(argv: list[str] | None = None) -> int:
     status = "ok" if (dropped_not_in_source == 0 and dropped_duplicate == 0
                        and dropped_cap == 0 and dropped_empty_definition == 0) else "degraded"
     runlog.record(run_dir, "glossary", status, checks=checks)
+    print(
+        f"glossary: {status} | terms_in={terms_in} terms_kept={len(kept_terms)}"
+    )
     return 0
 
 

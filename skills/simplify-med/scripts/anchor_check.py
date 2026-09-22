@@ -103,11 +103,22 @@ def main(argv: list[str] | None = None) -> int:
         units_doc = json.load(f)
     units_by_id = {u["id"]: u for u in units_doc.get("units", [])}
 
-    for i, raw_fact in enumerate(raw_doc.get("facts", [])):
+    facts = raw_doc.get("facts", [])
+    ok_count = 0
+    for i, raw_fact in enumerate(facts):
         ok, reason, char_start, char_end = check_fact(raw_fact, units_by_id)
         status = "ok" if ok else f"drop ({reason})"
+        if ok:
+            ok_count += 1
         text = raw_fact.get("text", "")
         print(f"[{i}] {status}: {text!r}")
+
+    dropped = len(facts) - ok_count
+    overall = "ok" if dropped == 0 else "degraded"
+    print(
+        f"anchor_check: {overall} | chunk={args.chunk} facts={len(facts)} "
+        f"ok={ok_count} dropped={dropped}"
+    )
 
     return 0
 
