@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "facts",
+  "type": "object",
+  "required": ["schema_version", "plugin_version", "run_id", "facts", "dropped"],
+  "additionalProperties": false,
+  "definitions": {
+    "fact": {
+      "type": "object",
+      "required": ["id", "category", "unit_id", "quote", "char_start", "char_end", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "integer", "minimum": 1},
+        "category": {
+          "type": "string",
+          "enum": [
+            "reason_for_visit",
+            "diagnosis",
+            "medications",
+            "tests",
+            "procedures",
+            "other",
+            "follow_up",
+            "warning_signs"
+          ]
+        },
+        "unit_id": {"type": "integer", "minimum": 1},
+        "quote": {"type": "string", "minLength": 1},
+        "char_start": {"type": "integer", "minimum": 0},
+        "char_end": {"type": "integer", "minimum": 0},
+        "text": {"type": "string", "minLength": 1}
+      }
+    },
+    "dropped_item": {
+      "type": "object",
+      "required": ["chunk", "reason", "fact"],
+      "additionalProperties": false,
+      "properties": {
+        "chunk": {"type": "integer"},
+        "reason": {"type": "string"},
+        "fact": {"type": "object"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string"},
+    "plugin_version": {"type": "string"},
+    "run_id": {"type": "string"},
+    "facts": {"type": "array", "items": {"$ref": "#/definitions/fact"}},
+    "dropped": {"type": "array", "items": {"$ref": "#/definitions/dropped_item"}}
+  }
+}

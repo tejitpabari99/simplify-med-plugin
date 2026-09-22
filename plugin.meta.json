@@ -1,0 +1,10 @@
+{
+  "name": "simplify-med",
+  "version": "0.1.0",
+  "schema_version": "1.0",
+  "description": "Turns a clinical document into a plain-language, fact-checked care plan. Every statement is anchored to a line of the original; interim files form an audit trail; output is JSON rendered to Markdown and a single self-contained HTML page.",
+  "tags": ["health", "medical", "plain-language", "patient", "care-plan", "simplification", "fidelity"],
+  "author": {"name": "Tejit Pabari"},
+  "homepage": "https://github.com/tejitpabari99/simplify-med-plugin",
+  "skills": ["simplify-med"]
+}

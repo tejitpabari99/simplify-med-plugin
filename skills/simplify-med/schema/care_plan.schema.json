@@ -1,0 +1,211 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "care_plan",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "plugin_version",
+    "summary",
+    "summary_fact_ids",
+    "reason_for_visit",
+    "diagnosis",
+    "medications",
+    "tests",
+    "procedures",
+    "other",
+    "follow_up",
+    "warning_signs",
+    "questions",
+    "low_priority"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "fact_ids": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "status": {
+      "type": "string",
+      "enum": ["to_do", "done"]
+    },
+    "reason_for_visit_item": {
+      "type": "object",
+      "required": ["source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {"type": "string"},
+        "description": {"type": "string"},
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "diagnosis_detail": {
+      "type": "object",
+      "required": ["source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "plain_name": {"type": "string"},
+        "description": {"type": "string"},
+        "what_it_means_for_you": {"type": "string"},
+        "severity": {
+          "anyOf": [
+            {"type": "string", "enum": ["high", "medium", "low"]},
+            {"type": "null"}
+          ]
+        },
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "diagnosis": {
+      "type": "object",
+      "required": ["changed_since_last_visit_fact_ids", "details"],
+      "additionalProperties": false,
+      "properties": {
+        "changed_since_last_visit": {"type": "string"},
+        "changed_since_last_visit_fact_ids": {"$ref": "#/definitions/fact_ids"},
+        "details": {"type": "array", "items": {"$ref": "#/definitions/diagnosis_detail"}}
+      }
+    },
+    "medication": {
+      "type": "object",
+      "required": ["status", "source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "plain_name": {"type": "string"},
+        "why": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "dosage": {"type": "string"},
+        "frequency": {"type": "string"},
+        "timing": {"type": "string"},
+        "duration": {"type": "string"},
+        "instructions": {"type": "string"},
+        "side_effects_to_watch": {"type": "string"},
+        "change": {"type": "string"},
+        "status": {"$ref": "#/definitions/status"},
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "test": {
+      "type": "object",
+      "required": ["status", "source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "plain_name": {"type": "string"},
+        "why": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "description": {"type": "string"},
+        "preparation": {"type": "string"},
+        "status": {"$ref": "#/definitions/status"},
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "procedure": {
+      "type": "object",
+      "required": ["status", "source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "plain_name": {"type": "string"},
+        "why": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "what_to_expect": {"type": "string"},
+        "timeframe": {"type": "string"},
+        "status": {"$ref": "#/definitions/status"},
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "other_instruction": {
+      "type": "object",
+      "required": ["status", "source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "why": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "steps": {"type": "array", "items": {"type": "string"}},
+        "description": {"type": "string"},
+        "frequency": {"type": "string"},
+        "duration": {"type": "string"},
+        "status": {"$ref": "#/definitions/status"},
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "follow_up": {
+      "type": "object",
+      "required": ["status", "source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "time_frame": {"type": "string"},
+        "description": {"type": "string"},
+        "status": {"$ref": "#/definitions/status"},
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "warning_sign": {
+      "type": "object",
+      "required": ["source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "symptom": {"type": "string"},
+        "what_it_might_mean": {"type": "string"},
+        "what_to_do": {"type": "string"},
+        "urgency": {
+          "anyOf": [
+            {"type": "string", "enum": ["emergency", "call_doctor", "monitor", "normal_side_effect"]},
+            {"type": "null"}
+          ]
+        },
+        "related_to": {"type": "string"},
+        "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
+      }
+    },
+    "glossary_term": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "definition": {"type": "string"},
+        "source": {"type": "string"}
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {"type": "string"},
+        "plugin_version": {"type": "string"},
+        "schema_version": {"type": "string"},
+        "level": {"type": "string"},
+        "created_at": {"type": "string"}
+      }
+    },
+    "score": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "before_grade": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+        "after_grade": {"anyOf": [{"type": "number"}, {"type": "null"}]}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string"},
+    "plugin_version": {"type": "string"},
+    "meta": {"$ref": "#/definitions/meta"},
+    "notices": {"type": "array", "items": {"type": "string"}},
+    "score": {"$ref": "#/definitions/score"},
+    "summary": {"type": "string"},
+    "summary_fact_ids": {"$ref": "#/definitions/fact_ids"},
+    "reason_for_visit": {"type": "array", "items": {"$ref": "#/definitions/reason_for_visit_item"}},
+    "diagnosis": {"$ref": "#/definitions/diagnosis"},
+    "medications": {"type": "array", "items": {"$ref": "#/definitions/medication"}},
+    "tests": {"type": "array", "items": {"$ref": "#/definitions/test"}},
+    "procedures": {"type": "array", "items": {"$ref": "#/definitions/procedure"}},
+    "other": {"type": "array", "items": {"$ref": "#/definitions/other_instruction"}},
+    "follow_up": {"type": "array", "items": {"$ref": "#/definitions/follow_up"}},
+    "warning_signs": {"type": "array", "items": {"$ref": "#/definitions/warning_sign"}},
+    "questions": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
+    "low_priority": {"type": "array", "items": {"type": "string"}},
+    "terms": {"type": "object", "additionalProperties": {"$ref": "#/definitions/glossary_term"}}
+  }
+}

@@ -1,0 +1,14 @@
+# Excluded from the Claude Code plugin package
+docs/
+tests/
+dist/
+packaging/
+simplify-runs/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+agents/
+.claude-plugin/
+plugin.meta.json
+README.md

@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "facts_raw",
+  "type": "object",
+  "required": ["facts"],
+  "additionalProperties": false,
+  "definitions": {
+    "fact": {
+      "type": "object",
+      "required": ["category", "unit_id", "quote", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "reason_for_visit",
+            "diagnosis",
+            "medications",
+            "tests",
+            "procedures",
+            "other",
+            "follow_up",
+            "warning_signs"
+          ]
+        },
+        "unit_id": {"type": "integer", "minimum": 1},
+        "quote": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string"},
+    "plugin_version": {"type": "string"},
+    "facts": {"type": "array", "items": {"$ref": "#/definitions/fact"}}
+  }
+}

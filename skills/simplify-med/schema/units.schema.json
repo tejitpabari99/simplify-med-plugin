@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "units",
+  "type": "object",
+  "required": ["schema_version", "plugin_version", "run_id", "units", "chunks"],
+  "additionalProperties": false,
+  "definitions": {
+    "unit": {
+      "type": "object",
+      "required": ["id", "file", "page", "line", "text", "extraction_method"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "integer", "minimum": 1},
+        "file": {"type": "string"},
+        "page": {"type": "integer", "minimum": 1},
+        "line": {"type": "integer", "minimum": 1},
+        "text": {"type": "string"},
+        "extraction_method": {"type": "string", "enum": ["native", "ocr", "pasted"]}
+      }
+    },
+    "chunk": {
+      "type": "object",
+      "required": ["k", "first_id", "last_id"],
+      "additionalProperties": false,
+      "properties": {
+        "k": {"type": "integer", "minimum": 1},
+        "first_id": {"type": "integer", "minimum": 1},
+        "last_id": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string"},
+    "plugin_version": {"type": "string"},
+    "run_id": {"type": "string"},
+    "units": {"type": "array", "items": {"$ref": "#/definitions/unit"}},
+    "chunks": {"type": "array", "items": {"$ref": "#/definitions/chunk"}}
+  }
+}

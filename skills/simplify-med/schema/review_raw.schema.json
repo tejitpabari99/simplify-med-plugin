@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "review_raw",
+  "type": "object",
+  "required": ["verdict", "corrections"],
+  "additionalProperties": false,
+  "definitions": {
+    "correction": {
+      "type": "object",
+      "required": ["op", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "op": {"type": "string", "enum": ["correct", "not_stated", "remove"]},
+        "path": {"type": "string"},
+        "value": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string"},
+    "plugin_version": {"type": "string"},
+    "verdict": {"type": "string", "enum": ["pass", "needs_correction"]},
+    "corrections": {"type": "array", "items": {"$ref": "#/definitions/correction"}}
+  }
+}

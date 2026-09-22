@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "run",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "plugin_version",
+    "run_id",
+    "created_at",
+    "level",
+    "inputs",
+    "stages",
+    "notices"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "input": {
+      "type": "object",
+      "required": ["file", "extraction_method", "pages"],
+      "additionalProperties": false,
+      "properties": {
+        "file": {"type": "string"},
+        "extraction_method": {"type": "string", "enum": ["native", "ocr", "pasted"]},
+        "pages": {"type": "integer", "minimum": 1}
+      }
+    },
+    "stage_entry": {
+      "type": "object",
+      "required": ["status", "attempts", "started_at", "finished_at", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"type": "string", "enum": ["ok", "degraded", "failed", "skipped"]},
+        "attempts": {"type": "integer", "minimum": 0},
+        "started_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "finished_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "checks": {"type": "object"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string"},
+    "plugin_version": {"type": "string"},
+    "run_id": {"type": "string"},
+    "created_at": {"type": "string"},
+    "level": {"type": "string", "enum": ["standard"]},
+    "inputs": {"type": "array", "items": {"$ref": "#/definitions/input"}},
+    "stages": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/definitions/stage_entry"}
+    },
+    "notices": {"type": "array", "items": {"type": "string"}}
+  }
+}
