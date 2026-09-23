@@ -1,0 +1,6 @@
+# Excluded while copying the portable skill into the OpenAI package
+__pycache__/
+*.pyc
+custom_start.md
+custom_end.md
+agents/

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "simplify-med",
+  "version": "0.1.0",
+  "description": "Turns a clinical document into a plain-language, fact-checked care plan with an auditable, privacy-preserving workflow.",
+  "author": {
+    "name": "Tejit Pabari"
+  },
+  "homepage": "https://github.com/tejitpabari99/simplify-med-plugin",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Simplify Med",
+        "shortDescription": "Turn medical paperwork into a fact-checked plain-language report.",
+        "longDescription": "Simplify supplied medical documents into a plain-language, source-anchored care plan and open the completed report in a privacy-preserving viewer.",
+        "developerName": "Tejit Pabari"
+      }
+    }
+  }
+}

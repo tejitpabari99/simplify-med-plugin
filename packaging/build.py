@@ -1,16 +1,8 @@
 #!/usr/bin/env python3
-"""Build distributable zip packages for the simplify-med plugin.
+"""Build staged, platform-specific simplify-med archives.
 
-Usage:
-    python3 build.py --platform claude-code|claude-ai [--out dist]
-
-Reads plugin.meta.json and .claude-plugin/plugin.json, verifies their
-versions match each other and skills/simplify-med/scripts/_version.py's
-PLUGIN_VERSION, then walks the repository applying a gitignore-style ignore
-file for the chosen platform and writes a zip to <out>/.
-
-Stdlib only. Runnable as ``python3 build.py ...`` from any cwd and
-importable as ``build``.
+The historical ``python3 packaging/build.py --platform ...`` CLI remains
+supported. All overlays are applied to a temporary copy, never the source skill.
 """
 
 from __future__ import annotations
@@ -19,27 +11,31 @@ import argparse
 import fnmatch
 import json
 import os
+import shutil
 import sys
+import tempfile
 import zipfile
 
 _PACKAGING_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_PACKAGING_DIR)
+_URL_TOKEN = "__SIMPLIFY_MED_MCP_URL__"
+_PLACEHOLDER_HOST = "PLUGIN_DOMAIN.example"
 
-# Maps platform name -> config. Add an entry here to support a new
-# platform later; per-platform customization (extra excludes, a different
-# archive layout, etc.) hangs off this dict rather than being hardcoded
-# into the build logic below.
 PLATFORMS = {
     "claude-code": {
-        "ignore_file": "claude-code.ignore",
-        # "." means: walk the whole repo root.
+        "ignore_file": os.path.join("claude-code", "claude-code.ignore"),
         "walk_root": ".",
+        "layout": "repository",
     },
     "claude-ai": {
-        "ignore_file": "claude-ai.ignore",
-        # Only this subtree is included in the archive, regardless of the
-        # ignore file's contents.
+        "ignore_file": os.path.join("claude-ai", "claude-ai.ignore"),
         "walk_root": os.path.join("skills", "simplify-med"),
+        "layout": "skill",
+    },
+    "openai": {
+        "ignore_file": os.path.join("openai", "openai.ignore"),
+        "walk_root": os.path.join("skills", "simplify-med"),
+        "layout": "openai",
     },
 }
 
@@ -58,9 +54,6 @@ def load_manifest(repo_root: str = _REPO_ROOT) -> dict:
 
 
 def load_version_constant(repo_root: str = _REPO_ROOT) -> str:
-    """Return PLUGIN_VERSION from skills/simplify-med/scripts/_version.py
-    without importing it as a package (keeps this script standalone and
-    import-order independent)."""
     path = os.path.join(repo_root, "skills", "simplify-med", "scripts", "_version.py")
     namespace: dict = {}
     with open(path, "r", encoding="utf-8") as f:
@@ -70,16 +63,11 @@ def load_version_constant(repo_root: str = _REPO_ROOT) -> str:
 
 
 def check_versions(repo_root: str = _REPO_ROOT) -> str:
-    """Verify plugin.meta.json, .claude-plugin/plugin.json, and _version.py
-    all agree on the plugin version. Returns the version string on success;
-    exits with status 2 (after printing an error) on any mismatch."""
     meta = load_meta(repo_root)
     manifest = load_manifest(repo_root)
     version_py = load_version_constant(repo_root)
-
     meta_version = meta.get("version")
     manifest_version = manifest.get("version")
-
     if meta_version != manifest_version:
         print(
             "Version mismatch: plugin.meta.json version="
@@ -87,7 +75,6 @@ def check_versions(repo_root: str = _REPO_ROOT) -> str:
             file=sys.stderr,
         )
         raise SystemExit(2)
-
     if meta_version != version_py:
         print(
             "Version mismatch: plugin.meta.json version="
@@ -97,17 +84,20 @@ def check_versions(repo_root: str = _REPO_ROOT) -> str:
         )
         raise SystemExit(2)
 
+    openai_manifest = os.path.join(repo_root, "packaging", "openai", "plugin.json")
+    if os.path.isfile(openai_manifest):
+        openai_version = _read_json(openai_manifest).get("version")
+        if openai_version != meta_version:
+            print(
+                "Version mismatch: plugin.meta.json version="
+                f"{meta_version!r} vs packaging/openai/plugin.json version={openai_version!r}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
     return meta_version
 
 
 def parse_ignore_file(path: str) -> list[tuple[str, bool, bool]]:
-    """Parse a gitignore-style ignore file.
-
-    Returns a list of (pattern, anchored, dir_only) tuples:
-      - anchored: pattern had a leading "/" and must match the full
-        repo-root-relative path.
-      - dir_only: pattern had a trailing "/" and only matches directories.
-    """
     patterns: list[tuple[str, bool, bool]] = []
     if not os.path.isfile(path):
         return patterns
@@ -122,13 +112,12 @@ def parse_ignore_file(path: str) -> list[tuple[str, bool, bool]]:
             dir_only = line.endswith("/")
             if dir_only:
                 line = line[:-1]
-            if not line:
-                continue
-            patterns.append((line, anchored, dir_only))
+            if line:
+                patterns.append((line, anchored, dir_only))
     return patterns
 
 
-def _matches_one(rel_path: str, basename: str, is_dir: bool, pattern: str, anchored: bool, dir_only: bool) -> bool:
+def _matches_one(rel_path, basename, is_dir, pattern, anchored, dir_only):
     if dir_only and not is_dir:
         return False
     if anchored:
@@ -136,86 +125,174 @@ def _matches_one(rel_path: str, basename: str, is_dir: bool, pattern: str, ancho
     return fnmatch.fnmatch(basename, pattern) or fnmatch.fnmatch(rel_path, pattern)
 
 
-def is_ignored(rel_path: str, is_dir: bool, patterns: list[tuple[str, bool, bool]]) -> bool:
+def is_ignored(rel_path, is_dir, patterns):
     rel_path = rel_path.replace(os.sep, "/")
     basename = rel_path.rsplit("/", 1)[-1]
-    return any(_matches_one(rel_path, basename, is_dir, p, a, d) for p, a, d in patterns)
+    return any(_matches_one(rel_path, basename, is_dir, *entry) for entry in patterns)
 
 
-def iter_included_files(repo_root: str, walk_root: str, patterns: list[tuple[str, bool, bool]]):
-    """Yield absolute paths of files under walk_root, skipping anything
-    matched by `patterns` (evaluated as paths relative to repo_root, so
-    anchoring behaves like a real repo-root-relative .gitignore)."""
+def iter_included_files(repo_root: str, walk_root: str, patterns):
     abs_walk_root = repo_root if walk_root == "." else os.path.join(repo_root, walk_root)
     for dirpath, dirnames, filenames in os.walk(abs_walk_root):
         rel_dir = os.path.relpath(dirpath, repo_root)
-
-        kept_dirnames = []
-        for d in dirnames:
-            rel_d = d if rel_dir == "." else f"{rel_dir}/{d}"
-            if is_ignored(rel_d, True, patterns):
-                continue
-            kept_dirnames.append(d)
-        dirnames[:] = kept_dirnames
-
-        for fname in filenames:
-            rel_f = fname if rel_dir == "." else f"{rel_dir}/{fname}"
-            if is_ignored(rel_f, False, patterns):
-                continue
-            yield os.path.join(dirpath, fname)
+        dirnames[:] = [
+            name
+            for name in dirnames
+            if not is_ignored(name if rel_dir == "." else f"{rel_dir}/{name}", True, patterns)
+        ]
+        for filename in filenames:
+            rel_path = filename if rel_dir == "." else f"{rel_dir}/{filename}"
+            if not is_ignored(rel_path, False, patterns):
+                yield os.path.join(dirpath, filename)
 
 
-def build(platform: str, out_dir: str = "dist", repo_root: str = _REPO_ROOT) -> tuple[str, int]:
+def _copy_files(files, source_root: str, destination: str) -> None:
+    for source in files:
+        target = os.path.join(destination, os.path.relpath(source, source_root))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def _copy_default_custom_files(repo_root: str, skill_destination: str) -> None:
+    defaults = os.path.join(repo_root, "packaging", "default")
+    for filename in ("custom_start.md", "custom_end.md"):
+        source = os.path.join(defaults, filename)
+        if not os.path.isfile(source):
+            raise SystemExit(f"Missing default platform hook: {source}")
+        os.makedirs(skill_destination, exist_ok=True)
+        shutil.copy2(source, os.path.join(skill_destination, filename))
+
+
+def _copy_if_present(source: str, destination: str) -> None:
+    if not os.path.exists(source):
+        return
+    if os.path.isdir(source):
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+    else:
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def _source_endpoint(repo_root: str) -> tuple[dict, str]:
+    path = os.path.join(repo_root, "mcp", "openai", "mcp.json")
+    if not os.path.isfile(path):
+        raise SystemExit("Missing OpenAI MCP declaration: mcp/openai/mcp.json")
+    document = _read_json(path)
+    try:
+        endpoint = document["mcpServers"]["simplify-med-ui"]["url"]
+    except (KeyError, TypeError):
+        raise SystemExit("mcp/openai/mcp.json must declare mcpServers.simplify-med-ui.url")
+    if not isinstance(endpoint, str):
+        raise SystemExit("The Simplify Med MCP endpoint must be a string")
+    return document, endpoint
+
+
+def _valid_endpoint(endpoint: str) -> bool:
+    return endpoint.startswith(("https://", "http://localhost", "http://127.0.0.1"))
+
+
+def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release):
+    skill_source = os.path.join(repo_root, "skills", "simplify-med")
+    skill_destination = os.path.join(plugin_stage, "skills", "simplify-med")
+    files = sorted(iter_included_files(repo_root, os.path.join("skills", "simplify-med"), patterns))
+    _copy_files(files, skill_source, skill_destination)
+    _copy_default_custom_files(repo_root, skill_destination)
+
+    overlay = os.path.join(repo_root, "packaging", "openai")
+    for filename in ("custom_start.md", "custom_end.md"):
+        _copy_if_present(os.path.join(overlay, filename), os.path.join(skill_destination, filename))
+    _copy_if_present(os.path.join(overlay, "agents"), os.path.join(skill_destination, "agents"))
+    _copy_if_present(os.path.join(overlay, "assets"), os.path.join(plugin_stage, "assets"))
+    shutil.copy2(os.path.join(overlay, "plugin.json"), os.path.join(plugin_stage, "plugin.json"))
+
+    mcp_document, configured_endpoint = _source_endpoint(repo_root)
+    endpoint = endpoint_override or configured_endpoint
+    if not _valid_endpoint(endpoint):
+        raise SystemExit("OpenAI MCP endpoints must use HTTPS (or localhost for development)")
+    if release and _PLACEHOLDER_HOST in endpoint:
+        raise SystemExit("Release build refused: replace the example OpenAI MCP endpoint")
+    mcp_target = os.path.join(plugin_stage, "mcp.json")
+    if endpoint_override:
+        mcp_document["mcpServers"]["simplify-med-ui"]["url"] = endpoint
+        with open(mcp_target, "w", encoding="utf-8") as f:
+            json.dump(mcp_document, f, indent=2)
+            f.write("\n")
+    else:
+        shutil.copy2(os.path.join(repo_root, "mcp", "openai", "mcp.json"), mcp_target)
+
+    yaml_path = os.path.join(skill_destination, "agents", "openai.yaml")
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        template = f.read()
+    if template.count(_URL_TOKEN) != 1:
+        raise SystemExit("packaging/openai/agents/openai.yaml must contain one endpoint token")
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.write(template.replace(_URL_TOKEN, endpoint))
+
+
+def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release):
+    config = PLATFORMS[platform]
+    patterns = parse_ignore_file(os.path.join(repo_root, "packaging", config["ignore_file"]))
+    if config["layout"] == "openai":
+        _stage_openai(repo_root, plugin_stage, patterns, mcp_url, release)
+        return
+    if mcp_url or release:
+        raise SystemExit("--mcp-url and --release apply only to the OpenAI build")
+
+    walk_root = config["walk_root"]
+    source_root = repo_root if walk_root == "." else os.path.join(repo_root, walk_root)
+    _copy_files(sorted(iter_included_files(repo_root, walk_root, patterns)), source_root, plugin_stage)
+    skill_destination = (
+        os.path.join(plugin_stage, "skills", "simplify-med")
+        if config["layout"] == "repository"
+        else plugin_stage
+    )
+    _copy_default_custom_files(repo_root, skill_destination)
+    overlay = os.path.join(repo_root, "packaging", platform)
+    for filename in ("custom_start.md", "custom_end.md"):
+        _copy_if_present(os.path.join(overlay, filename), os.path.join(skill_destination, filename))
+
+
+def build(platform, out_dir="dist", repo_root=_REPO_ROOT, mcp_url=None, release=False):
     if platform not in PLATFORMS:
         print(f"Unknown platform {platform!r}; choose from {sorted(PLATFORMS)}", file=sys.stderr)
         raise SystemExit(2)
-
     version = check_versions(repo_root)
-    meta = load_meta(repo_root)
-    plugin_name = meta["name"]
-
-    config = PLATFORMS[platform]
-    ignore_path = os.path.join(_PACKAGING_DIR, config["ignore_file"])
-    # When repo_root differs from this file's own repo (e.g. a temp copy
-    # used in tests), prefer that copy's own packaging/<ignore file> if it
-    # exists, so the build reflects the copy being built, not this file.
-    copy_ignore_path = os.path.join(repo_root, "packaging", config["ignore_file"])
-    if os.path.isfile(copy_ignore_path):
-        ignore_path = copy_ignore_path
-    patterns = parse_ignore_file(ignore_path)
-
-    walk_root = config["walk_root"]
-    abs_walk_root = repo_root if walk_root == "." else os.path.join(repo_root, walk_root)
-
+    plugin_name = load_meta(repo_root)["name"]
     out_dir_abs = out_dir if os.path.isabs(out_dir) else os.path.join(repo_root, out_dir)
     os.makedirs(out_dir_abs, exist_ok=True)
     zip_path = os.path.join(out_dir_abs, f"{plugin_name}-{version}-{platform}.zip")
 
-    entry_count = 0
-    files = sorted(iter_included_files(repo_root, walk_root, patterns))
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for abs_path in files:
-            rel_from_walk_root = os.path.relpath(abs_path, abs_walk_root).replace(os.sep, "/")
-            arcname = f"{plugin_name}/{rel_from_walk_root}"
-            zf.write(abs_path, arcname)
-            entry_count += 1
+    with tempfile.TemporaryDirectory(prefix="simplify-med-build-") as temp_dir:
+        plugin_stage = os.path.join(temp_dir, plugin_name)
+        os.makedirs(plugin_stage)
+        _stage_platform(platform, repo_root, plugin_stage, mcp_url, release)
+        staged_files = sorted(
+            os.path.join(dirpath, filename)
+            for dirpath, _, filenames in os.walk(plugin_stage)
+            for filename in filenames
+        )
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for source in staged_files:
+                relative = os.path.relpath(source, plugin_stage).replace(os.sep, "/")
+                zf.write(source, f"{plugin_name}/{relative}")
 
     print(zip_path)
-    print(f"{entry_count} entries")
-    return zip_path, entry_count
+    print(f"{len(staged_files)} entries")
+    return zip_path, len(staged_files)
 
 
-def _build_arg_parser() -> argparse.ArgumentParser:
+def _build_arg_parser():
     parser = argparse.ArgumentParser(description="Build a simplify-med plugin package")
     parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
-    parser.add_argument("--out", default="dist", help="Output directory (default: dist, relative to repo root)")
+    parser.add_argument("--out", default="dist", help="Output directory (default: dist)")
+    parser.add_argument("--mcp-url", default=None, help="Override the staged OpenAI MCP endpoint")
+    parser.add_argument("--release", action="store_true", help="Reject placeholder OpenAI endpoints")
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = _build_arg_parser()
-    args = parser.parse_args(argv)
-    build(args.platform, args.out)
+def main(argv=None):
+    args = _build_arg_parser().parse_args(argv)
+    build(args.platform, args.out, mcp_url=args.mcp_url, release=args.release)
     return 0
 
 
