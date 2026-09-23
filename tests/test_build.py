@@ -136,7 +136,7 @@ class TestBuildOpenAi(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out_dir:
             result = _run_build([
                 "--platform", "openai", "--out", out_dir,
-                "--mcp-url", "https://viewer.example/mcp", "--release",
+                "--mcp-url", "https://mcp.simplify-med.dev/mcp", "--release",
             ])
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             with zipfile.ZipFile(os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")) as zf:
@@ -144,9 +144,9 @@ class TestBuildOpenAi(unittest.TestCase):
                 yaml = zf.read("simplify-med/skills/simplify-med/agents/openai.yaml").decode()
         self.assertEqual(
             staged_mcp["mcpServers"]["simplify-med-ui"]["url"],
-            "https://viewer.example/mcp",
+            "https://mcp.simplify-med.dev/mcp",
         )
-        self.assertIn("url: https://viewer.example/mcp", yaml)
+        self.assertIn("url: https://mcp.simplify-med.dev/mcp", yaml)
         with open(source_path, "rb") as f:
             self.assertEqual(source_before, f.read())
 
@@ -154,7 +154,52 @@ class TestBuildOpenAi(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out_dir:
             result = _run_build(["--platform", "openai", "--out", out_dir, "--release"])
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("example OpenAI MCP endpoint", result.stderr)
+        self.assertIn("non-reserved host", result.stderr)
+
+    def test_non_release_accepts_loopback_http_for_development(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir,
+                "--mcp-url", "http://127.0.0.1:3000/mcp",
+            ])
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_non_release_rejects_insecure_non_loopback_http(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir,
+                "--mcp-url", "http://mcp.simplify-med.dev/mcp",
+            ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("HTTP only with a loopback host", result.stderr)
+
+    def test_release_rejects_non_public_or_malformed_endpoints(self):
+        invalid_endpoints = [
+            "http://localhost:3000/mcp",
+            "https://localhost/mcp",
+            "https://127.0.0.1/mcp",
+            "https://[::1]/mcp",
+            "https://10.0.0.1/mcp",
+            "https://mcp.internal.local/mcp",
+            "https://mcp.example.test/mcp",
+            "https://mcp.plugin.example/mcp",
+            "https://mcp.plugin.invalid/mcp",
+            "https://viewer.example.com/mcp",
+            "https://user:password@mcp.simplify-med.dev/mcp",
+            "https://mcp.simplify-med.dev/not-mcp",
+            "https://mcp.simplify-med.dev/mcp?token=secret",
+            "https://mcp.simplify-med.dev/mcp#fragment",
+            "https:///mcp",
+            "not-a-url",
+        ]
+        for endpoint in invalid_endpoints:
+            with self.subTest(endpoint=endpoint), tempfile.TemporaryDirectory() as out_dir:
+                result = _run_build([
+                    "--platform", "openai", "--out", out_dir,
+                    "--mcp-url", endpoint, "--release",
+                ])
+                self.assertNotEqual(result.returncode, 0, msg=endpoint)
+                self.assertIn("Release OpenAI MCP endpoint", result.stderr)
 
 
 class TestBuildDispatcherAndOverlays(unittest.TestCase):

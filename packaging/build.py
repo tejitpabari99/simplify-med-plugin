@@ -9,17 +9,23 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import ipaddress
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
 import zipfile
+from urllib.parse import urlsplit
 
 _PACKAGING_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_PACKAGING_DIR)
 _URL_TOKEN = "__SIMPLIFY_MED_MCP_URL__"
-_PLACEHOLDER_HOST = "PLUGIN_DOMAIN.example"
+_DEVELOPMENT_PLACEHOLDER = "https://PLUGIN_DOMAIN.example/mcp"
+_DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.IGNORECASE)
+_RESERVED_SUFFIXES = (".localhost", ".local", ".test", ".example", ".invalid", ".onion")
+_EXAMPLE_DOMAINS = ("example.com", "example.net", "example.org")
 
 PLATFORMS = {
     "claude-code": {
@@ -187,8 +193,74 @@ def _source_endpoint(repo_root: str) -> tuple[dict, str]:
     return document, endpoint
 
 
-def _valid_endpoint(endpoint: str) -> bool:
-    return endpoint.startswith(("https://", "http://localhost", "http://127.0.0.1"))
+def _endpoint_error(endpoint: str, release: bool) -> str | None:
+    """Return a reason when an MCP endpoint is unsafe or malformed.
+
+    Developer builds allow HTTP only on literal loopback hosts. Release builds
+    additionally require HTTPS and a syntactically public, non-reserved host.
+    DNS is deliberately not queried during a deterministic package build.
+    """
+    if endpoint == _DEVELOPMENT_PLACEHOLDER:
+        return (
+            "must use a public, non-local, non-reserved host for a release build"
+            if release
+            else None
+        )
+    if not isinstance(endpoint, str) or not endpoint or endpoint != endpoint.strip():
+        return "must be a non-empty URL without surrounding whitespace"
+    try:
+        parsed = urlsplit(endpoint)
+        port = parsed.port  # Force validation of a malformed/out-of-range port.
+    except ValueError:
+        return "contains an invalid host or port"
+    if parsed.scheme not in {"http", "https"}:
+        return "must use HTTP or HTTPS"
+    if not parsed.hostname:
+        return "must include a host"
+    if parsed.username is not None or parsed.password is not None:
+        return "must not contain credentials"
+    if parsed.query or parsed.fragment:
+        return "must not contain a query string or fragment"
+    if parsed.path != "/mcp":
+        return "must use the exact /mcp route"
+    if port is not None and not 1 <= port <= 65535:
+        return "contains an invalid port"
+
+    host = parsed.hostname.lower()
+    if host.endswith(".") or "%" in host:
+        return "contains an invalid host"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        try:
+            ascii_host = host.encode("idna").decode("ascii")
+        except UnicodeError:
+            return "contains an invalid host"
+        labels = ascii_host.split(".")
+        if any(not _DNS_LABEL.fullmatch(label) for label in labels):
+            return "contains an invalid host"
+        is_loopback = ascii_host == "localhost" or ascii_host.endswith(".localhost")
+        is_public_host = (
+            len(labels) >= 2
+            and not is_loopback
+            and not any(ascii_host.endswith(suffix) for suffix in _RESERVED_SUFFIXES)
+            and not any(
+                ascii_host == domain or ascii_host.endswith(f".{domain}")
+                for domain in _EXAMPLE_DOMAINS
+            )
+        )
+    else:
+        is_loopback = address.is_loopback
+        is_public_host = address.is_global
+
+    if parsed.scheme == "http" and not is_loopback:
+        return "may use HTTP only with a loopback host for development"
+    if release:
+        if parsed.scheme != "https":
+            return "must use HTTPS for a release build"
+        if not is_public_host:
+            return "must use a public, non-local, non-reserved host for a release build"
+    return None
 
 
 def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release):
@@ -207,10 +279,10 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release)
 
     mcp_document, configured_endpoint = _source_endpoint(repo_root)
     endpoint = endpoint_override or configured_endpoint
-    if not _valid_endpoint(endpoint):
-        raise SystemExit("OpenAI MCP endpoints must use HTTPS (or localhost for development)")
-    if release and _PLACEHOLDER_HOST in endpoint:
-        raise SystemExit("Release build refused: replace the example OpenAI MCP endpoint")
+    endpoint_error = _endpoint_error(endpoint, release)
+    if endpoint_error:
+        kind = "Release OpenAI MCP endpoint" if release else "OpenAI MCP endpoint"
+        raise SystemExit(f"{kind} {endpoint_error}")
     mcp_target = os.path.join(plugin_stage, "mcp.json")
     if endpoint_override:
         mcp_document["mcpServers"]["simplify-med-ui"]["url"] = endpoint
