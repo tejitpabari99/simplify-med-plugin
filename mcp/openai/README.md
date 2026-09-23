@@ -20,8 +20,7 @@ The iframe receives the original tool input from ChatGPT. In the user's browser 
 only `file_id` with `window.openai.getFileDownloadUrl`, downloads the JSON from OpenAI,
 validates the complete bundled `care_plan.schema.json` plus finalization-only metadata
 (including the readability score), and renders it locally. Intermediate draft plans are
-rejected. Parsed
-report data is never sent to this MCP service or to another tool.
+rejected. Parsed report data is never sent to this MCP service or to another tool.
 
 This boundary does not mean that no data leaves ChatGPT: the endpoint sees a temporary
 file capability and ordinary HTTP metadata. It also does not establish PHI, HIPAA,

@@ -358,7 +358,11 @@ def _build_arg_parser():
     parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
     parser.add_argument("--out", default="dist", help="Output directory (default: dist)")
     parser.add_argument("--mcp-url", default=None, help="Override the staged OpenAI MCP endpoint")
-    parser.add_argument("--release", action="store_true", help="Reject placeholder OpenAI endpoints")
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        help="Require a public HTTPS /mcp endpoint for an OpenAI build",
+    )
     return parser
 
 

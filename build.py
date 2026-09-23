@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--release",
         action="store_true",
-        help="Require a non-placeholder production endpoint for an OpenAI build",
+        help="Require a public HTTPS /mcp endpoint for an OpenAI build",
     )
     args = parser.parse_args(argv)
     packaging_build.build(

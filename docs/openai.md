@@ -201,13 +201,18 @@ python3 build.py claude-code
 python3 build.py claude-ai
 ```
 
-Override the staged endpoint explicitly, and use `--release` to reject the committed
-example domain:
+Override the staged endpoint explicitly. Developer builds may use literal loopback;
+use `--release` with the real production endpoint to require HTTPS, the exact `/mcp`
+path, and a syntactically public, non-reserved host:
 
 ```bash
-python3 build.py openai --mcp-url https://plugin.example.com/mcp
-python3 build.py openai --mcp-url https://plugin.example.com/mcp --release
+python3 build.py openai --mcp-url http://127.0.0.1:3000/mcp
+python3 build.py openai --mcp-url https://mcp.yourdomain.com/mcp --release
 ```
+
+Replace `mcp.yourdomain.com` with the endpoint you actually operate. The build performs
+deterministic URL validation; it does not prove DNS resolution, TLS, reachability, or
+that the host is under your control.
 
 The compatibility form remains available:
 
@@ -241,8 +246,10 @@ Version `0.1.0` does not include the optional `.codex-plugin/` compatibility man
 or an `assets/` directory because its portable manifest does not reference either.
 
 The endpoint must come from one build configuration source so the staged `mcp.json` and
-`agents/openai.yaml` cannot drift. Developer builds may use an explicit test endpoint;
-a release build must not ship `PLUGIN_DOMAIN.example` or another placeholder.
+`agents/openai.yaml` cannot drift. Developer builds may use an explicit loopback test
+endpoint. A release build rejects the committed example, HTTP, loopback/private IPs,
+reserved/example names, credentials, query strings, fragments, and paths other than
+exactly `/mcp`.
 
 Before distributing a ZIP, inspect its entries and validate root `plugin.json` and
 `mcp.json` against the Agent Plugins 1.0 schemas. Root portable manifests are canonical;
@@ -268,7 +275,8 @@ npm start
 
 It listens on `127.0.0.1:3000` by default, serves MCP at `/mcp`, and exposes the
 non-sensitive health response at `/healthz`. Set `HOST` and `PORT` to change the bind;
-a non-loopback bind also requires `ALLOWED_HOSTS`. Set
+a non-loopback bind also requires `ALLOWED_HOSTS` and `PUBLIC_ORIGIN` (the dedicated
+HTTPS origin advertised as `_meta.ui.domain`). Set
 `OPENAI_FILE_DOWNLOAD_ORIGINS` to a comma-separated list of exact, bare origins only
 after the live prototype establishes which origin is needed. Wildcards are rejected.
 
