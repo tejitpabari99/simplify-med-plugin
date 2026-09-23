@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "plugin_version": "0.1.0",
+  "meta": {
+    "run_id": "synthetic-widget-test",
+    "created_at": "2026-09-23T12:00:00Z"
+  },
+  "notices": ["Confirm medicine details with your clinician or pharmacist."],
+  "summary": "Your note describes chest tightness with activity and follow-up heart testing.",
+  "summary_fact_ids": [1],
+  "reason_for_visit": [
+    {
+      "reason": "Chest tightness",
+      "description": "Chest tightness happened during activity.",
+      "source_fact_ids": [1]
+    }
+  ],
+  "diagnosis": {
+    "changed_since_last_visit": "Stable angina is listed as a new diagnosis.",
+    "changed_since_last_visit_fact_ids": [2],
+    "details": [
+      {
+        "title": "Stable angina",
+        "plain_name": "chest pain from reduced blood flow",
+        "description": "The note lists stable angina.",
+        "what_it_means_for_you": "Symptoms may happen during activity.",
+        "severity": "medium",
+        "source_fact_ids": [2]
+      }
+    ]
+  },
+  "medications": [
+    {
+      "title": "Metoprolol",
+      "plain_name": "metoprolol",
+      "why": "For heart rate and chest pain management.",
+      "dosage": "25 mg",
+      "frequency": "twice daily",
+      "timing": "",
+      "duration": "",
+      "instructions": "",
+      "side_effects_to_watch": "",
+      "change": "New medication",
+      "status": "to_do",
+      "source_fact_ids": [3]
+    }
+  ],
+  "tests": [
+    {
+      "title": "Exercise stress test",
+      "plain_name": "",
+      "why": "To check blood flow during exercise.",
+      "description": "A heart test performed during exercise.",
+      "preparation": "",
+      "status": "to_do",
+      "source_fact_ids": [4]
+    }
+  ],
+  "procedures": [],
+  "other": [],
+  "follow_up": [
+    {
+      "time_frame": "In four weeks",
+      "description": "Review the stress test result.",
+      "status": "to_do",
+      "source_fact_ids": [5]
+    }
+  ],
+  "warning_signs": [
+    {
+      "symptom": "Chest tightness at rest",
+      "what_it_might_mean": "The note marks this as urgent.",
+      "what_to_do": "Call 911 or go to the emergency room.",
+      "urgency": "emergency",
+      "related_to": "Chest symptoms",
+      "source_fact_ids": [6]
+    }
+  ],
+  "questions": ["When should I schedule the stress test?"],
+  "low_priority": [],
+  "terms": {
+    "Angina": {
+      "definition": "Chest pain caused by reduced blood flow to the heart.",
+      "source": "llm_proposed"
+    }
+  }
+}
