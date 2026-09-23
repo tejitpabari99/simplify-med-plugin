@@ -27,6 +27,7 @@ porting the pipeline.
 ```
 plugin.meta.json               source of truth for name/version/description/schema_version
 .claude-plugin/plugin.json     Claude Code manifest (version must match plugin.meta.json)
+build.py                       root dispatcher for platform packages
 skills/simplify-med/           the portable Agent Skill (SKILL.md + bundled files)
   SKILL.md                     orchestration: stage list, file handoffs, parallel groups, fallback
   stages/                      one prompt per LLM stage
@@ -35,7 +36,8 @@ skills/simplify-med/           the portable Agent Skill (SKILL.md + bundled file
   reference/                   style rules, category checklist, abbreviation/plain-language dictionaries
   templates/                   report.html
 agents/                        thin Claude Code agent definitions, one per LLM stage
-packaging/                     build.py, claude-code.ignore, claude-ai.ignore
+packaging/                     shared staging plus per-platform profiles/overlays
+mcp/openai/                    presentation-only MCP server and ChatGPT report widget
 tests/                         unittest modules and fixtures
 docs/                          this documentation suite, plus agent_files/ (design history)
 simplify-runs/                 gitignored; one folder per run
@@ -467,6 +469,47 @@ Both kill tests ran under a 2-concurrent-agent cap; group A (ground×K plus
 glossary) split into batches when K+1 exceeded 2; group B always fit in
 one batch. The cap was never the actual bottleneck in either test.
 
+### Platform extension points
+
+`SKILL.md` has two platform extension points. After resolving bundled paths and before
+Stage 0 it reads `custom_start.md`; after Stage 5 finalization and before presenting
+results it reads `custom_end.md`. Canonical defaults are blank no-ops. A platform build
+copies the skill to a temporary staging tree, installs the defaults, and replaces them
+with platform versions when present. It never edits the source skill.
+
+This is the only OpenAI-related change inside orchestration. The OpenAI final hook tells
+ChatGPT to expose the native summary and three generated artifacts, then call the report
+viewer with `06_plan.final.json`. It does not change the stage graph, medical prompts,
+checks, schemas, or failure table.
+
+## OpenAI presentation architecture
+
+The OpenAI package adds a post-finalization presentation path:
+
+```text
+06_plan.final.json --OpenAI file parameter--> render_simplify_med_report
+        |                                        |
+        |                                        +--> generic result + static UI only
+        v
+ChatGPT iframe receives original tool input
+        |
+        +--> getFileDownloadUrl(file_id) --> fetch from OpenAI --> validate --> render
+```
+
+The streamable-HTTP MCP endpoint registers exactly one read-only render tool and one
+versioned `text/html;profile=mcp-app` resource. The endpoint receives the file ID and
+temporary download URL in the tool call but must not fetch, process, store, echo, or log
+them. The browser widget obtains a fresh URL from the ChatGPT bridge and validates the
+final care-plan JSON locally.
+
+The widget is a renderer over the same final JSON, not another pipeline stage. Inline
+mode is compact; fullscreen mode preserves the seven-section information architecture
+and is requested only after the user activates **Open full report**. Markdown and the
+self-contained HTML remain the complete portable fallback.
+
+See [openai.md](openai.md) for the complete tool schema, data flow, privacy boundary,
+CSP, deployment, prototype gates, and PHI/publication constraints.
+
 ## Uncalibrated constants
 
 From the design brief (`brainstorm.v1.md` section 5), verified against the
@@ -502,10 +545,14 @@ rules (`test_stage_docs.py`: text-content regression guards for the
 kill-test fixes) · status lines (`test_status_lines.py`: every script ends
 stdout, second-to-last for `unitize`, with `^[a-z_]+: (ok|degraded|failed|skipped) \|`)
 · fixtures (`test_fixtures.py`: structural assertions, not LLM stages) ·
-packaging (`test_build.py`: both platform zips, a version-mismatch case).
+packaging (`test_build.py`: platform zips, staging/override behavior, archive contents,
+and version mismatches) · OpenAI MCP/widget contract tests (file schema, non-fetching
+handler, non-echoing result, client validation, capability fallbacks, and user-gesture
+fullscreen).
 
-**How to run:** `python3 -m unittest discover -s tests` — 283 tests,
-stdlib-only, no network, pass from a clean checkout.
+**How to run the Python suite:** `python3 -m unittest discover -s tests -v` — stdlib-only,
+no network, and expected to pass from a clean checkout. The OpenAI Node/widget commands
+are documented in [openai.md](openai.md#test-and-verify) and `mcp/openai/README.md`.
 
 **Fixtures** (`tests/fixtures/documents/`): `synthetic-visit-note.txt`,
 `synthetic-discharge-summary.txt` (173 units, two form-feed page breaks),

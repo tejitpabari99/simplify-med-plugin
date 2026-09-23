@@ -1,6 +1,6 @@
 # simplify-med — overview
 
-simplify-med is a plugin (one Agent Skill plus thin Claude Code wrappers) that
+simplify-med is a plugin (one portable Agent Skill plus thin platform wrappers) that
 turns a clinical document — a visit note, discharge summary, lab report, or
 imaging report — into a plain-language, fact-checked care plan. The pipeline
 first breaks the document into atomic facts, each one anchored to a specific
@@ -22,10 +22,16 @@ clinical judgement the source doesn't already contain is needed, the
 pipeline will not fill that gap — it shows "not stated" and, where relevant,
 lists it as a question to ask a doctor.
 
-There is no backend. Every script is Python 3 standard library only — no
-pip installs, no network access. The plugin reads and writes only inside the
-run folder (and the input files it's given). Everything happens wherever the
-model runs it, and deleting the run folder removes all traces of the run.
+The medical pipeline has no backend. Every pipeline script is Python 3 standard library
+only — no pip installs and no network access — and reads or writes only the run folder
+(plus its inputs). Everything medical happens wherever the model runs the skill, and
+deleting the run folder removes that local audit trail.
+
+The OpenAI package optionally adds a separately hosted, presentation-only MCP endpoint
+after the final report exists. The endpoint serves a static widget and receives a
+temporary OpenAI file reference, but is designed not to download or process the medical
+document or report bytes. See [openai.md](openai.md); this presentation layer does not
+change the pipeline above.
 
 ## Install and run
 
@@ -37,17 +43,22 @@ claude --plugin-dir /path/to/simplify-med-plugin
 
 Then invoke the `simplify-med` skill from within Claude Code.
 
-**Packaged install**, built from `packaging/build.py`:
+**Packaged install**, built from the root dispatcher:
 
 ```
-python3 packaging/build.py --platform claude-code --out dist
-python3 packaging/build.py --platform claude-ai --out dist
+python3 build.py claude-code
+python3 build.py claude-ai
+python3 build.py openai
 ```
 
-`--platform claude-code` zips the whole plugin (wrapped in a top-level
-`simplify-med/` folder) for use as a Claude Code plugin. `--platform
-claude-ai` zips just `skills/simplify-med/` (also wrapped in `simplify-med/`)
-for upload as a standalone skill on claude.ai.
+`claude-code` zips the whole plugin (wrapped in a top-level `simplify-med/`
+folder) for use as a Claude Code plugin. `claude-ai` zips just the portable
+skill (also wrapped in `simplify-med/`) for upload as a standalone skill on
+claude.ai.
+
+The OpenAI ZIP contains the same skill plus portable manifests and viewer handoff
+instructions. Its MCP viewer must be deployed separately to a stable HTTPS endpoint;
+building the archive alone does not host it.
 
 **claude.ai**: upload the `claude-ai` zip as a skill.
 
@@ -211,5 +222,6 @@ status 2) on any mismatch. Every JSON file a run produces carries its own
 - [architecture.md](architecture.md) — the stage graph, every deterministic
   check, the data contracts, and the two kill tests in detail.
 - [plugins.md](plugins.md) — how to add support for another platform.
+- [openai.md](openai.md) — how the OpenAI package and MCP report viewer work.
 - [agent_files/](agent_files/) — the original design brief, the decision
   log, the futures list, and the kill-test reports.
