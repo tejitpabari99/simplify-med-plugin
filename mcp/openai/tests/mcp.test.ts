@@ -131,6 +131,25 @@ describe("streamable HTTP service", () => {
     }
   });
 
+  it("rejects non-loopback browser origins and enforces the 64 KiB request limit", async () => {
+    const app = createHttpApp({ host: "127.0.0.1", widgetBundle: "window.widget=true;" });
+    const httpServer = createServer(app);
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const address = httpServer.address();
+    if (!address || typeof address === "string") throw new Error("missing address");
+    const url = `http://127.0.0.1:${address.port}/mcp`;
+    try {
+      const forbidden = await fetch(url, { method: "POST", headers: { origin: "https://attacker.example", "content-type": "application/json" }, body: "{}" });
+      expect(forbidden.status).toBe(403);
+      const canary = "PRIVATE-BODY-CANARY";
+      const oversized = await fetch(url, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ canary, padding: "x".repeat(70 * 1024) }) });
+      expect(oversized.status).toBe(413);
+      expect(await oversized.text()).not.toContain(canary);
+    } finally {
+      await new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
   it("contains no report fixture in server source or health output", () => {
     const fixture = readFileSync(new URL("./fixtures/final-report.json", import.meta.url), "utf8");
     expect(fixture).toContain("synthetic-widget-test");

@@ -85,7 +85,9 @@ There is intentionally no second upload or file picker.
    notification (or the `window.openai.toolInput` compatibility value).
 6. The widget uses `file_id` with `window.openai.getFileDownloadUrl`, then fetches the
    fresh temporary URL directly from OpenAI in the user's browser/iframe.
-7. The widget validates and renders the JSON locally. It does not send the parsed report
+7. The widget validates both the complete report schema and finalization-only evidence
+   such as the readability score and complete final metadata; intermediate plans are rejected.
+8. The widget renders the JSON locally. It does not send the parsed report
    to the MCP endpoint, another tool, analytics, or another network service.
 
 The accurate privacy statement is:
@@ -223,7 +225,6 @@ The OpenAI archive contains this logical root:
 simplify-med/
   plugin.json
   mcp.json
-  .codex-plugin/plugin.json       # optional compatibility fallback
   skills/simplify-med/
     SKILL.md
     custom_start.md
@@ -234,8 +235,10 @@ simplify-med/
     scripts/
     stages/
     templates/
-  assets/                         # only assets referenced by the manifest
 ```
+
+Version `0.1.0` does not include the optional `.codex-plugin/` compatibility manifest
+or an `assets/` directory because its portable manifest does not reference either.
 
 The endpoint must come from one build configuration source so the staged `mcp.json` and
 `agents/openai.yaml` cannot drift. Developer builds may use an explicit test endpoint;

@@ -1,4 +1,4 @@
-import { App } from "@modelcontextprotocol/ext-apps";
+import { App, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps";
 
 import validateReport from "../generated/validate-report.js";
 
@@ -12,7 +12,11 @@ type FileParam = {
   mime_type?: string;
   file_name?: string;
 };
-type PresentationState = { openSections: string[]; checkedItems: string[] };
+type PresentationState = { openSections: string[]; checkedItems: Record<string, boolean> };
+type HostCapabilities = NonNullable<ReturnType<App["getHostCapabilities"]>>;
+type HostContext = NonNullable<ReturnType<App["getHostContext"]>>;
+
+export const APP_CAPABILITIES = { availableDisplayModes: ["inline", "fullscreen"] as const };
 
 type OpenAiBridge = {
   toolInput?: unknown;
@@ -41,6 +45,10 @@ function list(value: unknown): JsonObject[] {
 }
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+function booleans(value: unknown): Record<string, boolean> {
+  const input = obj(value);
+  return Object.fromEntries(Object.entries(input).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"));
 }
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -92,7 +100,42 @@ export function validateCarePlan(value: unknown): JsonObject {
   }
   const plan = value as JsonObject;
   if (plan.schema_version !== "1.0") throw new Error("This report schema version is not supported");
+  const meta = obj(plan.meta);
+  const score = obj(plan.score);
+  const requiredMeta = ["run_id", "plugin_version", "schema_version", "level", "created_at"];
+  const finalMeta = requiredMeta.every((key) => typeof meta[key] === "string" && text(meta[key]).length > 0);
+  const finalScore = Object.hasOwn(score, "before_grade") && Object.hasOwn(score, "after_grade") &&
+    [score.before_grade, score.after_grade].every((item) => item === null || typeof item === "number");
+  if (!finalMeta || !finalScore || !Array.isArray(plan.notices) || plan.terms === null || typeof plan.terms !== "object" || Array.isArray(plan.terms)) {
+    throw new Error("This is not a finalized Simplify Med report");
+  }
+  if (meta.plugin_version !== plan.plugin_version || meta.schema_version !== plan.schema_version) {
+    throw new Error("The finalized report metadata is inconsistent");
+  }
   return plan;
+}
+
+async function readLimitedBody(response: Response): Promise<string> {
+  if (!response.body) {
+    const raw = await response.text();
+    if (new TextEncoder().encode(raw).byteLength > MAX_REPORT_BYTES) throw new Error("This report is too large to display safely");
+    return raw;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let output = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_REPORT_BYTES) {
+      await reader.cancel();
+      throw new Error("This report is too large to display safely");
+    }
+    output += decoder.decode(value, { stream: true });
+  }
+  return output + decoder.decode();
 }
 
 export async function fetchReport(file: FileParam, bridge: OpenAiBridge): Promise<JsonObject> {
@@ -103,8 +146,7 @@ export async function fetchReport(file: FileParam, bridge: OpenAiBridge): Promis
   if (!response.ok) throw new Error("The report could not be loaded. Its temporary link may have expired");
   const declaredSize = Number(response.headers.get("content-length") || "0");
   if (declaredSize > MAX_REPORT_BYTES) throw new Error("This report is too large to display safely");
-  const raw = await response.text();
-  if (new Blob([raw]).size > MAX_REPORT_BYTES) throw new Error("This report is too large to display safely");
+  const raw = await readLimitedBody(response);
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -122,11 +164,11 @@ function rowTitle(item: JsonObject): string {
 
 function allNextSteps(plan: JsonObject) {
   const definitions: Array<[string, string, (item: JsonObject) => string, (item: JsonObject) => string[]]> = [
-    ["medications", "Medication", rowTitle, (item) => [present([item.dosage, item.frequency, item.timing, item.duration]), `Why: ${text(item.why) || "not stated in your note"}`, text(item.instructions), text(item.side_effects_to_watch), text(item.change)]],
-    ["tests", "Test", rowTitle, (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, text(item.preparation)]],
-    ["procedures", "Procedure", rowTitle, (item) => [text(item.what_to_expect), `Why: ${text(item.why) || "not stated in your note"}`, text(item.timeframe)]],
+    ["medications", "Medication", rowTitle, (item) => [present([item.dosage, item.frequency, item.timing, item.duration]), `Why: ${text(item.why) || "not stated in your note"}`, text(item.instructions) ? `Instructions: ${text(item.instructions)}` : "", text(item.side_effects_to_watch) ? `Side effects to watch for: ${text(item.side_effects_to_watch)}` : "", text(item.change) ? `Change: ${text(item.change)}` : ""]],
+    ["tests", "Test", rowTitle, (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, text(item.preparation) ? `How to prepare: ${text(item.preparation)}` : ""]],
+    ["procedures", "Procedure", rowTitle, (item) => [text(item.what_to_expect), `Why: ${text(item.why) || "not stated in your note"}`, text(item.timeframe) ? `When: ${text(item.timeframe)}` : ""]],
     ["follow_up", "Appointment", () => "Appointment", (item) => [present([item.time_frame, item.description], " — ")]],
-    ["other", "Instruction", (item) => text(item.title) || "Instruction", (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, ...strings(item.steps), text(item.frequency), text(item.duration)]],
+    ["other", "Instruction", (item) => text(item.title) || "Instruction", (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, ...strings(item.steps).map((step, index) => `Step ${index + 1}: ${step}`), text(item.frequency) ? `How often: ${text(item.frequency)}` : "", text(item.duration) ? `For how long: ${text(item.duration)}` : ""]],
   ];
   return definitions.flatMap(([field, type, title, details]) =>
     list(plan[field]).map((item, index) => ({
@@ -173,7 +215,8 @@ export function renderFullReport(plan: JsonObject, state: PresentationState, con
   const diagnosis = obj(plan.diagnosis); const findings = list(diagnosis.details);
   if (findings.length || text(diagnosis.changed_since_last_visit)) {
     const { root, body } = sectionShell("findings", "What the doctor found", state);
-    for (const item of findings) { const card = element("article", { className: "finding" }); appendText(card, "h3", rowTitle(item)); appendText(card, "p", text(item.description)); appendText(card, "p", text(item.what_it_means_for_you), "details"); body.append(card); }
+    const severityLabels: Record<string, string> = { high: "Serious", medium: "Moderate", low: "Minor" };
+    for (const item of findings) { const card = element("article", { className: "finding" }); const heading = element("h3", { text: rowTitle(item) }); const severity = severityLabels[text(item.severity)]; if (severity) heading.append(element("span", { className: "tag", text: severity })); card.append(heading); appendText(card, "p", text(item.description)); appendText(card, "p", text(item.what_it_means_for_you), "details"); body.append(card); }
     appendText(body, "p", text(diagnosis.changed_since_last_visit) ? `What changed since last time: ${text(diagnosis.changed_since_last_visit)}` : ""); body.append(followButton("findings", controller)); sections.findings = root;
   }
   const steps = allNextSteps(plan);
@@ -181,16 +224,17 @@ export function renderFullReport(plan: JsonObject, state: PresentationState, con
     const { root, body } = sectionShell("next_steps", "Your next steps", state);
     for (const group of [[false, "To do"], [true, "Already done"]] as const) {
       const rows = steps.filter((step) => step.done === group[0]); if (!rows.length) continue; body.append(element("h3", { text: group[1] }));
-      for (const step of rows) { const card = element("article", { className: "row" }); const label = element("label"); const box = element("input") as HTMLInputElement; box.type = "checkbox"; box.checked = state.checkedItems.includes(step.key) || step.done; box.dataset.key = step.key; box.addEventListener("change", () => controller.saveState()); const content = element("span"); appendText(content, "strong", step.title); content.append(element("span", { className: "tag", text: step.type })); for (const detail of step.details) appendText(content, "span", detail, "details"); label.append(box, content); card.append(label); body.append(card); }
+      for (const step of rows) { const card = element("article", { className: "row" }); const label = element("label"); const box = element("input") as HTMLInputElement; box.type = "checkbox"; box.checked = state.checkedItems[step.key] ?? step.done; box.dataset.key = step.key; box.addEventListener("change", () => controller.saveState()); const content = element("span"); appendText(content, "strong", step.title); content.append(element("span", { className: "tag", text: step.type })); for (const detail of step.details) appendText(content, "span", detail, "details"); label.append(box, content); card.append(label); body.append(card); }
     }
     body.append(followButton("next_steps", controller)); sections.next_steps = root;
   }
   const urgencyOrder = ["emergency", "call_doctor", "monitor", "normal_side_effect"];
+  const urgencyLabels: Record<string, string> = { emergency: "Emergency", call_doctor: "Call your doctor", monitor: "Keep an eye on it", normal_side_effect: "Normal side effect" };
   const urgencyRank = (value: unknown) => { const rank = urgencyOrder.indexOf(text(value)); return rank < 0 ? urgencyOrder.length : rank; };
   const warnings = list(plan.warning_signs).map((item, index) => ({ item, index })).sort((a, b) => urgencyRank(a.item.urgency) - urgencyRank(b.item.urgency) || a.index - b.index);
   if (warnings.length) {
     const { root, body } = sectionShell("watch", "What to watch for", state);
-    for (const { item } of warnings) { const card = element("article", { className: "warning" }); appendText(card, "h3", text(item.symptom)); appendText(card, "p", text(item.what_to_do)); appendText(card, "p", text(item.what_it_might_mean), "details"); appendText(card, "p", text(item.related_to) ? `Related to: ${text(item.related_to)}` : "", "details"); body.append(card); }
+    for (const { item } of warnings) { const card = element("article", { className: "warning" }); const heading = element("h3", { text: text(item.symptom) }); const urgency = urgencyLabels[text(item.urgency)]; if (urgency) heading.append(element("span", { className: "tag", text: urgency })); card.append(heading); appendText(card, "p", text(item.what_to_do)); appendText(card, "p", text(item.what_it_might_mean), "details"); appendText(card, "p", text(item.related_to) ? `Related to: ${text(item.related_to)}` : "", "details"); body.append(card); }
     body.append(followButton("watch", controller)); sections.watch = root;
   }
   const questions = strings(plan.questions);
@@ -206,15 +250,25 @@ export class ReportController {
   private state: PresentationState;
   private app: App | null = null;
   private appConnected = false;
+  private hostCapabilities: HostCapabilities = {};
+  private hostContext: HostContext = {};
   private loadedFileId = "";
 
   constructor(private readonly root: HTMLElement, private readonly bridge: OpenAiBridge = window.openai ?? {}) {
     const saved = obj(bridge.widgetState);
-    this.state = { openSections: strings(saved.openSections), checkedItems: strings(saved.checkedItems) };
+    const legacyChecked = strings(saved.checkedItems);
+    this.state = {
+      openSections: strings(saved.openSections),
+      checkedItems: legacyChecked.length ? Object.fromEntries(legacyChecked.map((key) => [key, true])) : booleans(saved.checkedItems),
+    };
   }
 
   attachApp(app: App) { this.app = app; }
-  markAppConnected() { this.appConnected = true; }
+  markAppConnected(capabilities: HostCapabilities = {}, context: HostContext = {}) {
+    this.appConnected = true;
+    this.hostCapabilities = capabilities;
+    this.hostContext = context;
+  }
 
   showStatus(message: string, error = false) {
     this.root.replaceChildren();
@@ -246,12 +300,19 @@ export class ReportController {
     header.append(element("p", { className: "sub", text: created ? `Simplify Med report created ${created}.` : "Simplify Med report." }));
     this.root.append(header);
     for (const notice of strings(this.plan.notices)) this.root.append(element("p", { className: "notice", text: notice }));
+    const score = obj(this.plan.score); const before = score.before_grade; const after = score.after_grade;
+    if (typeof after === "number") {
+      const scoreText = typeof before === "number" ? `Reading level: grade ${before} before, grade ${after} after.` : `Reading level: about grade ${after}.`;
+      this.root.append(element("p", { className: "muted", text: scoreText }));
+    }
     const overview = element("section", { className: "overview", attrs: { "aria-label": "Report highlights" } });
     const cards: Array<[string, string]> = [
       ["What you need to know", text(this.plan.summary)],
       ["Next actions", allNextSteps(this.plan).filter((step) => !step.done).slice(0, 3).map((step) => step.title).join("; ") || "No next action is listed."],
       ["Medication notes", list(this.plan.medications).slice(0, 3).map((item) => present([item.title, item.change], ": ")).join("; ") || "No medication item is listed."],
       ["Follow-up", [...list(this.plan.tests), ...list(this.plan.follow_up)].slice(0, 3).map((item) => text(item.title) || present([item.time_frame, item.description], " — ")).filter(Boolean).join("; ") || "No test or follow-up item is listed."],
+      ["Procedures", list(this.plan.procedures).slice(0, 3).map((item) => present([item.title, item.timeframe], " — ")).filter(Boolean).join("; ") || "No procedure is listed."],
+      ["Important uncertainty", strings(this.plan.notices).slice(0, 2).join("; ") || "No uncertainty notice is listed in the report."],
     ];
     for (const [heading, body] of cards) { const card = element("article"); card.append(element("h2", { text: heading }), element("p", { text: body })); overview.append(card); }
     this.root.append(overview);
@@ -268,22 +329,35 @@ export class ReportController {
 
   async openFullReport() {
     let mode = "inline";
+    let standardAttempted = false;
     try {
-      if (this.appConnected && this.app) mode = (await this.app.requestDisplayMode({ mode: "fullscreen" })).mode;
-      else if (this.bridge.requestDisplayMode) mode = (await this.bridge.requestDisplayMode({ mode: "fullscreen" })).mode;
+      const available = this.hostContext.availableDisplayModes;
+      if (this.appConnected && this.app && (!available || available.includes("fullscreen"))) {
+        standardAttempted = true;
+        mode = (await this.app.requestDisplayMode({ mode: "fullscreen" })).mode;
+      }
     } catch { mode = "inline"; }
+    if (mode !== "fullscreen" && this.bridge.requestDisplayMode) {
+      try { mode = (await this.bridge.requestDisplayMode({ mode: "fullscreen" })).mode; }
+      catch { mode = "inline"; }
+    }
     this.render(true);
     if (mode !== "fullscreen") {
-      const note = element("p", { className: "notice", text: "Fullscreen was unavailable, so the complete report is expanded here." });
-      this.root.querySelector("header")?.after(note);
+      this.showActionNotice(`${standardAttempted ? "Fullscreen was denied or unavailable" : "Fullscreen was unavailable"}, so the complete report is expanded here.`);
     }
+  }
+
+  private showActionNotice(message: string) {
+    this.root.querySelector(".action-notice")?.remove();
+    const note = element("p", { className: "notice action-notice", text: message, attrs: { role: "status" } });
+    this.root.querySelector("header")?.after(note);
   }
 
   saveState() {
     const openSections = Array.from(this.root.querySelectorAll<HTMLDetailsElement>("details[data-section]"))
       .filter((item) => item.open).map((item) => item.dataset.section || "").filter(Boolean);
-    const checkedItems = Array.from(this.root.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-key]'))
-      .filter((item) => item.checked).map((item) => item.dataset.key || "").filter(Boolean);
+    const checkedItems = Object.fromEntries(Array.from(this.root.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-key]'))
+      .map((item) => [item.dataset.key || "", item.checked]).filter(([key]) => Boolean(key)));
     this.state = { openSections, checkedItems };
     this.bridge.setWidgetState?.(this.state);
   }
@@ -292,14 +366,20 @@ export class ReportController {
     const prompt = `Explain the Simplify Med report section "${sectionId}" using only the completed report already in this conversation.`;
     try {
       if (this.appConnected && this.app) {
-        await this.app.updateModelContext({ structuredContent: { simplifyMedSection: sectionId } });
-        await this.app.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] });
-      } else if (this.bridge.sendFollowUpMessage) {
-        await this.bridge.sendFollowUpMessage({ prompt });
+        if (this.hostCapabilities.updateModelContext) {
+          await this.app.updateModelContext({ structuredContent: { simplifyMedSection: sectionId } });
+        }
+        if (this.hostCapabilities.message) {
+          await this.app.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] });
+          return;
+        }
       }
-    } catch {
-      this.showStatus("ChatGPT follow-up messaging is unavailable. Ask about this section in the composer instead.", true);
+    } catch { /* Try the ChatGPT compatibility extension below. */ }
+    if (this.bridge.sendFollowUpMessage) {
+      try { await this.bridge.sendFollowUpMessage({ prompt }); return; }
+      catch { /* Preserve the report and show a local fallback. */ }
     }
+    this.showActionNotice("ChatGPT follow-up messaging is unavailable. Ask about this section in the composer instead.");
   }
 
   downloadJson() {
@@ -318,20 +398,37 @@ export function bindToolInputs(
   if (compatibilityInput) void controller.receiveToolInput(compatibilityInput);
 }
 
+export function applyHostContext(context: HostContext) {
+  if (context.theme === "light" || context.theme === "dark") document.documentElement.dataset.theme = context.theme;
+  if (context.locale) document.documentElement.lang = context.locale;
+  if (context.displayMode) document.documentElement.dataset.displayMode = context.displayMode;
+  if (context.styles?.variables) applyHostStyleVariables(context.styles.variables);
+  const dimensions = context.containerDimensions;
+  const maxHeight = dimensions && "maxHeight" in dimensions ? dimensions.maxHeight : undefined;
+  if (typeof maxHeight === "number" && maxHeight > 0) document.documentElement.style.setProperty("--host-max-height", `${maxHeight}px`);
+  else document.documentElement.style.removeProperty("--host-max-height");
+}
+
 export async function bootstrap() {
   const root = document.getElementById("app");
   if (!root) throw new Error("Missing widget root");
   const controller = new ReportController(root, window.openai ?? {});
-  const app = new App({ name: "simplify-med-report-viewer", version: "0.1.0" }, {}, { autoResize: true });
-  const applyHostContext = (context: { theme?: string; locale?: string }) => {
-    if (context.theme === "light" || context.theme === "dark") document.documentElement.dataset.theme = context.theme;
-    if (context.locale) document.documentElement.lang = context.locale;
-  };
+  const app = new App(
+    { name: "simplify-med-report-viewer", version: "0.1.0" },
+    APP_CAPABILITIES,
+    { autoResize: true },
+  );
   controller.attachApp(app);
   app.onhostcontextchanged = applyHostContext;
   const compatibilityInput = window.openai?.toolInput;
   bindToolInputs(app, controller, compatibilityInput);
-  try { await app.connect(); controller.markAppConnected(); applyHostContext(app.getHostContext() ?? {}); }
+  try {
+    await app.connect();
+    const capabilities = app.getHostCapabilities() ?? {};
+    const context = app.getHostContext() ?? {};
+    controller.markAppConnected(capabilities, context);
+    applyHostContext(context);
+  }
   catch { if (!compatibilityInput) controller.showStatus("Waiting for ChatGPT to provide the completed report…"); }
   return controller;
 }

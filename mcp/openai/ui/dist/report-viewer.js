@@ -23417,6 +23417,9 @@ container holding the app. Specify either width or maxWidth, and either height o
     }
     return $.value;
   }
+  function bQ(X, Y = document.documentElement) {
+    for (let [Z, $] of Object.entries(X)) if ($ !== void 0) Y.style.setProperty(Z, $);
+  }
   var i = class _i extends _ {
     _appInfo;
     _capabilities;
@@ -25952,6 +25955,7 @@ container holding the app. Specify either width or maxWidth, and either height o
   // ui/src/report-viewer.ts
   var MAX_REPORT_BYTES = 5 * 1024 * 1024;
   var SECTION_ORDER = ["summary", "reason", "findings", "next_steps", "watch", "questions", "glossary"];
+  var APP_CAPABILITIES = { availableDisplayModes: ["inline", "fullscreen"] };
   function obj(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
   }
@@ -25960,6 +25964,10 @@ container holding the app. Specify either width or maxWidth, and either height o
   }
   function strings(value) {
     return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+  }
+  function booleans(value) {
+    const input2 = obj(value);
+    return Object.fromEntries(Object.entries(input2).filter((entry) => typeof entry[1] === "boolean"));
   }
   function text(value) {
     return typeof value === "string" ? value : "";
@@ -26004,7 +26012,40 @@ container holding the app. Specify either width or maxWidth, and either height o
     }
     const plan = value;
     if (plan.schema_version !== "1.0") throw new Error("This report schema version is not supported");
+    const meta3 = obj(plan.meta);
+    const score = obj(plan.score);
+    const requiredMeta = ["run_id", "plugin_version", "schema_version", "level", "created_at"];
+    const finalMeta = requiredMeta.every((key) => typeof meta3[key] === "string" && text(meta3[key]).length > 0);
+    const finalScore = Object.hasOwn(score, "before_grade") && Object.hasOwn(score, "after_grade") && [score.before_grade, score.after_grade].every((item) => item === null || typeof item === "number");
+    if (!finalMeta || !finalScore || !Array.isArray(plan.notices) || plan.terms === null || typeof plan.terms !== "object" || Array.isArray(plan.terms)) {
+      throw new Error("This is not a finalized Simplify Med report");
+    }
+    if (meta3.plugin_version !== plan.plugin_version || meta3.schema_version !== plan.schema_version) {
+      throw new Error("The finalized report metadata is inconsistent");
+    }
     return plan;
+  }
+  async function readLimitedBody(response) {
+    if (!response.body) {
+      const raw = await response.text();
+      if (new TextEncoder().encode(raw).byteLength > MAX_REPORT_BYTES) throw new Error("This report is too large to display safely");
+      return raw;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let size = 0;
+    let output2 = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REPORT_BYTES) {
+        await reader.cancel();
+        throw new Error("This report is too large to display safely");
+      }
+      output2 += decoder.decode(value, { stream: true });
+    }
+    return output2 + decoder.decode();
   }
   async function fetchReport(file2, bridge) {
     if (!bridge.getFileDownloadUrl) throw new Error("ChatGPT file download is unavailable in this view");
@@ -26014,8 +26055,7 @@ container holding the app. Specify either width or maxWidth, and either height o
     if (!response.ok) throw new Error("The report could not be loaded. Its temporary link may have expired");
     const declaredSize = Number(response.headers.get("content-length") || "0");
     if (declaredSize > MAX_REPORT_BYTES) throw new Error("This report is too large to display safely");
-    const raw = await response.text();
-    if (new Blob([raw]).size > MAX_REPORT_BYTES) throw new Error("This report is too large to display safely");
+    const raw = await readLimitedBody(response);
     let parsed;
     try {
       parsed = JSON.parse(raw);
@@ -26031,11 +26071,11 @@ container holding the app. Specify either width or maxWidth, and either height o
   }
   function allNextSteps(plan) {
     const definitions = [
-      ["medications", "Medication", rowTitle, (item) => [present([item.dosage, item.frequency, item.timing, item.duration]), `Why: ${text(item.why) || "not stated in your note"}`, text(item.instructions), text(item.side_effects_to_watch), text(item.change)]],
-      ["tests", "Test", rowTitle, (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, text(item.preparation)]],
-      ["procedures", "Procedure", rowTitle, (item) => [text(item.what_to_expect), `Why: ${text(item.why) || "not stated in your note"}`, text(item.timeframe)]],
+      ["medications", "Medication", rowTitle, (item) => [present([item.dosage, item.frequency, item.timing, item.duration]), `Why: ${text(item.why) || "not stated in your note"}`, text(item.instructions) ? `Instructions: ${text(item.instructions)}` : "", text(item.side_effects_to_watch) ? `Side effects to watch for: ${text(item.side_effects_to_watch)}` : "", text(item.change) ? `Change: ${text(item.change)}` : ""]],
+      ["tests", "Test", rowTitle, (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, text(item.preparation) ? `How to prepare: ${text(item.preparation)}` : ""]],
+      ["procedures", "Procedure", rowTitle, (item) => [text(item.what_to_expect), `Why: ${text(item.why) || "not stated in your note"}`, text(item.timeframe) ? `When: ${text(item.timeframe)}` : ""]],
       ["follow_up", "Appointment", () => "Appointment", (item) => [present([item.time_frame, item.description], " \u2014 ")]],
-      ["other", "Instruction", (item) => text(item.title) || "Instruction", (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, ...strings(item.steps), text(item.frequency), text(item.duration)]]
+      ["other", "Instruction", (item) => text(item.title) || "Instruction", (item) => [text(item.description), `Why: ${text(item.why) || "not stated in your note"}`, ...strings(item.steps).map((step, index) => `Step ${index + 1}: ${step}`), text(item.frequency) ? `How often: ${text(item.frequency)}` : "", text(item.duration) ? `For how long: ${text(item.duration)}` : ""]]
     ];
     return definitions.flatMap(
       ([field, type, title, details]) => list(plan[field]).map((item, index) => ({
@@ -26083,9 +26123,13 @@ container holding the app. Specify either width or maxWidth, and either height o
     const findings = list(diagnosis.details);
     if (findings.length || text(diagnosis.changed_since_last_visit)) {
       const { root, body } = sectionShell("findings", "What the doctor found", state);
+      const severityLabels = { high: "Serious", medium: "Moderate", low: "Minor" };
       for (const item of findings) {
         const card = element("article", { className: "finding" });
-        appendText(card, "h3", rowTitle(item));
+        const heading = element("h3", { text: rowTitle(item) });
+        const severity = severityLabels[text(item.severity)];
+        if (severity) heading.append(element("span", { className: "tag", text: severity }));
+        card.append(heading);
         appendText(card, "p", text(item.description));
         appendText(card, "p", text(item.what_it_means_for_you), "details");
         body.append(card);
@@ -26106,7 +26150,7 @@ container holding the app. Specify either width or maxWidth, and either height o
           const label = element("label");
           const box = element("input");
           box.type = "checkbox";
-          box.checked = state.checkedItems.includes(step.key) || step.done;
+          box.checked = state.checkedItems[step.key] ?? step.done;
           box.dataset.key = step.key;
           box.addEventListener("change", () => controller.saveState());
           const content = element("span");
@@ -26122,6 +26166,7 @@ container holding the app. Specify either width or maxWidth, and either height o
       sections.next_steps = root;
     }
     const urgencyOrder = ["emergency", "call_doctor", "monitor", "normal_side_effect"];
+    const urgencyLabels = { emergency: "Emergency", call_doctor: "Call your doctor", monitor: "Keep an eye on it", normal_side_effect: "Normal side effect" };
     const urgencyRank = (value) => {
       const rank = urgencyOrder.indexOf(text(value));
       return rank < 0 ? urgencyOrder.length : rank;
@@ -26131,7 +26176,10 @@ container holding the app. Specify either width or maxWidth, and either height o
       const { root, body } = sectionShell("watch", "What to watch for", state);
       for (const { item } of warnings) {
         const card = element("article", { className: "warning" });
-        appendText(card, "h3", text(item.symptom));
+        const heading = element("h3", { text: text(item.symptom) });
+        const urgency = urgencyLabels[text(item.urgency)];
+        if (urgency) heading.append(element("span", { className: "tag", text: urgency }));
+        card.append(heading);
         appendText(card, "p", text(item.what_to_do));
         appendText(card, "p", text(item.what_it_might_mean), "details");
         appendText(card, "p", text(item.related_to) ? `Related to: ${text(item.related_to)}` : "", "details");
@@ -26167,7 +26215,11 @@ container holding the app. Specify either width or maxWidth, and either height o
       this.root = root;
       this.bridge = bridge;
       const saved = obj(bridge.widgetState);
-      this.state = { openSections: strings(saved.openSections), checkedItems: strings(saved.checkedItems) };
+      const legacyChecked = strings(saved.checkedItems);
+      this.state = {
+        openSections: strings(saved.openSections),
+        checkedItems: legacyChecked.length ? Object.fromEntries(legacyChecked.map((key) => [key, true])) : booleans(saved.checkedItems)
+      };
     }
     root;
     bridge;
@@ -26175,12 +26227,16 @@ container holding the app. Specify either width or maxWidth, and either height o
     state;
     app = null;
     appConnected = false;
+    hostCapabilities = {};
+    hostContext = {};
     loadedFileId = "";
     attachApp(app) {
       this.app = app;
     }
-    markAppConnected() {
+    markAppConnected(capabilities = {}, context = {}) {
       this.appConnected = true;
+      this.hostCapabilities = capabilities;
+      this.hostContext = context;
     }
     showStatus(message, error62 = false) {
       this.root.replaceChildren();
@@ -26211,12 +26267,21 @@ container holding the app. Specify either width or maxWidth, and either height o
       header.append(element("p", { className: "sub", text: created ? `Simplify Med report created ${created}.` : "Simplify Med report." }));
       this.root.append(header);
       for (const notice of strings(this.plan.notices)) this.root.append(element("p", { className: "notice", text: notice }));
+      const score = obj(this.plan.score);
+      const before = score.before_grade;
+      const after = score.after_grade;
+      if (typeof after === "number") {
+        const scoreText = typeof before === "number" ? `Reading level: grade ${before} before, grade ${after} after.` : `Reading level: about grade ${after}.`;
+        this.root.append(element("p", { className: "muted", text: scoreText }));
+      }
       const overview = element("section", { className: "overview", attrs: { "aria-label": "Report highlights" } });
       const cards = [
         ["What you need to know", text(this.plan.summary)],
         ["Next actions", allNextSteps(this.plan).filter((step) => !step.done).slice(0, 3).map((step) => step.title).join("; ") || "No next action is listed."],
         ["Medication notes", list(this.plan.medications).slice(0, 3).map((item) => present([item.title, item.change], ": ")).join("; ") || "No medication item is listed."],
-        ["Follow-up", [...list(this.plan.tests), ...list(this.plan.follow_up)].slice(0, 3).map((item) => text(item.title) || present([item.time_frame, item.description], " \u2014 ")).filter(Boolean).join("; ") || "No test or follow-up item is listed."]
+        ["Follow-up", [...list(this.plan.tests), ...list(this.plan.follow_up)].slice(0, 3).map((item) => text(item.title) || present([item.time_frame, item.description], " \u2014 ")).filter(Boolean).join("; ") || "No test or follow-up item is listed."],
+        ["Procedures", list(this.plan.procedures).slice(0, 3).map((item) => present([item.title, item.timeframe], " \u2014 ")).filter(Boolean).join("; ") || "No procedure is listed."],
+        ["Important uncertainty", strings(this.plan.notices).slice(0, 2).join("; ") || "No uncertainty notice is listed in the report."]
       ];
       for (const [heading, body] of cards) {
         const card = element("article");
@@ -26246,21 +26311,36 @@ container holding the app. Specify either width or maxWidth, and either height o
     }
     async openFullReport() {
       let mode = "inline";
+      let standardAttempted = false;
       try {
-        if (this.appConnected && this.app) mode = (await this.app.requestDisplayMode({ mode: "fullscreen" })).mode;
-        else if (this.bridge.requestDisplayMode) mode = (await this.bridge.requestDisplayMode({ mode: "fullscreen" })).mode;
+        const available = this.hostContext.availableDisplayModes;
+        if (this.appConnected && this.app && (!available || available.includes("fullscreen"))) {
+          standardAttempted = true;
+          mode = (await this.app.requestDisplayMode({ mode: "fullscreen" })).mode;
+        }
       } catch {
         mode = "inline";
       }
+      if (mode !== "fullscreen" && this.bridge.requestDisplayMode) {
+        try {
+          mode = (await this.bridge.requestDisplayMode({ mode: "fullscreen" })).mode;
+        } catch {
+          mode = "inline";
+        }
+      }
       this.render(true);
       if (mode !== "fullscreen") {
-        const note = element("p", { className: "notice", text: "Fullscreen was unavailable, so the complete report is expanded here." });
-        this.root.querySelector("header")?.after(note);
+        this.showActionNotice(`${standardAttempted ? "Fullscreen was denied or unavailable" : "Fullscreen was unavailable"}, so the complete report is expanded here.`);
       }
+    }
+    showActionNotice(message) {
+      this.root.querySelector(".action-notice")?.remove();
+      const note = element("p", { className: "notice action-notice", text: message, attrs: { role: "status" } });
+      this.root.querySelector("header")?.after(note);
     }
     saveState() {
       const openSections = Array.from(this.root.querySelectorAll("details[data-section]")).filter((item) => item.open).map((item) => item.dataset.section || "").filter(Boolean);
-      const checkedItems = Array.from(this.root.querySelectorAll('input[type="checkbox"][data-key]')).filter((item) => item.checked).map((item) => item.dataset.key || "").filter(Boolean);
+      const checkedItems = Object.fromEntries(Array.from(this.root.querySelectorAll('input[type="checkbox"][data-key]')).map((item) => [item.dataset.key || "", item.checked]).filter(([key]) => Boolean(key)));
       this.state = { openSections, checkedItems };
       this.bridge.setWidgetState?.(this.state);
     }
@@ -26268,14 +26348,24 @@ container holding the app. Specify either width or maxWidth, and either height o
       const prompt = `Explain the Simplify Med report section "${sectionId}" using only the completed report already in this conversation.`;
       try {
         if (this.appConnected && this.app) {
-          await this.app.updateModelContext({ structuredContent: { simplifyMedSection: sectionId } });
-          await this.app.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] });
-        } else if (this.bridge.sendFollowUpMessage) {
-          await this.bridge.sendFollowUpMessage({ prompt });
+          if (this.hostCapabilities.updateModelContext) {
+            await this.app.updateModelContext({ structuredContent: { simplifyMedSection: sectionId } });
+          }
+          if (this.hostCapabilities.message) {
+            await this.app.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] });
+            return;
+          }
         }
       } catch {
-        this.showStatus("ChatGPT follow-up messaging is unavailable. Ask about this section in the composer instead.", true);
       }
+      if (this.bridge.sendFollowUpMessage) {
+        try {
+          await this.bridge.sendFollowUpMessage({ prompt });
+          return;
+        } catch {
+        }
+      }
+      this.showActionNotice("ChatGPT follow-up messaging is unavailable. Ask about this section in the composer instead.");
     }
     downloadJson() {
       if (!this.plan) return;
@@ -26291,23 +26381,35 @@ container holding the app. Specify either width or maxWidth, and either height o
     app.ontoolinput = (params) => void controller.receiveToolInput(params.arguments);
     if (compatibilityInput) void controller.receiveToolInput(compatibilityInput);
   }
+  function applyHostContext(context) {
+    if (context.theme === "light" || context.theme === "dark") document.documentElement.dataset.theme = context.theme;
+    if (context.locale) document.documentElement.lang = context.locale;
+    if (context.displayMode) document.documentElement.dataset.displayMode = context.displayMode;
+    if (context.styles?.variables) bQ(context.styles.variables);
+    const dimensions = context.containerDimensions;
+    const maxHeight = dimensions && "maxHeight" in dimensions ? dimensions.maxHeight : void 0;
+    if (typeof maxHeight === "number" && maxHeight > 0) document.documentElement.style.setProperty("--host-max-height", `${maxHeight}px`);
+    else document.documentElement.style.removeProperty("--host-max-height");
+  }
   async function bootstrap() {
     const root = document.getElementById("app");
     if (!root) throw new Error("Missing widget root");
     const controller = new ReportController(root, window.openai ?? {});
-    const app = new i({ name: "simplify-med-report-viewer", version: "0.1.0" }, {}, { autoResize: true });
-    const applyHostContext = (context) => {
-      if (context.theme === "light" || context.theme === "dark") document.documentElement.dataset.theme = context.theme;
-      if (context.locale) document.documentElement.lang = context.locale;
-    };
+    const app = new i(
+      { name: "simplify-med-report-viewer", version: "0.1.0" },
+      APP_CAPABILITIES,
+      { autoResize: true }
+    );
     controller.attachApp(app);
     app.onhostcontextchanged = applyHostContext;
     const compatibilityInput = window.openai?.toolInput;
     bindToolInputs(app, controller, compatibilityInput);
     try {
       await app.connect();
-      controller.markAppConnected();
-      applyHostContext(app.getHostContext() ?? {});
+      const capabilities = app.getHostCapabilities() ?? {};
+      const context = app.getHostContext() ?? {};
+      controller.markAppConnected(capabilities, context);
+      applyHostContext(context);
     } catch {
       if (!compatibilityInput) controller.showStatus("Waiting for ChatGPT to provide the completed report\u2026");
     }

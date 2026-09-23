@@ -18,7 +18,9 @@ temporary `download_url`, and may contain `file_name` and `mime_type`. The servi
 
 The iframe receives the original tool input from ChatGPT. In the user's browser it uses
 only `file_id` with `window.openai.getFileDownloadUrl`, downloads the JSON from OpenAI,
-validates the complete bundled `care_plan.schema.json`, and renders it locally. Parsed
+validates the complete bundled `care_plan.schema.json` plus finalization-only metadata
+(including the readability score), and renders it locally. Intermediate draft plans are
+rejected. Parsed
 report data is never sent to this MCP service or to another tool.
 
 This boundary does not mean that no data leaves ChatGPT: the endpoint sees a temporary
@@ -106,7 +108,10 @@ developer-mode prototype, record the actual production origin, then set the narr
 allowlist and rescan the MCP metadata. The public endpoint must use stable HTTPS and
 support unbuffered streamable HTTP.
 
-The process intentionally has no request logger. The operator must also disable request
+The HTTP service rejects browser `Origin` headers unless their hostname is loopback and
+caps JSON request bodies at 64 KiB; oversized requests receive a generic `413` response.
+The report bytes never pass through that request body. The process intentionally has no
+request logger. The operator must also disable request
 bodies, MCP arguments, file IDs, temporary URLs, and error payload capture in the reverse
 proxy, CDN, load balancer, APM, tracing, and error-reporting layers. Coarse status,
 latency, availability, and release-version metrics are sufficient. Verify this with a

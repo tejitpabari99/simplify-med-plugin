@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ReportController, bindToolInputs, fetchReport, validateCarePlan, validateFileParam } from "../ui/src/report-viewer.js";
+import { APP_CAPABILITIES, ReportController, applyHostContext, bindToolInputs, fetchReport, validateCarePlan, validateFileParam } from "../ui/src/report-viewer.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/final-report.json", import.meta.url), "utf8"));
 let dom: JSDOM;
@@ -31,6 +31,8 @@ describe("widget validation and private loading", () => {
     expect(validateCarePlan(fixture)).toEqual(fixture);
     expect(() => validateCarePlan({ ...fixture, diagnosis: { details: [] } })).toThrow();
     expect(() => validateCarePlan({ ...fixture, schema_version: "2.0" })).toThrow("not supported");
+    const { score: _score, ...draftShape } = fixture;
+    expect(() => validateCarePlan(draftShape)).toThrow("not a finalized");
   });
 
   it("uses file_id for a fresh URL and never fetches the input download_url", async () => {
@@ -51,6 +53,8 @@ describe("widget validation and private loading", () => {
     await expect(fetchReport({ file_id: "f", download_url: "x" }, bridge)).rejects.toThrow("malformed");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("{}", { status: 200, headers: { "content-length": "6000000" } })));
     await expect(fetchReport({ file_id: "f", download_url: "x" }, bridge)).rejects.toThrow("too large");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(new Uint8Array(5 * 1024 * 1024 + 1), { status: 200 })));
+    await expect(fetchReport({ file_id: "f", download_url: "x" }, bridge)).rejects.toThrow("too large");
   });
 });
 
@@ -66,6 +70,21 @@ describe("widget rendering and capability fallbacks", () => {
     return { controller: new ReportController(root, bridge), bridge, root };
   }
 
+  it("declares display modes and applies host context constraints", () => {
+    expect(APP_CAPABILITIES.availableDisplayModes).toEqual(["inline", "fullscreen"]);
+    applyHostContext({
+      theme: "dark",
+      locale: "fr-FR",
+      displayMode: "fullscreen",
+      containerDimensions: { maxHeight: 420 },
+      styles: { variables: { "--color-background-primary": "#101820" } },
+    } as any);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.documentElement.dataset.displayMode).toBe("fullscreen");
+    expect(document.documentElement.lang).toBe("fr-FR");
+    expect(document.documentElement.style.getPropertyValue("--host-max-height")).toBe("420px");
+  });
+
   it("renders the seven canonical sections in order", async () => {
     const { controller, root } = controllerWithBridge();
     await controller.receiveToolInput({ report: { file_id: "file-1", download_url: "opaque" } });
@@ -74,6 +93,15 @@ describe("widget rendering and capability fallbacks", () => {
     ]);
     expect(root.textContent).toContain("Your visit, explained");
     expect(root.textContent).toContain("not a new diagnosis or treatment instruction");
+    expect(root.textContent).toContain("Reading level: grade 11.3 before, grade 7.4 after.");
+    expect(root.textContent).toContain("Moderate");
+    expect(root.textContent).toContain("Emergency");
+    expect(root.textContent).toContain("Instructions: Take with food.");
+    expect(root.textContent).toContain("Side effects to watch for: Dizziness.");
+    expect(root.textContent).toContain("Change: New medication");
+    expect(root.textContent).toContain("When: To be decided");
+    expect(root.textContent).toContain("Procedures");
+    expect(root.textContent).toContain("Important uncertainty");
   });
 
   it("accepts both standard MCP Apps notifications and the compatibility input", async () => {
@@ -98,6 +126,20 @@ describe("widget rendering and capability fallbacks", () => {
     expect(root.querySelector("section[aria-label='Complete Simplify Med report']")?.classList.contains("hidden")).toBe(false);
   });
 
+  it("falls back from rejected standard fullscreen to the ChatGPT extension", async () => {
+    const compatibilityFullscreen = vi.fn().mockResolvedValue({ mode: "fullscreen" });
+    const { controller, root } = controllerWithBridge({ requestDisplayMode: compatibilityFullscreen });
+    const standardFullscreen = vi.fn().mockRejectedValue(new Error("unsupported"));
+    controller.attachApp({ requestDisplayMode: standardFullscreen } as any);
+    controller.markAppConnected({}, { availableDisplayModes: ["inline", "fullscreen"] });
+    await controller.receiveToolInput({ report: { file_id: "file-1", download_url: "opaque" } });
+    (root.querySelector("button.primary") as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(compatibilityFullscreen).toHaveBeenCalled());
+    expect(standardFullscreen).toHaveBeenCalled();
+    expect(root.textContent).toContain(fixture.summary);
+    expect(root.textContent).not.toContain("Fullscreen was denied");
+  });
+
   it("persists only presentation keys, never report content", async () => {
     const { controller, bridge, root } = controllerWithBridge();
     await controller.receiveToolInput({ report: { file_id: "file-1", download_url: "opaque" } });
@@ -105,6 +147,9 @@ describe("widget rendering and capability fallbacks", () => {
     const saved = bridge.setWidgetState.mock.calls.at(-1)?.[0];
     expect(Object.keys(saved).sort()).toEqual(["checkedItems", "openSections"]);
     expect(JSON.stringify(saved)).not.toContain(fixture.summary);
+    (root.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+    const unchecked = bridge.setWidgetState.mock.calls.at(-1)?.[0];
+    expect(unchecked.checkedItems["medications-0"]).toBe(false);
   });
 
   it("sends only a section identifier in a contextual follow-up", async () => {
@@ -117,13 +162,36 @@ describe("widget rendering and capability fallbacks", () => {
     expect(JSON.stringify(payload)).not.toContain(fixture.summary);
   });
 
+  it("falls back after a standard message failure without replacing the report", async () => {
+    const sendFollowUpMessage = vi.fn().mockResolvedValue({});
+    const { controller, root } = controllerWithBridge({ sendFollowUpMessage });
+    controller.attachApp({
+      updateModelContext: vi.fn().mockResolvedValue({}),
+      sendMessage: vi.fn().mockRejectedValue(new Error("rejected")),
+    } as any);
+    controller.markAppConnected({ updateModelContext: {}, message: { text: {} } }, {});
+    await controller.receiveToolInput({ report: { file_id: "file-1", download_url: "opaque" } });
+    await controller.followUp("watch");
+    expect(sendFollowUpMessage).toHaveBeenCalled();
+    expect(root.textContent).toContain(fixture.summary);
+    expect(root.querySelector(".status.error")).toBeNull();
+  });
+
+  it("preserves the report when every follow-up capability is unavailable", async () => {
+    const { controller, root } = controllerWithBridge();
+    await controller.receiveToolInput({ report: { file_id: "file-1", download_url: "opaque" } });
+    await controller.followUp("watch");
+    expect(root.textContent).toContain(fixture.summary);
+    expect(root.textContent).toContain("follow-up messaging is unavailable");
+  });
+
   it("passes an automated accessibility scan for rendered structure", async () => {
     const { controller, root } = controllerWithBridge();
     await controller.receiveToolInput({ report: { file_id: "file-1", download_url: "opaque" } });
+    vi.spyOn(dom.window.HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     const axe = (await import("axe-core")).default;
     const results = await axe.run(root, {
       rules: {
-        "color-contrast": { enabled: false },
         region: { enabled: false }
       }
     });
