@@ -2,7 +2,18 @@
 
 ## What it is
 
-simplify-med is a Claude Code plugin that turns a clinical document into a plain-language, fact-checked care plan. A deterministic pipeline of scripts and LLM stages grounds every statement to a line of the original document, assembles a structured care plan, reviews and corrects it for fidelity and coverage, and renders it to Markdown and a single self-contained HTML page. Every interim file the pipeline writes is schema-validated and logged, so a full run leaves an auditable trail from source text to final output.
+simplify-med is a portable Agent Skill, packaged for Claude Code, claude.ai, and OpenAI,
+that turns a clinical document into a plain-language, fact-checked care plan. A
+deterministic pipeline of scripts and LLM stages grounds every statement to a line of
+the original document, assembles a structured care plan, reviews and corrects it for
+fidelity and coverage, and renders it to Markdown and a single self-contained HTML
+page. Every interim file the pipeline writes is schema-validated and logged, so a full
+run leaves an auditable trail from source text to final output.
+
+The OpenAI package adds a presentation-only MCP viewer after finalization. Medical
+processing still runs in the host; the developer-operated endpoint is designed not to
+download or process document or report bytes. See [`docs/openai.md`](docs/openai.md) for
+the exact data flow, privacy boundary, deployment requirements, and PHI limitations.
 
 ## Documentation
 
@@ -10,12 +21,15 @@ simplify-med is a Claude Code plugin that turns a clinical document into a plain
 - [`docs/overview.md`](docs/overview.md) — what simplify-med is, how to install and run it, and what a report contains.
 - [`docs/architecture.md`](docs/architecture.md) — a deep dive: the run folder, the stage graph, every deterministic check, the data contracts, and testing.
 - [`docs/plugins.md`](docs/plugins.md) — for adding support for another platform.
+- [`docs/openai.md`](docs/openai.md) — the OpenAI package, MCP viewer, data flow,
+  security boundary, deployment, testing, and operator checklist.
 
 ## Layout
 
 ```
 plugin.meta.json               source of truth for name/version/description
 .claude-plugin/plugin.json     Claude Code manifest (version must match plugin.meta.json)
+build.py                       root platform build dispatcher
 skills/simplify-med/
   SKILL.md                     skill entry point
   stages/                      one prompt per LLM stage: ground, glossary, assemble,
@@ -29,7 +43,8 @@ skills/simplify-med/
                                 ahrq_plain_language.json
   templates/                   report.html
 agents/                        thin Claude Code agent definitions, one per LLM stage
-packaging/                     build.py, claude-code.ignore, claude-ai.ignore
+packaging/                     shared staging plus claude-code, claude-ai, openai profiles
+mcp/openai/                    presentation-only MCP server and report widget
 tests/                         unittest modules and fixtures
 docs/agent_files/...           design brief and futures list (excluded from packages)
 ```
@@ -107,14 +122,19 @@ Each run lives in `simplify-runs/<run-id>/` (gitignored) and contains:
 ## Packaging
 
 ```
-python3 packaging/build.py --platform claude-code --out dist
-python3 packaging/build.py --platform claude-ai --out dist
+python3 build.py claude-code
+python3 build.py claude-ai
+python3 build.py openai
 ```
 
-`--platform claude-code` packages the whole plugin (wrapped in a top-level
-`simplify-med/` folder) for use as a Claude Code plugin. `--platform claude-ai`
-packages just `skills/simplify-med/` (also wrapped in `simplify-med/`) for use as
-a standalone Claude.ai skill. Both write a zip to `dist/` (gitignored).
+Claude Code and claude.ai packages preserve the existing host behavior. The OpenAI
+package adds portable root manifests, OpenAI-specific final handoff instructions, and a
+dependency on the separately deployed presentation MCP endpoint. All write a zip to
+`dist/` (gitignored). The existing `python3 packaging/build.py --platform <platform>
+--out dist` form remains available for compatibility.
+
+An OpenAI production build needs the deployed HTTPS MCP endpoint. Building the ZIP does
+not deploy the server; follow [`docs/openai.md`](docs/openai.md#deploy).
 
 ## Versioning
 

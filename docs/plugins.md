@@ -1,7 +1,7 @@
 # Adding a platform
 
 For an engineer or agent adding support for a platform other than Claude
-Code or claude.ai (ChatGPT, Gemini, Cursor, a custom harness). Read
+Code, claude.ai, or OpenAI (Gemini, Cursor, a custom harness). Read
 [architecture.md](architecture.md) first if you need the pipeline itself;
 this document is about packaging and running the same pipeline somewhere
 else.
@@ -23,8 +23,9 @@ description: >
 
 Everything else in this repository is a **per-platform wrapper** around
 that folder: `.claude-plugin/plugin.json` and `agents/*.md` are Claude
-Code's wrapper. A new platform gets its own wrapper, not a fork of the
-skill folder.
+Code's wrapper; the root portable manifest, staged OpenAI dependency and
+final handoff instructions are the OpenAI wrapper. A new platform gets its
+own wrapper, not a fork of the skill folder.
 
 ## The Agent Skills standard
 
@@ -104,7 +105,10 @@ version wrong, `_version.py` wrong).
   in the current context, writing the output file, one stage at a time, in
   the same order as below." The pipeline degrades to sequential in-context
   execution, not a missing feature.
-- No network access is ever needed.
+- The portable medical pipeline never needs network access. A platform may add a
+  separate integration after finalization: the OpenAI package, for example, uses a
+  presentation-only MCP endpoint and a browser-side file download. That integration
+  must not introduce network access into the pipeline scripts or generated HTML.
 
 ## What a platform wrapper must provide
 
@@ -125,74 +129,54 @@ version wrong, `_version.py` wrong).
    path> — <N> items written`). If the platform has no sub-agent concept,
    document that it uses the in-context fallback path instead — do not
    invent a sub-agent registration mechanism that isn't there.
-3. **A packaging profile** — see below.
+3. **A packaging profile** — see below. Platform-specific instruction files are
+   applied to a temporary staged copy; do not edit the source skill during a build.
 
-## How `packaging/build.py` works today
+OpenAI uses the sequential in-context fallback for the seven medical LLM stages when
+the host does not expose a matching sub-agent mechanism. Its staged
+`agents/openai.yaml` declares the presentation dependency; it does not replace the
+medical stage agents or turn the MCP server into a processing service. See
+[openai.md](openai.md).
 
-`PLATFORMS` (a dict, currently exactly two entries):
+## How the build works today
 
-```python
-PLATFORMS = {
-    "claude-code": {"ignore_file": "claude-code.ignore", "walk_root": "."},
-    "claude-ai":   {"ignore_file": "claude-ai.ignore",
-                     "walk_root": os.path.join("skills", "simplify-med")},
-}
+The preferred entry point is the root dispatcher:
+
+```bash
+python3 build.py claude-code
+python3 build.py claude-ai
+python3 build.py openai
 ```
 
-Only `claude-code` and `claude-ai` exist today — nothing else is wired up,
-regardless of what any design document discusses as a future possibility.
+`packaging/build.py --platform <name> --out <dir>` remains a compatibility entry point.
+Shared code verifies version consistency, creates a temporary staging tree, installs
+blank default `custom_start.md` and `custom_end.md`, applies the selected platform's
+overrides and ignores, then writes `dist/<name>-<version>-<platform>.zip`. Platform
+profiles own archive layout, manifests, exclusions, and platform instructions.
 
-**Ignore-file format** (`parse_ignore_file`), a small gitignore-style
-subset: blank lines and `#` comments are skipped; a leading `/` anchors
-the pattern to the full repo-root-relative path (matched with
-`fnmatch.fnmatch` against that path only); a trailing `/` restricts the
-pattern to directories; an unanchored pattern matches either the entry's
-basename or its full relative path. No `**`, no negation (`!`), no other
-gitignore syntax — `is_ignored` / `_matches_one` is the entire matcher.
+The source skill is read-only from the builder's point of view. All overlay work happens
+in temporary staging, and tests check that a build does not mutate
+`skills/simplify-med/`.
 
-**Archive root per platform.** `walk_root` is the directory `build()`
-walks (`"."` for `claude-code` — the whole repo; `skills/simplify-med` for
-`claude-ai`). Every included file's zip entry (`arcname`) is
-`"<plugin_name>/" + <path relative to walk_root>` — so both zips share the
-same `simplify-med/...` internal layout, just rooted at different points
-in the source tree.
-
-**Zip naming:** `dist/<plugin_name>-<version>-<platform>.zip` (e.g.
-`simplify-med-0.1.0-claude-code.zip`).
-
-**Exit codes:** `2` from `check_versions()` on any version mismatch,
-before any file is written; otherwise `build()` returns `(zip_path,
-entry_count)` and `main()` returns `0`. There is no other failure path in
-`build.py` today (a missing ignore file yields an empty pattern list, not
-an error).
+Claude Code packages the plugin wrapper and registered agents. Claude.ai packages the
+standalone skill. OpenAI packages a portable root `plugin.json`, root `mcp.json`, the
+staged skill and its `agents/openai.yaml`, and any manifest-referenced assets; it does
+not package the MCP server source. See [openai.md](openai.md#build-and-package) for the
+OpenAI archive and endpoint configuration.
 
 ## Adding a platform — step by step
 
-1. Add `packaging/<platform>.ignore`, modeled on `claude-code.ignore` /
-   `claude-ai.ignore` (both currently exclude `docs/`, `tests/`, `dist/`,
-   `packaging/`, `simplify-runs/`, `.git/`, `.gitignore`, `__pycache__/`,
-   `*.pyc`; `claude-ai.ignore` additionally excludes `agents/`,
-   `.claude-plugin/`, `plugin.meta.json`, `README.md`).
-2. Add an entry to `PLATFORMS` in `packaging/build.py`: `ignore_file` and
-   `walk_root` at minimum. The dict has no other keys today (no "wrapper
-   folder name" concept exists yet) — if your platform needs one, that's a
-   new field on this dict, not a separate mechanism.
-3. If the platform needs a generated manifest file inside the archive,
-   write a small function that reads `plugin.meta.json` (`load_meta()`)
-   and produces that platform's manifest content, then call it from
-   `build()` and write the result into the open `zipfile.ZipFile` with
-   `zf.writestr(f"{plugin_name}/<manifest path>", content)`, alongside the
-   existing `zf.write(abs_path, arcname)` loop (`build()`, the
-   `with zipfile.ZipFile(...) as zf:` block). This is the intended hook
-   point — no such generator exists today (see `futures.md`'s "Platform
-   packaging customization" entry); do not implement it as part of
-   documentation work, only as part of an actual platform-support change.
-4. Add a test to `tests/test_build.py`, modeled on
-   `TestBuildClaudeCode`/`TestBuildClaudeAi`: build the new platform's
-   zip into a temp `--out` directory, assert exactly one zip is produced
-   and named `...-<platform>.zip`, assert specific expected entries are
-   present (and platform-excluded ones, like `docs/`/`tests/`, are not).
-5. Run `python3 packaging/build.py --platform <platform> --out dist` and
+1. Add `packaging/<platform>/` with its ignore rules, custom-file overrides, manifests,
+   and assets as needed. Keep common behavior in the shared builder.
+2. Register the platform with both the root dispatcher and compatibility entry point.
+3. Build from a temporary stage. Start with blank defaults, apply only that platform's
+   overlay, and keep the canonical skill unchanged.
+4. Generate platform manifests from `plugin.meta.json` where possible. If two staged
+   files carry the same endpoint or identifier, render them from one configuration
+   source and add a drift test.
+5. Add package tests covering name, archive root, expected entries, exclusions,
+   referenced assets, version agreement, override precedence, and no source mutation.
+6. Run `python3 build.py <platform>` and
    inspect the archive (`python3 -c "import zipfile;
    print('\n'.join(zipfile.ZipFile('dist/....zip').namelist()))"`) to
    confirm the entry set and internal layout are what the platform needs.
@@ -221,4 +205,6 @@ an error).
 
 - [architecture.md](architecture.md) — the pipeline itself.
 - [overview.md](overview.md) — the patient-facing picture.
+- [openai.md](openai.md) — the implemented OpenAI wrapper, MCP viewer, deployment, and
+  privacy boundary.
 - `agent_files/` — the original design brief and both kill tests.

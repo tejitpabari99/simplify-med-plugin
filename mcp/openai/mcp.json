@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "simplify-med-ui": {
+      "type": "streamable-http",
+      "url": "https://PLUGIN_DOMAIN.example/mcp"
+    }
+  }
+}

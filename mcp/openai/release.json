@@ -1,0 +1,20 @@
+{
+  "release": "0.1.0",
+  "documentation_reviewed": "2026-09-23",
+  "agent_plugins_schema": "1.0.0",
+  "care_plan_schema": "1.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "zod": "4.6.5",
+    "ajv": "8.20.0"
+  },
+  "openai_apps_sdk_examples_commit": "18cc38e78a968712c357bacdc3c79fead5bfc6b4",
+  "ui_resource": "ui://simplify-med/report-v1.html",
+  "ui_bundle": {
+    "path": "ui/dist/report-viewer.js",
+    "sha256": "e7acf9e7ffce24642bd4c4704eeeda324e79a0399de19f5fc3c217c518169c27",
+    "bytes": 1127407
+  },
+  "prototype_status": "Local contracts pass; ChatGPT generated-file handoff, download origin, surfaces, tiers, and production logging remain operator gates."
+}

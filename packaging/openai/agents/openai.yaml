@@ -1,0 +1,7 @@
+dependencies:
+  tools:
+    - type: mcp
+      value: simplify-med-ui
+      description: Render a completed Simplify Med JSON report in ChatGPT
+      transport: streamable_http
+      url: __SIMPLIFY_MED_MCP_URL__

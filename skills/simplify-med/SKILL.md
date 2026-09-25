@@ -9,6 +9,10 @@ run also has a `<run>` directory, resolved once you have it (Stage 0
 prints it). Use these two absolute paths in every command and every
 dispatch message below -- never a relative path.
 
+If `<skill>/custom_start.md` exists, read it now and follow its
+platform-specific instructions before Stage 0. If it does not exist or is
+empty, continue unchanged.
+
 ## 1. What this does
 
 This is a fact-first pipeline: a clinical document is first broken into
@@ -198,6 +202,10 @@ Stdout gives, one per line: the HTML report path, the Markdown report
 path, the reading-level line, then any notices, then (per section 3) the
 `finalize: ...` status line as the last line -- that last line is not a
 notice. Exit 1 is fatal -- show the user its stderr text.
+
+After finalization succeeds, if `<skill>/custom_end.md` exists, read it and
+follow its platform-specific result-presentation instructions before
+presenting the results. If it does not exist or is empty, continue unchanged.
 
 ## 11. What to tell the user
 
