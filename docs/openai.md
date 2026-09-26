@@ -222,6 +222,28 @@ The compatibility form remains available:
 python3 packaging/build.py --platform openai --out dist
 ```
 
+For manual connector setup in ChatGPT (the owner adds the MCP connector by hand instead
+of shipping it in the package), build with `--no-mcp` to omit all MCP connection info
+from the archive: no root `mcp.json` or `.mcp.json` is written, the staged
+`.codex-plugin/plugin.json` drops its `mcpServers` key, and the staged
+`skills/simplify-med/agents/openai.yaml` drops its `dependencies` block (the MCP tool
+declaration) while keeping `interface`/`policy` intact. `--no-mcp` cannot be combined
+with `--mcp-url` (there is no endpoint to override); `--release` is still accepted and
+simply skips endpoint validation, since there is no endpoint to validate. The build
+asserts that no endpoint token or example/ngrok URL survives anywhere in the resulting
+archive. The zip filename is unchanged (`simplify-med-0.1.0-openai.zip`).
+
+```bash
+python3 build.py openai --no-mcp --release --out dist
+```
+
+After installing a `--no-mcp` package, connect the MCP endpoint manually in ChatGPT
+developer mode. For the current dev tunnel, add:
+
+```text
+https://helene-unreconnoitred-overslowly.ngrok-free.dev/mcp
+```
+
 Builds run against a temporary staging tree. Shared build code checks the version,
 installs blank default custom files, applies the platform overlay, processes exclusions,
 and writes the ZIP. A build must leave `skills/simplify-med/` byte-for-byte unchanged.

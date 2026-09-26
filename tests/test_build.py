@@ -221,6 +221,71 @@ class TestBuildOpenAi(unittest.TestCase):
                 self.assertIn("Release OpenAI MCP endpoint", result.stderr)
 
 
+    def test_no_mcp_build_omits_all_mcp_connection_info(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build(["--platform", "openai", "--out", out_dir, "--no-mcp"])
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")
+            with zipfile.ZipFile(zip_path) as zf:
+                names = set(zf.namelist())
+                compat_plugin = json.loads(
+                    zf.read("simplify-med/.codex-plugin/plugin.json")
+                )
+                yaml_text = zf.read(
+                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                ).decode()
+                all_text_blobs = []
+                for name in names:
+                    if name.endswith((".png", ".ico", ".gif", ".jpg", ".jpeg")):
+                        continue
+                    try:
+                        all_text_blobs.append(zf.read(name).decode())
+                    except UnicodeDecodeError:
+                        continue
+
+            # No root or compatibility MCP declaration is staged at all.
+            self.assertNotIn("simplify-med/mcp.json", names)
+            self.assertNotIn("simplify-med/.mcp.json", names)
+
+            # The compatibility manifest keeps its other keys but drops mcpServers.
+            self.assertNotIn("mcpServers", compat_plugin)
+            self.assertEqual(compat_plugin["skills"], "./skills/")
+            self.assertEqual(compat_plugin["name"], "simplify-med")
+
+            # The skill's agent file keeps interface/policy but drops the MCP tool
+            # dependency entirely.
+            self.assertIn("interface:", yaml_text)
+            self.assertIn("policy:", yaml_text)
+            self.assertNotIn("dependencies:", yaml_text)
+            self.assertNotIn("type: mcp", yaml_text)
+            self.assertNotIn("transport: streamable_http", yaml_text)
+
+            # No stray endpoint token, mcpServers key, or example/ngrok URL survives
+            # anywhere in the archive.
+            for blob in all_text_blobs:
+                self.assertNotIn("__SIMPLIFY_MED_MCP_URL__", blob)
+                self.assertNotIn("mcpServers", blob)
+                self.assertNotIn("ngrok", blob)
+                self.assertNotIn("PLUGIN_DOMAIN.example", blob)
+
+    def test_no_mcp_rejects_mcp_url(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir,
+                "--no-mcp", "--mcp-url", "https://mcp.simplify-med.dev/mcp",
+            ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--no-mcp", result.stderr)
+        self.assertIn("--mcp-url", result.stderr)
+
+    def test_no_mcp_with_release_still_builds(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir, "--no-mcp", "--release",
+            ])
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
     def test_icons_exist_at_referenced_paths_and_interfaces_match(self):
         with tempfile.TemporaryDirectory() as out_dir:
             result = _run_build(["--platform", "openai", "--out", out_dir])

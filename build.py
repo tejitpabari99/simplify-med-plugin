@@ -22,6 +22,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Require a public HTTPS /mcp endpoint for an OpenAI build",
     )
+    parser.add_argument(
+        "--no-mcp",
+        action="store_true",
+        help=(
+            "Exclude all MCP connection info from the OpenAI package "
+            "(the connector is added manually in ChatGPT); cannot be combined with --mcp-url"
+        ),
+    )
     args = parser.parse_args(argv)
     packaging_build.build(
         args.platform,
@@ -29,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         repo_root=_ROOT,
         mcp_url=args.mcp_url,
         release=args.release,
+        include_mcp=not args.no_mcp,
     )
     return 0
 

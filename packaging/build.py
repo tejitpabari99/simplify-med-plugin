@@ -277,7 +277,65 @@ def _endpoint_error(endpoint: str, release: bool) -> str | None:
     return None
 
 
-def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release):
+def _strip_yaml_top_level_key(text: str, key: str) -> str:
+    """Remove a top-level ``key:`` block (the key line plus its indented body).
+
+    Deliberately not a general YAML parser: the build is stdlib-only, so this
+    walks lines and removes the matching top-level key together with every
+    following line that is blank or indented, stopping at the next
+    non-indented line or end of file.
+    """
+    lines = text.splitlines(keepends=True)
+    key_prefix = f"{key}:"
+    out = []
+    i = 0
+    removed = False
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.rstrip("\n")
+        if not removed and (stripped == key_prefix or stripped.startswith(key_prefix + " ")):
+            removed = True
+            i += 1
+            while i < len(lines):
+                candidate = lines[i]
+                candidate_stripped = candidate.rstrip("\n")
+                if candidate_stripped == "" or candidate[0] in (" ", "\t"):
+                    i += 1
+                    continue
+                break
+            continue
+        out.append(line)
+        i += 1
+    if not removed:
+        raise SystemExit(f"Expected top-level key {key!r} not found while staging openai.yaml")
+    return "".join(out)
+
+
+_NO_MCP_FORBIDDEN_STRINGS = (_URL_TOKEN, "ngrok", "PLUGIN_DOMAIN.example", "mcpServers")
+
+
+def _assert_no_mcp_traces(plugin_stage: str) -> None:
+    """Guard for --no-mcp builds: no endpoint token, mcpServers key, or
+
+    example/ngrok URL may survive anywhere in the staged tree.
+    """
+    for dirpath, _, filenames in os.walk(plugin_stage):
+        for filename in filenames:
+            path = os.path.join(dirpath, filename)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except (UnicodeDecodeError, OSError):
+                continue
+            for needle in _NO_MCP_FORBIDDEN_STRINGS:
+                if needle in content:
+                    rel = os.path.relpath(path, plugin_stage)
+                    raise SystemExit(
+                        f"--no-mcp build must not contain {needle!r}; found in {rel}"
+                    )
+
+
+def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release, include_mcp=True):
     skill_source = os.path.join(repo_root, "skills", "simplify-med")
     skill_destination = os.path.join(plugin_stage, "skills", "simplify-med")
     files = sorted(iter_included_files(repo_root, os.path.join("skills", "simplify-med"), patterns))
@@ -299,6 +357,30 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release)
     )
     shutil.copy2(os.path.join(overlay, "plugin.json"), os.path.join(plugin_stage, "plugin.json"))
 
+    yaml_path = os.path.join(skill_destination, "agents", "openai.yaml")
+
+    if not include_mcp:
+        # No MCP connection info is staged at all: the owner will add the
+        # connector manually in ChatGPT. Strip the compatibility manifest's
+        # mcpServers pointer (write a modified copy of the staged file, never
+        # the packaging source) and drop the MCP tool dependency from the
+        # staged skill's agent file, keeping interface/policy intact.
+        compat_manifest_path = os.path.join(plugin_stage, ".codex-plugin", "plugin.json")
+        compat_manifest = _read_json(compat_manifest_path)
+        compat_manifest.pop("mcpServers", None)
+        with open(compat_manifest_path, "w", encoding="utf-8") as f:
+            json.dump(compat_manifest, f, indent=2)
+            f.write("\n")
+
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            template = f.read()
+        stripped = _strip_yaml_top_level_key(template, "dependencies")
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.write(stripped)
+
+        _assert_no_mcp_traces(plugin_stage)
+        return
+
     mcp_document, configured_endpoint = _source_endpoint(repo_root)
     endpoint = endpoint_override or configured_endpoint
     endpoint_error = _endpoint_error(endpoint, release)
@@ -318,7 +400,6 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release)
         json.dump({"mcpServers": mcp_document["mcpServers"]}, f, indent=2)
         f.write("\n")
 
-    yaml_path = os.path.join(skill_destination, "agents", "openai.yaml")
     with open(yaml_path, "r", encoding="utf-8") as f:
         template = f.read()
     if template.count(_URL_TOKEN) != 1:
@@ -327,14 +408,16 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release)
         f.write(template.replace(_URL_TOKEN, endpoint))
 
 
-def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release):
+def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp=True):
     config = PLATFORMS[platform]
     patterns = parse_ignore_file(os.path.join(repo_root, "packaging", config["ignore_file"]))
     if config["layout"] == "openai":
-        _stage_openai(repo_root, plugin_stage, patterns, mcp_url, release)
+        _stage_openai(repo_root, plugin_stage, patterns, mcp_url, release, include_mcp)
         return
     if mcp_url or release:
         raise SystemExit("--mcp-url and --release apply only to the OpenAI build")
+    if not include_mcp:
+        raise SystemExit("--no-mcp applies only to the OpenAI build")
 
     walk_root = config["walk_root"]
     source_root = repo_root if walk_root == "." else os.path.join(repo_root, walk_root)
@@ -350,10 +433,12 @@ def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release):
         _copy_if_present(os.path.join(overlay, filename), os.path.join(skill_destination, filename))
 
 
-def build(platform, out_dir="dist", repo_root=_REPO_ROOT, mcp_url=None, release=False):
+def build(platform, out_dir="dist", repo_root=_REPO_ROOT, mcp_url=None, release=False, include_mcp=True):
     if platform not in PLATFORMS:
         print(f"Unknown platform {platform!r}; choose from {sorted(PLATFORMS)}", file=sys.stderr)
         raise SystemExit(2)
+    if not include_mcp and mcp_url:
+        raise SystemExit("--no-mcp cannot be combined with --mcp-url")
     version = check_versions(repo_root)
     plugin_name = load_meta(repo_root)["name"]
     out_dir_abs = out_dir if os.path.isabs(out_dir) else os.path.join(repo_root, out_dir)
@@ -363,7 +448,7 @@ def build(platform, out_dir="dist", repo_root=_REPO_ROOT, mcp_url=None, release=
     with tempfile.TemporaryDirectory(prefix="simplify-med-build-") as temp_dir:
         plugin_stage = os.path.join(temp_dir, plugin_name)
         os.makedirs(plugin_stage)
-        _stage_platform(platform, repo_root, plugin_stage, mcp_url, release)
+        _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp)
         staged_files = sorted(
             os.path.join(dirpath, filename)
             for dirpath, _, filenames in os.walk(plugin_stage)
@@ -389,12 +474,20 @@ def _build_arg_parser():
         action="store_true",
         help="Require a public HTTPS /mcp endpoint for an OpenAI build",
     )
+    parser.add_argument(
+        "--no-mcp",
+        action="store_true",
+        help=(
+            "Exclude all MCP connection info from the OpenAI package "
+            "(the connector is added manually in ChatGPT); cannot be combined with --mcp-url"
+        ),
+    )
     return parser
 
 
 def main(argv=None):
     args = _build_arg_parser().parse_args(argv)
-    build(args.platform, args.out, mcp_url=args.mcp_url, release=args.release)
+    build(args.platform, args.out, mcp_url=args.mcp_url, release=args.release, include_mcp=not args.no_mcp)
     return 0
 
 
