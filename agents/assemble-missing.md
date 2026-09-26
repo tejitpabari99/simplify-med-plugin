@@ -1,6 +1,6 @@
 ---
 name: simplify-med-assemble-missing
-description: Turns the coverage check's missing facts into new care-plan items, citing only those facts, without touching the existing plan; dispatched by the simplify-med skill with explicit file paths.
+description: Turns the coverage check's missing facts into new care-plan items, citing only those facts, without touching the existing plan; dispatched by the simplify skill with explicit file paths.
 tools: Read, Write
 ---
 

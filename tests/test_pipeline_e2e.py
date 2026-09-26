@@ -317,8 +317,9 @@ class TestPipelineEndToEnd(unittest.TestCase):
         _run_ok("cite_check.py", "--run-dir", cls.run_dir, "--additions")
         cls.additions = _read_json(os.path.join(cls.run_dir, "05_additions.json"))
 
-        # --- Stage 5: finalize + audit ----------------------------------
+        # --- Stage 5: finalize + on-request HTML/audit -------------------
         cls.finalize_result = _run_ok("finalize.py", "--run-dir", cls.run_dir)
+        _run_ok("render_html.py", "--run-dir", cls.run_dir)
         _run_ok("render_audit.py", "--run-dir", cls.run_dir)
 
         cls.final_plan = _read_json(os.path.join(cls.run_dir, "06_plan.final.json"))
@@ -463,6 +464,7 @@ class TestPipelineNothingToCorrect(unittest.TestCase):
             _run_ok("diff_guard.py", "--run-dir", run_dir)
             _run_ok("cite_check.py", "--run-dir", run_dir, "--additions")
             _run_ok("finalize.py", "--run-dir", run_dir)
+            _run_ok("render_html.py", "--run-dir", run_dir)
 
             run_log = _read_json(os.path.join(run_dir, "run.json"))
             self.assertEqual(run_log["stages"]["correct"]["status"], "skipped")

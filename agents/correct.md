@@ -1,6 +1,6 @@
 ---
 name: simplify-med-correct
-description: Applies the review stage's fixed list of corrections, plus a bounded PII sweep, to the assembled care plan; dispatched by the simplify-med skill with explicit file paths.
+description: Applies the review stage's fixed list of corrections, plus a bounded PII sweep, to the assembled care plan; dispatched by the simplify skill with explicit file paths.
 tools: Read, Write
 ---
 

@@ -5,9 +5,17 @@ what must be hosted, how the report reaches the ChatGPT widget, and where the pr
 boundary sits. For the medical pipeline itself, read [architecture.md](architecture.md).
 The OpenAI layer does not replace or reorder that pipeline.
 
+> **Note:** everything below describes the default build (`python3 build.py openai`),
+> which includes the MCP viewer. `python3 build.py openai --no-mcp` instead produces a
+> skills-only plugin with no MCP server, connector wiring, or widget — none of that mode
+> is covered in this file. See the README's [Packaging](../README.md#packaging) section
+> and
+> [`docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md`](agent_files/2026-09-26-openai-skills-only/DESIGN.md)
+> for what it omits and how to install it.
+
 ## Scope and status
 
-The `0.1.0` OpenAI package combines the portable `simplify-med` skill with a minimal,
+The `0.1.0` OpenAI package combines the portable `simplify` skill with a minimal,
 presentation-only MCP server. ChatGPT runs the skill and its bundled Python scripts,
 producing the same verified final JSON, Markdown, and self-contained HTML as other
 hosts. The MCP server supplies one render tool and one static UI resource. It does not
@@ -22,15 +30,17 @@ ChatGPT account against the deployed endpoint.
 
 | Component | Location | Role |
 |---|---|---|
-| Portable skill | `skills/simplify-med/` | Runs the unchanged fact-first medical pipeline in the host. |
+| Portable skill | `skills/simplify/` | Runs the unchanged fact-first medical pipeline in the host. |
 | Platform hooks | staged `custom_start.md`, `custom_end.md` | Add host-specific instructions before Stage 0 and after finalization. Blank defaults are no-ops. |
 | Portable manifest | staged root `plugin.json` | Identifies the plugin and carries OpenAI listing metadata. |
 | MCP declaration | `mcp/openai/mcp.json`, copied to staged root | Points the installed package at the deployed streamable-HTTP endpoint. |
-| Skill dependency | staged `skills/simplify-med/agents/openai.yaml` | Declares the same endpoint as a report-viewer dependency. |
+| Compatibility manifest | staged `.codex-plugin/plugin.json` | Supports OpenAI hosts that still use the Codex compatibility ingestion path. |
+| Compatibility MCP declaration | staged `.mcp.json` | Mirrors the root MCP server map without the portable-only schema field. |
+| Skill dependency | staged `skills/simplify/agents/openai.yaml` | Declares the same endpoint as a report-viewer dependency. |
 | MCP server | `mcp/openai/src/` | Registers one read-only render tool and serves the static UI resource. |
 | Report widget | `mcp/openai/ui/` | Loads the final JSON from OpenAI in the iframe and renders inline/fullscreen views. |
-| Portable reports | run folder `report.md`, `report.html` | Remain the complete downloadable fallback; `report.html` works offline. |
-| OpenAI package profile | `packaging/openai/` | Supplies the manifest, hooks, dependency overlay, assets, and exclusions used while staging the OpenAI archive. |
+| Portable reports | run folder `report.md`, and, on request, `report.html` | Remain the complete downloadable fallback; `report.html` works offline. |
+| OpenAI package profile | `packaging/openai/` | Supplies the manifest, hooks, dependency overlay, plugin-root and skill-level icon assets, and exclusions used while staging the OpenAI archive. |
 
 The MCP server source is deployed separately. It is not included in the plugin ZIP.
 
@@ -52,13 +62,14 @@ Stages 0-5: unitize -> ground/glossary -> assemble -> review -> correct/fill -> 
         |
         +-----------------> 06_plan.final.json
         +-----------------> report.md
-        +-----------------> report.html
         |
         v
 custom_end.md
   - present the native concise summary
-  - attach/link JSON, Markdown, and HTML
+  - attach/link JSON and Markdown
   - call render_simplify_med_report with the final JSON file only
+  - offer report.html (render_html.py) and the audit trail (render_audit.py)
+    as on-request follow-ups
         |
         v
 static ChatGPT widget (inline, then user-requested fullscreen)
@@ -73,8 +84,8 @@ the viewer; the core finalizer and renderers remain unaware of MCP.
 
 There is intentionally no second upload or file picker.
 
-1. ChatGPT runs the skill and creates `06_plan.final.json`, `report.md`, and
-   `report.html` in the run folder.
+1. ChatGPT runs the skill and creates `06_plan.final.json` and `report.md` in
+   the run folder (`report.html` is rendered later, only if requested).
 2. ChatGPT invokes `render_simplify_med_report` with the final JSON artifact in the
    top-level `report` file parameter.
 3. OpenAI sends the MCP endpoint a file object containing `file_id` and a temporary,
@@ -220,9 +231,52 @@ The compatibility form remains available:
 python3 packaging/build.py --platform openai --out dist
 ```
 
+For manual connector setup in ChatGPT (the owner adds the MCP connector by hand instead
+of shipping it in the package), build with `--no-mcp` to omit all MCP connection info
+from the archive: no root `mcp.json` or `.mcp.json` is written, the staged
+`.codex-plugin/plugin.json` drops its `mcpServers` key, and the staged
+`skills/simplify/agents/openai.yaml` drops its `dependencies` block (the MCP tool
+declaration) while keeping `interface`/`policy` intact. `--no-mcp` cannot be combined
+with `--mcp-url` (there is no endpoint to override); `--release` is still accepted and
+simply skips endpoint validation, since there is no endpoint to validate. The build
+asserts that no endpoint token or example/ngrok URL survives anywhere in the resulting
+archive. The zip filename gets a distinct suffix so it never collides with the
+default MCP build in the same `--out` directory: `simplify-med-0.1.0-openai-no-mcp.zip`.
+
+```bash
+python3 build.py openai --no-mcp --release --out dist
+```
+
+**EXPERIMENTAL: `--app-id`.** Instead of shipping MCP connection info, reference an
+existing ChatGPT dev-mode app by ID:
+
+```bash
+python3 build.py openai --app-id plugin_asdk_app_6ab74031b9608191b6aa67d0ac5c1e55 --release --out dist
+```
+
+This is documented for the Codex `plugin-creator` workflow (a companion `.app.json` at
+the plugin root, pointed to by the manifest's `apps` field) but is **not confirmed** to
+be honored by ChatGPT's own plugin-zip ingestion path. `--app-id` is OpenAI-platform-only,
+must match `^plugin_asdk_app_[0-9a-f]{32}$`, and cannot be combined with `--mcp-url`. It
+implies the same no-MCP staging as `--no-mcp` (no `mcp.json`/`.mcp.json`, no
+`mcpServers`, no `openai.yaml` `dependencies` block); combining it with `--no-mcp`
+explicitly is allowed and redundant. It writes a staged `.app.json` at the plugin root
+(`{"apps": {"simplify-med-ui": {"id": "<app-id>"}}}`) and adds `"apps": "./.app.json"`
+to the staged `.codex-plugin/plugin.json`. The root portable `plugin.json` is left
+unchanged: the `agent-plugins.org` 1.0.0 schema does not allow a top-level `apps` field,
+and while `extensions.com.openai` accepts arbitrary content, there is no documented
+OpenAI-ingestion meaning for an `apps` key placed there, so nothing is added speculatively.
+
+After installing a `--no-mcp` package, connect the MCP endpoint manually in ChatGPT
+developer mode. For the current dev tunnel, add:
+
+```text
+https://helene-unreconnoitred-overslowly.ngrok-free.dev/mcp
+```
+
 Builds run against a temporary staging tree. Shared build code checks the version,
 installs blank default custom files, applies the platform overlay, processes exclusions,
-and writes the ZIP. A build must leave `skills/simplify-med/` byte-for-byte unchanged.
+and writes the ZIP. A build must leave `skills/simplify/` byte-for-byte unchanged.
 
 The OpenAI archive contains this logical root:
 
@@ -230,11 +284,21 @@ The OpenAI archive contains this logical root:
 simplify-med/
   plugin.json
   mcp.json
-  skills/simplify-med/
+  .mcp.json
+  .codex-plugin/
+    plugin.json
+  assets/
+    logo.png
+    logo.svg
+    composer-icon.png
+  skills/simplify/
     SKILL.md
     custom_start.md
     custom_end.md
     agents/openai.yaml
+    assets/
+      icon-small.svg
+      icon-large.png
     reference/
     schema/
     scripts/
@@ -242,8 +306,27 @@ simplify-med/
     templates/
 ```
 
-Version `0.1.0` does not include the optional `.codex-plugin/` compatibility manifest
-or an `assets/` directory because its portable manifest does not reference either.
+The root portable manifest remains canonical. The compatibility manifest mirrors the
+same identity and OpenAI interface metadata, and points legacy ingestion at `.mcp.json`.
+The build derives `.mcp.json` from the same staged server map as root `mcp.json`, while
+omitting the portable-only `$schema` field, so an endpoint override cannot make the two
+declarations drift.
+
+The plugin-root `assets/` directory (staged from `packaging/openai/assets/`) supplies the
+`interface.logo` and `interface.composerIcon` images referenced by both `plugin.json` and
+`.codex-plugin/plugin.json`. The skill-level `skills/simplify/assets/` directory
+(staged from `packaging/openai/skill-assets/`) supplies the `icon_small`/`icon_large`
+images referenced by `agents/openai.yaml`; the Codex ingestion validator resolves those
+two paths relative to the skill directory, not the plugin root, so they cannot live in
+the same `assets/` folder as the root logo. **The current logo/icon artwork is placeholder
+art generated for this build** (see the [Owner action checklist](#owner-action-checklist)).
+
+`interface.capabilities` is `["Interactive", "Write"]` in both `plugin.json` and
+`.codex-plugin/plugin.json`, matching the only concrete example in the Codex
+`plugin-creator` skill's `plugin-json-spec.md`. Neither the live `agent-plugins.org` JSON
+schemas nor the Codex `validate_plugin.py` ingestion validator enforce an enum for this
+field; treat any other capability value as unverified until confirmed in the real
+ChatGPT/Codex developer-mode UI.
 
 The endpoint must come from one build configuration source so the staged `mcp.json` and
 `agents/openai.yaml` cannot drift. Developer builds may use an explicit loopback test
@@ -251,9 +334,9 @@ endpoint. A release build rejects the committed example, HTTP, loopback/private 
 reserved/example names, credentials, query strings, fragments, and paths other than
 exactly `/mcp`.
 
-Before distributing a ZIP, inspect its entries and validate root `plugin.json` and
-`mcp.json` against the Agent Plugins 1.0 schemas. Root portable manifests are canonical;
-the `.codex-plugin` manifest is only a fallback. See the official
+Before distributing a ZIP, inspect its entries and validate root `plugin.json`,
+`mcp.json`, and the `.codex-plugin` compatibility manifest. Root portable manifests are
+canonical; the `.codex-plugin` manifest is a fallback for compatibility ingestion. See the official
 [plugin packaging guide](https://developers.openai.com/plugins/build/plugins).
 
 ## Run locally
@@ -283,6 +366,23 @@ after the live prototype establishes which origin is needed. Wildcards are rejec
 For ChatGPT developer-mode testing, the endpoint must be reachable through public HTTPS
 or OpenAI's Secure MCP Tunnel. Connect it in ChatGPT developer mode before installing
 the complete plugin package. A localhost URL alone is not sufficient for ChatGPT.
+
+If the server runs under a process supervisor (e.g. pm2) rather than a foreground
+`npm start`, redeploy a code change with:
+
+```bash
+npm run build && pm2 restart simplify-med-mcp --update-env
+```
+
+The running process does not pick up a rebuilt `dist/`/`ui/dist/` until it is restarted.
+The `/mcp` transport replies with a single `application/json` body per request
+(`enableJsonResponse: true`) rather than the streamable-HTTP transport's default SSE
+(`text/event-stream`) response, since this server is stateless and never streams more
+than one response per request; this is spec-compliant and avoids proxies/tunnels that
+buffer or truncate long-lived SSE responses. The HTTP layer's browser-`Origin` allowlist
+is the same host list as `ALLOWED_HOSTS` (loopback by default), so the configured
+`PUBLIC_ORIGIN` hostname is itself always allowed as a browser `Origin`, not only
+loopback.
 
 Always use the synthetic fixtures under `tests/fixtures/`; do not use a real medical
 record to prove connectivity.
@@ -420,6 +520,17 @@ logs, and repeat the canary test before proceeding.
 target production surface and add only that exact origin. Do not use `*` or broaden
 unrelated resource/frame domains.
 
+**`resources/read` returns HTTP 200 with a matching `Content-Length` but delivers zero
+bytes through a reverse proxy or tunnel.** This was reproduced through an ngrok tunnel:
+the request succeeded identically against the loopback address, but the public URL
+served a `text/event-stream` response that the tunnel hop truncated after headers. The
+server now sets `enableJsonResponse: true` on the streamable-HTTP transport so a
+single-response call like `resources/read` returns a complete `application/json` body
+instead of SSE; confirm the fix by repeating `resources/read` for
+`ui://simplify-med/report-v1.html` against the public endpoint and checking the full
+body arrives every time. If it still fails, check the proxy/tunnel's own inspection or
+buffering mode (e.g. ngrok's web inspector) and the built widget bundle size.
+
 ## Release record
 
 For every candidate, record:
@@ -448,6 +559,13 @@ Before production, the owner must:
 - [ ] Disable sensitive capture at the proxy, CDN, load balancer, APM, tracing, and
   error-reporting layers.
 - [ ] Provide public privacy-policy, terms, website/support, and required listing assets.
+  Set the manifest's `interface.privacyPolicyURL` and `interface.termsOfServiceURL` fields
+  (in both `packaging/openai/plugin.json` and `packaging/openai/.codex-plugin/plugin.json`)
+  to the real hosted pages once they exist; both must be absolute `https://` URLs. Do not
+  invent placeholder URLs.
+- [ ] Replace the placeholder logo/icon artwork in `packaging/openai/assets/` (`logo.png`,
+  `logo.svg`, `composer-icon.png`) and `packaging/openai/skill-assets/` (`icon-small.svg`,
+  `icon-large.png`) with reviewed brand assets before submission.
 - [ ] Replace the example endpoint and build the release archive.
 - [ ] Connect the endpoint in ChatGPT developer mode and install the complete package.
 - [ ] Run every prototype gate with synthetic data on each intended workspace tier.

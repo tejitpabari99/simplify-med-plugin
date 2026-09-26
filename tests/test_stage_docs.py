@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
 REPO_ROOT = _paths.REPO_ROOT
-SKILL_MD_PATH = os.path.join(REPO_ROOT, "skills", "simplify-med", "SKILL.md")
-STAGES_DIR = os.path.join(REPO_ROOT, "skills", "simplify-med", "stages")
+SKILL_MD_PATH = os.path.join(REPO_ROOT, "skills", "simplify", "SKILL.md")
+STAGES_DIR = os.path.join(REPO_ROOT, "skills", "simplify", "stages")
 AGENTS_DIR = os.path.join(REPO_ROOT, "agents")
 
 

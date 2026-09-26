@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build:validator": "node scripts/generate-validator.mjs",
-    "build:ui": "npm run build:validator && esbuild ui/src/report-viewer.ts --bundle --format=iife --platform=browser --target=es2022 --outfile=ui/dist/report-viewer.js",
+    "build:ui": "npm run build:validator && esbuild ui/src/report-viewer.ts --bundle --minify --format=iife --platform=browser --target=es2022 --outfile=ui/dist/report-viewer.js",
     "build:server": "tsc -p tsconfig.server.json",
     "build": "npm run build:ui && npm run build:server",
     "typecheck": "tsc -p tsconfig.json --noEmit",

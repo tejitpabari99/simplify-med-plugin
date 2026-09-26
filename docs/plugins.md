@@ -8,14 +8,14 @@ else.
 
 ## What a plugin is here
 
-One Agent Skill, `skills/simplify-med/` — `SKILL.md` plus `stages/`,
+One Agent Skill, `skills/simplify/` — `SKILL.md` plus `stages/`,
 `scripts/`, `schema/`, `reference/`, `templates/` — is the portable core.
 Everything a platform needs to run the pipeline is inside that folder.
 `SKILL.md`'s frontmatter carries exactly two fields, verified by
 `tests/test_skill_consistency.py`'s `TestSkillFrontmatter`:
 
 ```yaml
-name: simplify-med
+name: simplify
 description: >
   Turn a clinical document ... into a plain-language, fact-checked
   care plan with an audit trail. ...
@@ -79,10 +79,10 @@ in `SKILL.md` itself.
 | `tags` | category tags |
 | `author` | `{name}` |
 | `homepage` | repo URL |
-| `skills` | array of skill folder names under `skills/`, currently `["simplify-med"]` |
+| `skills` | array of skill folder names under `skills/`, currently `["simplify"]` |
 
 **Sync rule.** `.claude-plugin/plugin.json`'s `version` and
-`skills/simplify-med/scripts/_version.py`'s `PLUGIN_VERSION` constant must
+`skills/simplify/scripts/_version.py`'s `PLUGIN_VERSION` constant must
 both equal `plugin.meta.json`'s `version`. `packaging/build.py`'s
 `check_versions()` reads all three (`load_meta`, `load_manifest`,
 `load_version_constant` — the last execs `_version.py`'s source directly
@@ -156,7 +156,7 @@ profiles own archive layout, manifests, exclusions, and platform instructions.
 
 The source skill is read-only from the builder's point of view. All overlay work happens
 in temporary staging, and tests check that a build does not mutate
-`skills/simplify-med/`.
+`skills/simplify/`.
 
 Claude Code packages the plugin wrapper and registered agents. Claude.ai packages the
 standalone skill. OpenAI packages a portable root `plugin.json`, root `mcp.json`, the

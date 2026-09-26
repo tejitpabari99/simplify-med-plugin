@@ -1,6 +1,6 @@
 ---
 name: simplify-med-assemble
-description: Assembles the typed care plan from the fact ledger in plain language; dispatched by the simplify-med skill with explicit file paths.
+description: Assembles the typed care plan from the fact ledger in plain language; dispatched by the simplify skill with explicit file paths.
 tools: Read, Write
 ---
 

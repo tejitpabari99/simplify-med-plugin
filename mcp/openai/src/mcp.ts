@@ -48,7 +48,14 @@ export function createPresentationServer(options: PresentationServerOptions): Mc
     async () => ({ content: [{ type: "text", text: "Opening the completed report." }] }),
   );
 
+  const widgetDescription = "Static privacy-preserving viewer for a completed Simplify Med report";
   const resourceMeta = {
+    // `ui.domain` is kept as a full `https://` origin (not a bare hostname): the generic
+    // MCP Apps spec's own examples are bare hostnames, but ChatGPT is the only host this
+    // server targets, and developers.openai.com/apps-sdk/reference and
+    // developers.openai.com/plugins/reference (checked 2026-09-26) both document
+    // `_meta.ui.domain` / the `openai/widgetDomain` alias as a full origin, e.g. defaulting
+    // to `https://web-sandbox.oaiusercontent.com`. No change needed here.
     ui: {
       prefersBorder: true,
       ...(widgetDomain ? { domain: widgetDomain } : {}),
@@ -58,6 +65,11 @@ export function createPresentationServer(options: PresentationServerOptions): Mc
         frameDomains: [] as string[],
       },
     },
+    // OpenAI-specific compatibility aliases (still documented as honored on the pages
+    // above): the model-facing widget summary, and the legacy flat widget-domain key
+    // mirroring `ui.domain`.
+    "openai/widgetDescription": widgetDescription,
+    ...(widgetDomain ? { "openai/widgetDomain": widgetDomain } : {}),
   };
   const html = buildWidgetHtml(options.widgetBundle);
 
@@ -67,7 +79,7 @@ export function createPresentationServer(options: PresentationServerOptions): Mc
     RESOURCE_URI,
     {
       title: "Simplify Med report viewer",
-      description: "Static privacy-preserving viewer for a completed Simplify Med report",
+      description: widgetDescription,
       _meta: resourceMeta,
     },
     async () => ({

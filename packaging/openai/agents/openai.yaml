@@ -1,3 +1,11 @@
+interface:
+  display_name: Simplify
+  short_description: Turn medical paperwork into a fact-checked plain-language report.
+  icon_small: ./assets/icon-small.svg
+  icon_large: ./assets/icon-large.png
+  default_prompt: Simplify this medical document into a plain-language care plan.
+policy:
+  allow_implicit_invocation: true
 dependencies:
   tools:
     - type: mcp

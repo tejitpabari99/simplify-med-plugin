@@ -41,7 +41,7 @@ change the pipeline above.
 claude --plugin-dir /path/to/simplify-med-plugin
 ```
 
-Then invoke the `simplify-med` skill from within Claude Code.
+Then invoke the `simplify` skill from within Claude Code.
 
 **Packaged install**, built from the root dispatcher:
 
@@ -53,8 +53,8 @@ python3 build.py openai
 
 `claude-code` zips the whole plugin (wrapped in a top-level `simplify-med/`
 folder) for use as a Claude Code plugin. `claude-ai` zips just the portable
-skill (also wrapped in `simplify-med/`) for upload as a standalone skill on
-claude.ai.
+skill (wrapped in a top-level `simplify/` folder, matching the skill name)
+for upload as a standalone skill on claude.ai.
 
 The OpenAI ZIP contains the same skill plus portable manifests and viewer handoff
 instructions. Its MCP viewer must be deployed separately to a stable HTTPS endpoint;
@@ -74,20 +74,25 @@ grounder sees all of them together.
 
 ### What you get back
 
-`report.html` (one self-contained file: inline CSS and JS, no external
-assets, works offline, checkboxes that remember their state) and `report.md`
-(the same content as plain text). Also a one-line reading-level result, and
-any notices (see below).
+`report.md` (plain-language text). Also a one-line reading-level result, and
+any notices (see below). After presenting the result, the assistant offers
+relevant next steps: a printable/shareable `report.html` (one self-contained
+file: inline CSS and JS, no external assets, works offline, checkboxes that
+remember their state), rendered on request by `render_html.py`, and the
+audit trail (`report.audit.md`, on request by `render_audit.py`).
 
 ### Where it lands
 
 Each run is written to `simplify-runs/<run-id>/` in the current working
 directory (gitignored). That folder is the full audit trail, from the
-numbered source units through `report.html`.
+numbered source units through the final report.
 
 ## The report
 
-`plan_view.py` is the single view model both renderers read from. It builds,
+`finalize.py` always writes `report.md`; `report.html` is rendered only
+when asked for, by running `render_html.py` afterward, from the same final
+plan. `plan_view.py` is the single view model both renderers read from. It
+builds,
 in this fixed order, whichever of these seven sections have content (a
 section with nothing to show is omitted entirely):
 
@@ -212,7 +217,7 @@ and one simplification level (`standard`, ~6th-grade reading level) — see
 
 `plugin.meta.json` is the single source of truth for the plugin's version —
 currently `0.1.0`, semantic versioning starting from there. `.claude-plugin/plugin.json`
-and `skills/simplify-med/scripts/_version.py`'s `PLUGIN_VERSION` must both
+and `skills/simplify/scripts/_version.py`'s `PLUGIN_VERSION` must both
 match it; `packaging/build.py` checks all three and refuses to build (exit
 status 2) on any mismatch. Every JSON file a run produces carries its own
 `schema_version` and `plugin_version`.

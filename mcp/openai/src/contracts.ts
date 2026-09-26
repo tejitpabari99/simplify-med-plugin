@@ -51,6 +51,14 @@ export const TOOL_CONFIG = {
   },
   _meta: {
     "openai/fileParams": ["report"],
+    // Compatibility aliases verified against developers.openai.com/apps-sdk/reference
+    // and developers.openai.com/plugins/reference (2026-09-26): ChatGPT reads
+    // `_meta.ui.resourceUri` directly today, but still documents `openai/outputTemplate`
+    // as an honored compatibility alias, and `openai/toolInvocation/invoking`/`invoked`
+    // as the native "status while/after the tool runs" strings (<=64 chars each).
+    "openai/outputTemplate": RESOURCE_URI,
+    "openai/toolInvocation/invoking": "Opening the report…",
+    "openai/toolInvocation/invoked": "Report opened.",
     ui: {
       resourceUri: RESOURCE_URI,
       visibility: ["model"] as const,

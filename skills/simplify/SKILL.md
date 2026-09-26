@@ -1,10 +1,10 @@
 ---
-name: simplify-med
-description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces report.html and report.md in a run folder.
+name: simplify
+description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces a plain-language report (Markdown) in a run folder, with a printable HTML version and an audit trail available on request.
 ---
 
 Resolve `<skill>` once, at the start, to the absolute path of the directory
-containing this file (`skills/simplify-med/` in a plugin checkout). Every
+containing this file (`skills/simplify/` in a plugin checkout). Every
 run also has a `<run>` directory, resolved once you have it (Stage 0
 prints it). Use these two absolute paths in every command and every
 dispatch message below -- never a relative path.
@@ -198,10 +198,10 @@ directly (it records the stage as skipped).
 python3 <skill>/scripts/finalize.py --run-dir <run>
 ```
 
-Stdout gives, one per line: the HTML report path, the Markdown report
-path, the reading-level line, then any notices, then (per section 3) the
-`finalize: ...` status line as the last line -- that last line is not a
-notice. Exit 1 is fatal -- show the user its stderr text.
+Stdout gives, one per line: the Markdown report path, the reading-level
+line, then any notices, then (per section 3) the `finalize: ...` status
+line as the last line -- that last line is not a notice. Exit 1 is fatal
+-- show the user its stderr text.
 
 After finalization succeeds, if `<skill>/custom_end.md` exists, read it and
 follow its platform-specific result-presentation instructions before
@@ -209,21 +209,26 @@ presenting the results. If it does not exist or is empty, continue unchanged.
 
 ## 11. What to tell the user
 
-Give the two report paths (`report.html` is one file that opens in any
-browser, works offline, and has tick-boxes that remember their state;
-`report.md` has the same content as text); the reading-level line
-verbatim; each notice verbatim; and one sentence that this is a reading
-aid, not medical advice. Do NOT paste the plan into chat, and do NOT
-mention fact ids, line numbers, chunk counts, or any other run internals.
-If you can offer file downloads, offer `report.html` and
-`report.md`. If the user asks how a statement was verified, or wants
-sources, run:
+Give the report path (`report.md`); the reading-level line verbatim; each
+notice verbatim; and one sentence that this is a reading aid, not medical
+advice. Do NOT paste the plan into chat, and do NOT mention fact ids, line
+numbers, chunk counts, or any other run internals. If you can offer file
+downloads, offer `report.md`.
 
-```
-python3 <skill>/scripts/render_audit.py --run-dir <run>
-```
+Then, briefly and naturally (not as a menu), offer relevant next steps,
+for example:
 
-and point them to `<run>/report.audit.md`.
+- A printable/shareable HTML report -- run
+  `python3 <skill>/scripts/render_html.py --run-dir <run>` and point to
+  `<run>/report.html`.
+- The audit trail, if they ask how a statement was verified or want
+  sources -- run
+
+  ```
+  python3 <skill>/scripts/render_audit.py --run-dir <run>
+  ```
+
+  and point them to `<run>/report.audit.md`.
 
 ## 12. Failure table
 
@@ -242,7 +247,6 @@ and point them to `<run>/report.audit.md`.
 
 Each run lives in `<cwd>/simplify-runs/<run-id>/` and contains numbered
 stage files (`01_units.json` ... `06_plan.final.json`), `run.json` (the
-audit trail: per-stage status, attempts, checks), and the three reports:
-`report.md`, `report.html`, and, on request, `report.audit.md`. Everything
-in it stays on the user's machine; deleting the folder removes all traces
-of the run.
+audit trail: per-stage status, attempts, checks), and `report.md`, plus,
+on request, `report.html` and `report.audit.md`. Everything in it stays on
+the user's machine; deleting the folder removes all traces of the run.

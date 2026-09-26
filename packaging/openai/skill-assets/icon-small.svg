@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Simplify Med placeholder icon">
+  <title>Simplify Med placeholder icon</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="14.125" fill="url(#bg)"/>
+  <g>
+    <rect x="15.375" y="12.25" width="29.5" height="37.125" rx="3.875" fill="#FFFFFF"/>
+    <polygon points="39.125,12.25 44.875,18 39.125,18" fill="#E0ECF1"/>
+    <rect x="20.5" y="23.5" width="18.75" height="2.875" rx="1.4375" fill="#BFD6E0"/>
+    <rect x="20.5" y="29.25" width="18.75" height="2.875" rx="1.4375" fill="#BFD6E0"/>
+    <rect x="20.5" y="35" width="12.25" height="2.875" rx="1.4375" fill="#BFD6E0"/>
+  </g>
+  <g>
+    <circle cx="43.625" cy="44.625" r="12.75" fill="#0D9488" stroke="#FFFFFF" stroke-width="0.75"/>
+    <polyline points="38.5,44.875 41.875,48.25 49.5,40" fill="none" stroke="#FFFFFF" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

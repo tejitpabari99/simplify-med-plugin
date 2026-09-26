@@ -1,6 +1,6 @@
 ---
 name: simplify-med-review-coverage
-description: Checks every fact in the ledger against the assembled care plan, enumerate-then-check, and writes a raw coverage JSON file; dispatched by the simplify-med skill with explicit file paths.
+description: Checks every fact in the ledger against the assembled care plan, enumerate-then-check, and writes a raw coverage JSON file; dispatched by the simplify skill with explicit file paths.
 tools: Read, Write
 ---
 

@@ -13,7 +13,15 @@
         "displayName": "Simplify Med",
         "shortDescription": "Turn medical paperwork into a fact-checked plain-language report.",
         "longDescription": "Simplify supplied medical documents into a plain-language, source-anchored care plan and open the completed report in a privacy-preserving viewer.",
-        "developerName": "Tejit Pabari"
+        "developerName": "Tejit Pabari",
+        "category": "Productivity",
+        "capabilities": ["Interactive", "Write"],
+        "websiteURL": "https://github.com/tejitpabari99/simplify-med-plugin",
+        "logo": "./assets/logo.png",
+        "composerIcon": "./assets/composer-icon.png",
+        "defaultPrompt": [
+          "Simplify this medical document into a plain-language care plan."
+        ]
       }
     }
   }

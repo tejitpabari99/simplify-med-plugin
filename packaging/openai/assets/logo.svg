@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Simplify Med placeholder logo">
+  <title>Simplify Med placeholder logo</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="113" fill="url(#bg)"/>
+  <g>
+    <rect x="123" y="98" width="236" height="297" rx="31" fill="#FFFFFF"/>
+    <polygon points="313,98 359,144 313,144" fill="#E0ECF1"/>
+    <rect x="164" y="188" width="150" height="23" rx="11.5" fill="#BFD6E0"/>
+    <rect x="164" y="234" width="150" height="23" rx="11.5" fill="#BFD6E0"/>
+    <rect x="164" y="280" width="98" height="23" rx="11.5" fill="#BFD6E0"/>
+  </g>
+  <g>
+    <circle cx="349" cy="357" r="102" fill="#0D9488" stroke="#FFFFFF" stroke-width="6"/>
+    <polyline points="308,359 335,386 396,320" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

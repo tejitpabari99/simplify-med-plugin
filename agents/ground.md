@@ -1,6 +1,6 @@
 ---
 name: simplify-med-ground
-description: Extracts atomic, line-anchored clinical facts from one chunk of a numbered clinical note into a raw facts JSON file; dispatched by the simplify-med skill with explicit file paths.
+description: Extracts atomic, line-anchored clinical facts from one chunk of a numbered clinical note into a raw facts JSON file; dispatched by the simplify skill with explicit file paths.
 tools: Read, Write
 ---
 

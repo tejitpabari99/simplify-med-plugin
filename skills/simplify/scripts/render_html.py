@@ -248,7 +248,9 @@ def render(plan: dict) -> str:
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Render a final care plan to a self-contained HTML report.")
+    parser = argparse.ArgumentParser(
+        description="Render a final care plan to a self-contained HTML report (on request only)."
+    )
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--plan", default=None, help="Path to the plan JSON (default: <run-dir>/06_plan.final.json)")
     parser.add_argument("--out", default=None, help="Output path (default: <run-dir>/report.html)")
@@ -260,6 +262,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     plan_path = args.plan or os.path.join(args.run_dir, "06_plan.final.json")
+    if not os.path.isfile(plan_path):
+        print(
+            f"render_html: cannot find {plan_path} -- run finalize.py first.",
+            file=sys.stderr,
+        )
+        return 1
+
     with open(plan_path, "r", encoding="utf-8") as f:
         plan = json.load(f)
 
@@ -269,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         f.write(text)
 
     print(f"OK wrote {out_path}")
+    print(f"render_html: ok | path={out_path}")
     return 0
 
 
