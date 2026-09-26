@@ -8,6 +8,49 @@ An OpenAI plugin with three patient-facing skills:
 
 `prep` and `med-lit` are instruction-only skills (no scripts) with basic Markdown output.
 
+## The Problem
+
+Patients leave appointments unsure what just happened. The paperwork they take home is long and full of jargon, and it rarely says clearly what to do next.
+
+The research behind this plugin covers **200+ patient surveys, 50 patient interviews, and 30 clinician interviews**:
+
+| Survey finding | Share of patients |
+|---|---:|
+| Understood only part of their visit, or got too little information | **57%** |
+| Missed critical questions, or were too overloaded to ask them | **51%** |
+| Had to contact the doctor again after the visit | **58%** |
+
+> “I kind of go dumb when they start talking.” — patient
+>
+> “A thousand pages, but only two usable ones.” — clinician
+
+Patients and clinicians described the same gaps, and each skill targets one of them:
+
+| Gap | Patient interviews | Clinicians | Skill |
+|---|---:|---:|---|
+| Information overload | 71% | 95% | `simplify` |
+| Unprepared for the visit | 76% | 74% | `prep` |
+| Jargon and results | 62% | 79% | `med-lit` |
+
+Headline participant counts are rounded fieldwork totals. The percentages come from the connected, de-identified corpus analysed in [`user/research-report.md`](user/research-report.md).
+
+## Before and After
+
+Same ER report, two results. Asking ChatGPT to simplify the raw report produces a long, dense wall of text that still uses jargon, and it goes on well past this screenshot. `simplify` produces one short page: what happened, what they found, what to do now, and when to go back.
+
+| Before: ChatGPT on the raw report | After: `simplify` |
+|---|---|
+| <img src="user/pitch-deck/before-chatgpt.png" alt="ChatGPT's long simplification of an ER report" width="420"> | <img src="user/pitch-deck/after-simplify-med.png" alt="Simplify Med's short plain-language summary of the same ER visit" width="420"> |
+
+## Why You Can Trust the Output
+
+- **Source-grounded.** Every fact is quoted from an exact line of the source. The writing stage never sees the raw note, only checked facts.
+- **AHRQ plain language.** 299 AHRQ word swaps and 47 expanded abbreviations, aiming for about a 6th-grade reading level.
+- **Checked by code.** Deterministic Python scripts, not the model, verify quotes, citations, and every number, and they keep a full audit trail.
+- **No diagnosis, no guessing.** Missing information stays missing.
+
+The [pitch deck (PDF)](user/pitch-deck/simplify-med-pitch-deck.pdf) and [pitch video](user/pitch-video/) summarise the problem, the research, and the solution.
+
 ## Plugin Structure
 
 The repository root is the plugin folder OpenAI uses:

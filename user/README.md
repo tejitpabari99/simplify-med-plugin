@@ -6,6 +6,7 @@ Project 1 patient, caregiver, and clinician research.
 - [`research-report.md`](research-report.md): main findings, excerpts, product implications, and limitations.
 - [`figures/`](figures/): five generated PNG figures.
 - [`interactive/research-evidence-explorer.html`](interactive/research-evidence-explorer.html): source for the interactive evidence explorer.
+- [`pitch-deck/`](pitch-deck/): the pitch deck PDF and the before/after screenshots.
 - [`data/`](data/): de-identified aggregate metrics, coded excerpts, source inventory, and data-quality notes.
 - [`scripts/analyze_user_research.py`](scripts/analyze_user_research.py): rebuilds all aggregate outputs and PNGs from local spreadsheet exports.
 - [`scripts/validate_research_outputs.py`](scripts/validate_research_outputs.py): validates metric arithmetic, expected outputs, image dimensions, and common PII patterns.
