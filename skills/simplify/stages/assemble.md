@@ -40,12 +40,44 @@ low_priority: [string]
 
 ## Job
 
-Do these four things, in this order, and nothing else:
+Do these five things, in this order, and nothing else:
 
-1. Map each fact to a care-plan item of its category (see MAPPING), recording the id of every fact each item is built from in that item's `source_fact_ids` field as you go (see SOURCE_FACT_IDS). Facts are already at clause granularity, so this is close to a one-to-one map -- most facts become exactly one item.
-2. Split each item's fact content into that item's typed fields.
-3. Render every field in plain language -- apply every rule in style_rules.md -- a bounded rewrite of a few words at a time, e.g. "metoprolol 25mg BID" becomes "metoprolol 25 mg twice a day." Never rewrite a fact's meaning, only its wording. `title` is the name as the note gives it; `plain_name` is the everyday name ONLY when it differs from `title`, otherwise `""`. Never nest one inside the other with parentheses in `description`, `what_it_means_for_you`, or any other field -- "high blood pressure (high blood pressure (hypertension))" is wrong; "hypertension" as `title` with `plain_name` "high blood pressure" is right. Say a thing once per item.
-4. Write `summary` from the assembled whole, and list the ids of every fact it draws from in `summary_fact_ids`.
+1. Triage the facts using PATIENT RELEVANCE below. The fact ledger is intentionally more complete than the patient-facing report.
+2. Map patient-relevant facts to care-plan items of their category (see MAPPING), recording the id of every fact each item is built from in that item's `source_fact_ids` field as you go (see SOURCE_FACT_IDS).
+3. Put non-critical supporting facts in `low_priority` as short audit-only lines. Do not turn them into full patient-facing items.
+4. Split each included item's fact content into typed fields, then render every field in plain language. Apply every rule in style_rules.md. Use a bounded rewrite of a few words at a time, e.g. "metoprolol 25mg BID" becomes "metoprolol 25 mg twice a day." Never rewrite a fact's meaning, only its wording. `title` is the name as the note gives it; `plain_name` is the everyday name ONLY when it differs from `title`, otherwise `""`. Never nest one inside the other with parentheses in `description`, `what_it_means_for_you`, or any other field -- "high blood pressure (high blood pressure (hypertension))" is wrong; "hypertension" as `title` with `plain_name` "high blood pressure" is right. Say a thing once per item.
+5. Write `summary` from only the highest-priority included facts, and list the ids of every fact it draws from in `summary_fact_ids`.
+
+### PATIENT RELEVANCE -- preserve what changes understanding, action, or safety
+
+The goal is not to display every extracted fact. The goal is a concise, source-grounded explanation that helps the patient understand what happened and what to do.
+
+Always keep in the patient-facing sections when stated:
+
+- the main reason for the visit;
+- the clinician's main conclusion, documented diagnosis, or unresolved important finding;
+- medication starts, stops, changes, and exact home-use instructions;
+- pending tests, referrals, appointments, monitoring, or other actions;
+- follow-up timing and who the patient should contact;
+- warning signs with the source's action and urgency;
+- conflicts, uncertainty, or missing details that could change an action;
+- a reassuring result when it directly explains the disposition, such as why emergency discharge was considered safe.
+
+Usually move to `low_priority` instead of displaying:
+
+- technical details of how a completed test was performed, including contrast names, contrast doses, machine settings, sequences, and measurement metadata;
+- raw normal or incidental values that do not change the plan;
+- repeated versions of the same finding, instruction, or warning;
+- differential diagnoses the clinician considered and rejected, unless the rejection directly explains the main conclusion;
+- generic education-sheet advice, broad wellness guidance, and conditional advice unrelated to this patient's documented plan;
+- completed tests whose only remaining content is that the test occurred;
+- stable background medication or history details that did not change and do not explain the visit.
+
+When deciding, ask: would removing this detail change what the patient understands, does next, asks about, or treats as urgent? If no, keep it out of the patient-facing sections.
+
+For completed tests, prefer the patient-relevant result or conclusion over procedure details. Do not create an "Already done" inventory of every scan, laboratory panel, tracing, injection, or technical parameter.
+
+For warning signs, combine overlapping symptoms only when they have the same action and urgency and the combined wording preserves every important symptom. Do not repeat a generic education handout's exhaustive list when one concise, source-supported escalation instruction conveys the same action.
 
 ### MAPPING -- a fact's category decides which care-plan array it becomes an item in
 
@@ -86,7 +118,7 @@ Do not merge facts that are merely related; only merge facts that say the same t
 
 ### LOW PRIORITY
 
-After mapping, move an item into low_priority (as one short line, not a full item) only if it is a normal result, a routine finding, or an administrative detail: no action for the patient, and no diagnosis or plan they would want in the main sections. This is a narrow reclassification. When in doubt, leave the item in its real section.
+Use `low_priority` as the audit-only home for source-supported facts that do not belong in the concise patient view. This includes normal or routine findings, technical test details, repeated facts, stable background details, rejected differentials, and generic education that does not change this patient's documented plan. Write one short line per fact or merged group. Preserve the specific content well enough for the coverage reviewer to recognize it. Do not put a safety-critical action, medication change, pending follow-up, important result, or explicit warning instruction here.
 
 ### QUESTIONS
 
@@ -94,7 +126,7 @@ Write at most three questions a patient might reasonably ask their care team abo
 
 ### SUMMARY
 
-Write `summary` from the assembled whole -- a short plain-language overview of the visit -- and list the ids of every fact it draws from in `summary_fact_ids`. Apply every rule in style_rules.md, including PLAIN WORDS.
+Write `summary` as two or three short sentences, normally 60 to 120 words. Include only: why the patient was seen, the main conclusion or most important result, and the most important next step or unresolved issue. Do not inventory diagnoses, tests, normal values, technical details, or every warning sign. Do not repeat details that the next sections already make easy to find. List the ids of every fact it draws from in `summary_fact_ids`. Apply every rule in style_rules.md, including PLAIN WORDS.
 
 ## If you are retried
 

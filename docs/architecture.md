@@ -187,8 +187,12 @@ support; emits corrections. Inputs: `02_facts.txt`, `03_plan.draft.json`,
 `03_flags.json`. Output: `04_review.raw.json`. Check:
 `sanitize_review.py --run-dir <run> --only review`.
 
-**Coverage.** Enumerate-then-check every fact id against the plan; never
-judges fidelity. Inputs: `02_facts.txt`, `03_plan.draft.json`. Output:
+**Critical coverage.** Enumerate every fact id, but mark a fact missing only
+when its omission could change patient understanding, action, questions, or
+safety. Technical test mechanics, repeated facts, generic education,
+non-actionable normal values, and stable background details may be safely
+omitted from the patient view. This stage never judges fidelity. Inputs:
+`02_facts.txt`, `03_plan.draft.json`. Output:
 `04_coverage.raw.json`. Check: `sanitize_review.py --run-dir <run> --only coverage`.
 
 **Review sanitize rules** (`sanitize_review.sanitize_corrections`), each a
@@ -216,8 +220,9 @@ violation paths), then, regardless, `diff_guard.py --run-dir <run>` (no
 `corrections == 0`: model stage skipped, `diff_guard.py` run directly (copies the
 draft through, `correct: skipped`).
 
-**Assemble-missing.** Turns coverage misses into new items, citing only
-those facts, never touching existing items. Inputs: `02_facts.txt`,
+**Assemble-missing.** Turns critical-coverage misses into the smallest new
+items that restore the missing meaning, citing only those facts and never
+touching existing items. Inputs: `02_facts.txt`,
 `03_plan.draft.json`, `04_coverage.json`, `reference/style_rules.md`,
 `schema/additions_raw.schema.json`. Output: `05_additions.raw.json`.
 Check: `cite_check.py --run-dir <run> --additions`. If `missing == 0`:
@@ -265,9 +270,10 @@ nothing written. In order:
 5. **PII sweep** (`_pii_sweep`): bounded regex over every string field
    except `meta` — `Dr./Doctor <Name>` and `<Name>, MD/DO/NP/PA/RN` → "your
    doctor"; substitution count recorded.
-6. **Readability** (`_compute_score`): `readability.fk_grade` on the raw
-   input text (`before_grade`) and `plan_view.visible_text` of the final
-   plan (`after_grade`).
+6. **Readability telemetry** (`_compute_score`): `readability.fk_grade` on
+   the raw input text (`before_grade`) and `plan_view.visible_text` of the
+   final plan (`after_grade`). The score remains in JSON and run logs but is
+   not shown in patient-facing Markdown or HTML.
 7. **Notices** (`_build_notices`): draft-fallback notice ("We could not run
    every check on this summary") if step 1 fell back; generic verify
    notice ("We could not fully verify every part of this summary against
@@ -281,9 +287,10 @@ nothing written. In order:
 
 **Failure:** exit 1, nothing written, on failed preconditions or a final
 document that doesn't validate (internal-bug case). **Stdout order:**
-Markdown path, the reading-level line (or "Reading level: not enough
-text to estimate."), each notice verbatim, then the `finalize: ...` status
-line last.
+Markdown path, an internal reading-level telemetry line (or "Reading level:
+not enough text to estimate."), each notice verbatim, then the
+`finalize: ...` status line last. The telemetry line is not rendered into
+the patient-facing report.
 
 ### render_html (script, on request only)
 
@@ -391,9 +398,9 @@ LOW PRIORITY (routine/normal/administrative only, narrow) · QUESTIONS
 
 **Why review is split.** `review_fidelity.md` (does the plan say something
 its facts don't support — never judges placement) and
-`review_coverage.md` (is every fact's content somewhere in the plan,
-enumerate-then-check — never judges truth) run as independent parallel
-dispatches of different shape.
+`review_coverage.md` (is every patient-critical fact represented while
+supporting detail may remain hidden or be safely omitted — never judges
+truth) run as independent parallel dispatches of different shape.
 
 **How the reviewer uses `03_flags.json`.** Both hint types are "a place to
 look, not an automatic correction": a `numeric_parity` hint requires either
@@ -484,7 +491,7 @@ current code:
 | Quote informativeness floor | 12 chars, or 7+ char word, or a digit | `textnorm.py` (`is_informative`); own copy of the same constants in `numeric_parity.py` | Inherited from simplify-med PRD 03 |
 | PII substitution token delta | 4 tokens | `diff_guard.py` (`_MAX_PII_TOKEN_DELTA`) | Inherited from simplify-med PRD 05 |
 | Numeric unit-word length | 15 chars | `numeric_parity.py` (`_UNIT_WORD_MAX_LENGTH`) | Inherited from simplify-med PRD 10 |
-| Glossary soft cap | 25 terms | `stages/glossary.md` (instruction) + `glossary_check.py` (`_CAP`, enforced) | Fewer than simplify-med's 40 |
+| Glossary cap | 5 terms | `stages/glossary.md` (instruction) + `glossary_check.py` (`_CAP`, enforced) | Keeps only terms needed to understand the patient-relevant report |
 | Target reading level | grade 6 | `reference/style_rules.md` | AHRQ/CDC recommendation |
 
 None recalibrated against real documents; see `futures.md` for the

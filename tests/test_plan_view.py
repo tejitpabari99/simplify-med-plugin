@@ -91,26 +91,23 @@ class TestBuildView(unittest.TestCase):
         self.assertEqual(self.view["title"], "Your visit, explained")
         self.assertEqual(self.view["notices"], ["A notice."])
 
-    def test_score_line_both_present(self):
-        self.assertEqual(self.view["score_line"], "Reading level: grade 9.0 before, grade 6.0 after.")
+    def test_score_line_is_internal_not_patient_visible(self):
+        self.assertNotIn("score_line", self.view)
 
-    def test_score_line_after_only(self):
+    def test_score_line_helper_after_only(self):
         plan = _base_plan()
         plan["score"] = {"before_grade": None, "after_grade": 6.0}
-        view = plan_view.build_view(plan)
-        self.assertEqual(view["score_line"], "Reading level: about grade 6.0.")
+        self.assertEqual(plan_view.score_line(plan["score"]), "Reading level: about grade 6.0.")
 
-    def test_score_line_omitted_when_after_missing(self):
+    def test_score_line_helper_omitted_when_after_missing(self):
         plan = _base_plan()
         plan["score"] = {"before_grade": 9.0, "after_grade": None}
-        view = plan_view.build_view(plan)
-        self.assertNotIn("score_line", view)
+        self.assertIsNone(plan_view.score_line(plan["score"]))
 
-    def test_score_line_omitted_when_both_missing(self):
+    def test_score_line_helper_omitted_when_both_missing(self):
         plan = _base_plan()
         plan["score"] = {"before_grade": None, "after_grade": None}
-        view = plan_view.build_view(plan)
-        self.assertNotIn("score_line", view)
+        self.assertIsNone(plan_view.score_line(plan["score"]))
 
     def test_section_order(self):
         keys = [s["key"] for s in self.view["sections"]]
@@ -149,21 +146,21 @@ class TestBuildView(unittest.TestCase):
                 order_seen.append(label)
         self.assertEqual(order_seen, ["Medication", "Test", "Procedure", "Appointment", "Instruction"])
 
-    def test_medication_why_always_present_including_not_stated(self):
+    def test_medication_why_only_present_when_stated(self):
         next_steps = next(s for s in self.view["sections"] if s["key"] == "next_steps")
         med_a = next(r for r in next_steps["todo"] if r["title"] == "Med A")
-        self.assertEqual(med_a["sub"][0], "Why: not stated in your note")
+        self.assertEqual(med_a["sub"], [])
         med_b = next(r for r in next_steps["done"] if r["title"].startswith("Med B"))
         self.assertEqual(med_b["sub"][0], "Why: Controls symptoms.")
 
-    def test_test_procedure_instruction_why_always_present(self):
+    def test_test_procedure_instruction_why_only_when_stated(self):
         next_steps = next(s for s in self.view["sections"] if s["key"] == "next_steps")
         test_row = next(r for r in next_steps["todo"] if r["type_label"] == "Test")
-        self.assertTrue(test_row["sub"][0].startswith("Why:"))
+        self.assertNotIn("Why: not stated in your note", test_row["sub"])
         proc_row = next(r for r in next_steps["todo"] if r["type_label"] == "Procedure")
         self.assertTrue(proc_row["sub"][0].startswith("Why:"))
         instr_row = next(r for r in next_steps["todo"] if r["type_label"] == "Instruction")
-        self.assertTrue(instr_row["sub"][0].startswith("Why:"))
+        self.assertNotIn("Why: not stated in your note", instr_row["sub"])
         self.assertIn("Step 1: Eat less salt.", instr_row["sub"])
         self.assertIn("Step 2: Walk daily.", instr_row["sub"])
 
@@ -224,7 +221,7 @@ class TestVisibleText(unittest.TestCase):
         text = plan_view.visible_text(plan)
         self.assertIn("You have a condition that needs treatment.", text)
         self.assertIn("Med A", text)
-        self.assertIn("Why: not stated in your note", text)
+        self.assertNotIn("Why: not stated in your note", text)
 
     def test_deep_copy_safe(self):
         plan = _base_plan()

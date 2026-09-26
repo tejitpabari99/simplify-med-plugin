@@ -12,5 +12,8 @@ LANGUAGE RULES -- apply to every field you write:
 - Never add urgency, prognosis, or medical advice beyond what a fact states.
 - Start every patient action (in medications, tests, procedures, other, follow_up) with a clear verb: Take / Call / Schedule / Ask / Bring / Watch / Avoid / Continue / Stop.
 - Aim for about a 6th-grade reading level: short common words, one idea per sentence.
+- Lead with the main message and the next action. Keep supporting detail out of the first view.
+- Do not repeat a fact in multiple sections unless repetition is needed to prevent a safety error.
+- Leave an optional field empty or null when the source does not state it. Do not write filler such as "not stated in your note" into patient-facing text.
 
 PLAIN WORDS -- `reference/ahrq_plain_language.json` lists medical words and their everyday alternatives. Prefer the everyday alternative; when a medical term must stay (a diagnosis name, a drug name), keep it and put the plain meaning next to it once.

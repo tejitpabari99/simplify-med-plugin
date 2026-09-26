@@ -20,8 +20,8 @@ class TestRenderMd(unittest.TestCase):
     def test_notice_blockquote(self):
         self.assertIn("> A notice.", self.text)
 
-    def test_score_line_italic(self):
-        self.assertIn("_Reading level: grade 9.0 before, grade 6.0 after._", self.text)
+    def test_readability_score_not_patient_visible(self):
+        self.assertNotIn("Reading level:", self.text)
 
     def test_section_headings(self):
         for heading in (

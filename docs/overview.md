@@ -21,7 +21,9 @@ The pipeline accepts one UTF-8 `.txt` file per source document. Text from PDFs, 
 
 ## Output
 
-The default output is `report.md`, backed by a structured final JSON plan. The report may contain:
+The default output is a concise `report.md`, backed by a more complete structured final JSON plan. The patient-facing report keeps facts that affect understanding, action, questions, or safety. Technical, repetitive, generic, and non-actionable supporting detail stays in the audit layer.
+
+The report may contain:
 
 - a short summary;
 - reasons for the visit;
@@ -46,7 +48,7 @@ The pipeline separates language reasoning from deterministic checks:
 3. `anchor_check.py` verifies every quote against the numbered source.
 4. `assemble.md` maps checked facts into the care-plan schema.
 5. Citation and numeric checks reject or flag unsupported output.
-6. Fidelity and coverage reviews identify corrections and omissions.
+6. Fidelity and critical-coverage reviews identify unsupported claims and important omissions without forcing every extracted detail into the report.
 7. Diff and citation guards constrain the repair stages.
 8. `finalize.py` merges validated results, records notices, and renders Markdown.
 

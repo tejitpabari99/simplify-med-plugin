@@ -28,9 +28,11 @@ skills/simplify/
 1. Splits extracted document text into numbered source units.
 2. Extracts atomic facts anchored to exact source lines.
 3. Builds a structured plain-language care plan from checked facts only.
-4. Reviews fidelity, coverage, and numeric preservation.
-5. Applies bounded corrections and fills verified omissions.
+4. Reviews fidelity, critical coverage, and numeric preservation.
+5. Applies bounded corrections and fills verified critical omissions.
 6. Produces Markdown, with HTML and a source audit available on request.
+
+The fact ledger remains comprehensive for verification. The default patient view is selective: it emphasizes the main conclusion, medication changes, next actions, follow-up, and explicit warning instructions while hiding technical and non-actionable detail in the audit layer.
 
 The language work lives in `skills/simplify/stages/`. Python is reserved for deterministic work such as source anchoring, schema validation, citations, numeric checks, bounded diffs, audit logging, and rendering. See `docs/openai-plugin.md` for the governing authoring rules and the per-script rationale.
 

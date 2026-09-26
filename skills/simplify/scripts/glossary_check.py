@@ -7,7 +7,7 @@ Validates 02_glossary.raw.json against glossary_raw.schema.json first
 (schema errors -> print and exit 1, the orchestrator's retry signal).
 Then drops terms whose matched_term cannot be found (normalized
 substring) in any unit's text, terms with an empty definition, and exact
-duplicates (by normalized matched_term); caps the survivors at 25 in file
+duplicates (by normalized matched_term); caps the survivors at 5 in file
 order; forces `source: "llm_proposed"`; writes 02_glossary.json.
 
 Never fatal: a missing raw file yields an empty glossary, status
@@ -28,7 +28,7 @@ import textnorm  # noqa: E402
 import validate  # noqa: E402
 from _version import PLUGIN_VERSION, SCHEMA_VERSION  # noqa: E402
 
-_CAP = 25
+_CAP = 5
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

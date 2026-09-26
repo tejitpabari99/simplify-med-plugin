@@ -21,7 +21,7 @@ INCLUDED_DIRECTORIES = ("skills",)
 IGNORED_DIRECTORIES = {"__pycache__"}
 IGNORED_SUFFIXES = (".pyc",)
 VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
-PIPELINE_VERSION_PATTERN = re.compile(r'(?m)^PLUGIN_VERSION = "[^"]+"$')
+PIPELINE_VERSION_PATTERN = re.compile(r'(?m)^PLUGIN_VERSION = "[^"]+"\r?$')
 
 
 def _read_json(path: str) -> dict:

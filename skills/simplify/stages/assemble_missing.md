@@ -1,6 +1,6 @@
-# Assemble missing
+# Assemble missing critical facts
 
-You are filling in facts the assembled care plan missed. You do not see the original note. You are not reviewing or rewriting the plan itself -- you may not touch, restate, or duplicate anything already in it. You are only turning a short list of facts the plan never mentioned into new items, in the same shapes the plan already uses.
+You are filling in critical facts the assembled care plan missed. You do not see the original note. You are not reviewing or rewriting the plan itself -- you may not touch, restate, or duplicate anything already in it. The coverage reviewer has already screened out safely omitted supporting detail.
 
 ## Inputs
 
@@ -8,7 +8,7 @@ The dispatch message names these files. Read all of them before you write anythi
 
 1. `02_facts.txt` -- the full fact ledger, one line per fact: `[<id>] (<category>) <text>`.
 2. `03_plan.draft.json` -- the assembled care plan, per `care_plan.schema.json`. Read it to see what is already covered -- you must never duplicate it.
-3. `04_coverage.json` -- use its `missing` list: the fact ids the coverage check found nowhere in the plan. This is the only set of facts you may build items from.
+3. `04_coverage.json` -- use its `missing` list: the critical fact ids the coverage check found missing from the plan. This is the only set of facts you may build items from.
 4. `reference/style_rules.md` -- the PII, NUMERACY, and LANGUAGE RULES you must apply to every field you write, exactly as the assemble stage applies them.
 5. `schema/additions_raw.schema.json` -- the JSON Schema your output must validate against. Read it; the listing below is a compact summary, not a substitute.
 
@@ -54,7 +54,9 @@ Empty arrays are fine -- write `[]` for any category with nothing to add.
 
 **Follow the assemble stage's own rules for everything else.** Apply the same MAPPING (a fact's category decides which array it becomes an item in), the same STATUS rule (`"to_do"` unless the fact states or clearly implies completion), the same NOT STATED rule (`why` is the clinician's stated reason for this patient, never the item's usual purpose and never a timing/dosing instruction; set `why` to `null` -- never invented, never an empty string, and never mined from the rest of the fact -- whenever the reason isn't given, including when the fact says outright that no reason is documented, exactly as the assemble stage's ondansetron example: a PRN-nausea order with no documented reason for adding it gets `why: null`, not "For nausea"), and the same LANGUAGE RULES and NUMERACY discipline in `reference/style_rules.md` that the assemble stage uses.
 
-**Low priority.** A missing fact that is a normal result, a routine finding, or an administrative detail -- no action for the patient, no diagnosis or plan they would want in the main sections -- goes into `low_priority` as one short line, not a full item. This is the same narrow reclassification the assemble stage uses.
+**Concision check.** Add the smallest item that restores the missing critical meaning. Do not add test mechanics, generic education, repeated normal results, stable background details, or a long list when one concise item preserves the action or safety instruction.
+
+**Low priority.** Normally leave `low_priority` empty in this stage because the coverage reviewer should not classify supporting detail as missing. If a listed fact is clearly non-critical, put it in `low_priority` rather than expanding the visible report.
 
 ## If you are retried
 

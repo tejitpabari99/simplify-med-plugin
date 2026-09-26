@@ -11,6 +11,8 @@ Turn the supplied clinical documents into a plain-language report without adding
 
 - Treat the source documents as the only authority. Never infer a diagnosis, reason, dose, cause, severity, or recommendation that the documents do not state.
 - Keep every clinical statement traceable to source text through the fact ledger and `source_fact_ids`.
+- Keep the patient-facing result concise and action-first. Preserve every safety-critical fact, but do not display every extracted fact.
+- Put technical, repetitive, generic, and non-actionable supporting detail in the hidden audit layer rather than the patient report.
 - Preserve uncertainty. Use “not stated” or an empty optional field instead of guessing.
 - Keep source documents and run artifacts local unless the user explicitly asks to share them.
 - Present the result as a reading aid, not medical advice or a treatment instruction.
@@ -60,21 +62,21 @@ Append `:ocr` to text transcribed from an image or scan and `:pasted` to manuall
 - Run `python3 scripts/cite_check.py --run-dir <run>`.
 - Run `python3 scripts/numeric_parity.py --run-dir <run>`. Numeric flags inform review but do not fail the run by themselves.
 
-### 4. Review Fidelity and Coverage
+### 4. Review Fidelity and Critical Coverage
 
 These reviews are independent and may run in parallel:
 
 - Follow `stages/review_fidelity.md`, write `<run>/04_review.raw.json`, then run `python3 scripts/sanitize_review.py --run-dir <run> --only review`.
-- Follow `stages/review_coverage.md`, write `<run>/04_coverage.raw.json`, then run `python3 scripts/sanitize_review.py --run-dir <run> --only coverage`.
+- Follow `stages/review_coverage.md`, write `<run>/04_coverage.raw.json`, then run `python3 scripts/sanitize_review.py --run-dir <run> --only coverage`. This review checks that important patient-facing facts were not omitted; it does not force every extracted detail into the report.
 
 If either review fails twice, remove its invalid raw output and run its sanitizer once more so the audit trail records that review as skipped.
 
 ### 5. Correct and Fill Gaps
 
-Read the correction count in `<run>/04_review.json` and the missing-fact count in `<run>/04_coverage.json`.
+Read the correction count in `<run>/04_review.json` and the missing-critical-fact count in `<run>/04_coverage.json`.
 
 - If corrections exist, follow `stages/correct.md` and write `<run>/05_plan.corrected.raw.json`. Run `python3 scripts/diff_guard.py --run-dir <run> --strict`; retry the stage once if needed. Then run `python3 scripts/diff_guard.py --run-dir <run>` to produce the settled corrected plan. If no corrections exist, run only the non-strict command so the stage is recorded as skipped.
-- If missing facts exist, follow `stages/assemble_missing.md` and write `<run>/05_additions.raw.json`. Run `python3 scripts/cite_check.py --run-dir <run> --additions`. If no facts are missing, run the same command without creating model output so the stage is recorded as skipped.
+- If missing critical facts exist, follow `stages/assemble_missing.md` and write `<run>/05_additions.raw.json`. Run `python3 scripts/cite_check.py --run-dir <run> --additions`. If no critical facts are missing, run the same command without creating model output so the stage is recorded as skipped.
 
 ### 6. Finalize
 
@@ -84,7 +86,7 @@ Run:
 python3 scripts/finalize.py --run-dir <run>
 ```
 
-Finalization writes `<run>/06_plan.final.json` and `<run>/report.md`, reports the reading level, and records any degraded or skipped checks.
+Finalization writes `<run>/06_plan.final.json` and `<run>/report.md`, records readability telemetry internally, and records any degraded or skipped checks.
 
 ## Present the Result
 

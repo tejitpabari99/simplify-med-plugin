@@ -90,5 +90,33 @@ class TestNotStatedIsAStatedReason(unittest.TestCase):
         self.assertIn("general indication", text)
 
 
+class TestPatientRelevantConcision(unittest.TestCase):
+    """A complete ledger must not force every fact into the patient view."""
+
+    def test_assemble_prioritizes_patient_relevance(self):
+        text = _read(os.path.join(STAGES_DIR, "assemble.md"))
+        self.assertIn("PATIENT RELEVANCE", text)
+        self.assertIn("The goal is not to display every extracted fact", text)
+        self.assertIn("contrast names", text)
+        self.assertIn("generic education-sheet advice", text)
+        self.assertIn("two or three short sentences", text)
+
+    def test_coverage_checks_only_critical_omissions(self):
+        text = _read(os.path.join(STAGES_DIR, "review_coverage.md"))
+        self.assertIn("critical coverage", text.lower())
+        self.assertIn("Concision is a requirement", text)
+        self.assertIn("Set `present: false` only for an omitted critical fact", text)
+
+    def test_missing_stage_restores_smallest_critical_item(self):
+        text = _read(os.path.join(STAGES_DIR, "assemble_missing.md"))
+        self.assertIn("missing critical facts", text.lower())
+        self.assertIn("Add the smallest item", text)
+
+    def test_glossary_is_small_and_relevant(self):
+        text = _read(os.path.join(STAGES_DIR, "glossary.md"))
+        self.assertIn("no more than five terms", text)
+        self.assertIn("patient-relevant", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -83,6 +83,9 @@ class TestRenderHtml(unittest.TestCase):
         self.assertEqual(self.html.count('<div class="notice">'), 1)
         self.assertIn("A notice.", self.html)
 
+    def test_readability_score_not_patient_visible(self):
+        self.assertNotIn("Reading level:", _body_only(self.html))
+
     def test_footer_present(self):
         self.assertIn("reading aid, not medical advice", self.html)
 

@@ -1,6 +1,8 @@
-# Review: coverage
+# Review: critical coverage
 
-You are checking whether every clinical fact made it into a patient-facing care plan somewhere. You do not see the original note. You do not rewrite anything, and you are not judging fidelity here -- a fact can be present and still be misstated; that is a different check's job. You are only asking, fact by fact: is this fact's content anywhere in the plan?
+You are checking whether the care plan omitted any fact that matters to the patient's understanding, action, or safety. You do not see the original note. You do not rewrite anything, and you are not judging fidelity here -- a fact can be present and still be misstated; that is a different check's job.
+
+The fact ledger is intentionally more complete than the patient-facing report. Concision is a requirement. Do not force every extracted fact into the visible plan.
 
 ## Inputs
 
@@ -24,10 +26,31 @@ You must produce one entry for EVERY fact id that appears in `02_facts.txt`, in 
 Work through the fact ledger one fact at a time, in order. For each fact:
 
 1. Read its content.
-2. Search the whole care plan for that content -- any section, including `low_priority`; `summary` counts only if the specific content is actually there, not merely gestured at.
-3. Decide `present: true` if the fact's content appears somewhere, in the plan's own words or verbatim -- it does not need to match word for word. Decide `present: false` if you cannot find it anywhere.
+2. Search the whole care plan for that content, including `low_priority`. `summary` counts only if the specific content is actually there, not merely gestured at.
+3. If the content appears anywhere, set `present: true`.
+4. If it does not appear, decide whether omitting it could change what the patient understands, does next, asks about, or treats as urgent.
+5. Set `present: false` only for an omitted critical fact. Set `present: true` for a safely omitted supporting detail.
 
-Answer every single fact this way, one at a time. Never answer from an overall impression of "this plan looks complete" or "this plan looks thin" -- that is exactly the failure mode this check exists to catch. A fact you have not specifically located in the plan is `present: false`, even if the plan seems thorough overall.
+Critical facts normally include:
+
+- medication starts, stops, changes, doses, frequencies, timing, and home-use instructions;
+- pending tests, referrals, appointments, monitoring, and follow-up timing;
+- explicit warning signs, actions, and urgency;
+- documented diagnoses, main conclusions, and important abnormal or unresolved findings;
+- results that directly explain the disposition or next step;
+- conflicts or uncertainty that could change an action.
+
+Safely omitted supporting details normally include:
+
+- technical details of how a completed test was performed, including contrast names or doses;
+- raw normal values or incidental findings that do not change the plan;
+- repeated facts already represented by a clearer item;
+- rejected differential diagnoses that do not change the main explanation;
+- broad generic education or wellness advice not specific to this patient's documented plan;
+- stable background history or medicines that did not change;
+- a completed test whose patient-relevant result is already stated elsewhere.
+
+Answer every fact one at a time. Never mark a fact missing merely because its exact wording is absent. Never reward a long report for repeating non-critical detail. A concise plan passes when all critical facts are represented and supporting details are either in `low_priority` or safely omitted.
 
 ## If you are retried
 

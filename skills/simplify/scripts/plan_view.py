@@ -45,10 +45,6 @@ _SECTION_FOR_TYPE = {
 }
 
 
-def _not_stated_why(why):
-    return why if why else "not stated in your note"
-
-
 def _join_nonempty(parts, sep=", "):
     return sep.join(p for p in parts if p)
 
@@ -118,7 +114,9 @@ def _med_row(item):
         title = f"{title} ({plain})"
     detail = _join_nonempty([item.get("dosage", ""), item.get("frequency", ""),
                               item.get("timing", ""), item.get("duration", "")])
-    sub = [f"Why: {_not_stated_why(item.get('why'))}"]
+    sub = []
+    if item.get("why"):
+        sub.append(f"Why: {item['why']}")
     if item.get("instructions"):
         sub.append(f"Instructions: {item['instructions']}")
     if item.get("side_effects_to_watch"):
@@ -134,7 +132,9 @@ def _test_row(item):
     if plain and plain != title:
         title = f"{title} ({plain})"
     detail = item.get("description", "") or ""
-    sub = [f"Why: {_not_stated_why(item.get('why'))}"]
+    sub = []
+    if item.get("why"):
+        sub.append(f"Why: {item['why']}")
     if item.get("preparation"):
         sub.append(f"How to prepare: {item['preparation']}")
     return title, detail, sub
@@ -146,7 +146,9 @@ def _procedure_row(item):
     if plain and plain != title:
         title = f"{title} ({plain})"
     detail = item.get("what_to_expect", "") or ""
-    sub = [f"Why: {_not_stated_why(item.get('why'))}"]
+    sub = []
+    if item.get("why"):
+        sub.append(f"Why: {item['why']}")
     if item.get("timeframe"):
         sub.append(f"When: {item['timeframe']}")
     return title, detail, sub
@@ -163,7 +165,9 @@ def _follow_up_row(item):
 def _other_row(item):
     title = item.get("title", "") or ""
     detail = item.get("description", "") or ""
-    sub = [f"Why: {_not_stated_why(item.get('why'))}"]
+    sub = []
+    if item.get("why"):
+        sub.append(f"Why: {item['why']}")
     for i, step in enumerate(item.get("steps", []) or [], start=1):
         sub.append(f"Step {i}: {step}")
     if item.get("frequency"):
@@ -278,9 +282,6 @@ def build_view(plan: dict) -> dict:
         "notices": notices,
         "sections": sections,
     }
-    line = score_line(plan.get("score"))
-    if line:
-        view["score_line"] = line
     return view
 
 

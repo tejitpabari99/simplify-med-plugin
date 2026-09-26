@@ -30,6 +30,6 @@ The dispatch message names the output path `02_glossary.raw.json`. Write a singl
 
 Do not give clinical advice or interpret the patient's own results in a definition -- describe what the term means in general, not what it means for this patient.
 
-**Count.** Do not aim for a fixed count -- propose as many or as few terms as the note genuinely warrants. Soft cap: propose no more than 25 terms. If you find yourself proposing more than 25, keep only the 25 you judge least likely for a general reader to already know, prioritising terms that appear in diagnoses, medications, and instructions.
+**Count.** Do not aim for a fixed count. Propose no more than five terms. Keep only terms that appear in the patient-relevant summary, diagnoses, medication changes, actions, or warning instructions. Prefer explaining a term in context; omit the glossary entirely when the report is already clear.
 
 Return JSON only. No markdown, no commentary, no trailing explanation.

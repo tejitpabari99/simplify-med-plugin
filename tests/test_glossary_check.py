@@ -70,7 +70,7 @@ class TestGlossaryCheck(unittest.TestCase):
             self.assertEqual(data["stages"]["glossary"]["checks"]["dropped_not_in_source"], 1)
             self.assertEqual(data["stages"]["glossary"]["status"], "degraded")
 
-    def test_caps_at_25_keeping_file_order(self):
+    def test_caps_at_5_keeping_file_order(self):
         with tempfile.TemporaryDirectory() as d:
             run_id = os.path.basename(d)
             texts = [f"term{i} appears here" for i in range(30)]
@@ -86,11 +86,11 @@ class TestGlossaryCheck(unittest.TestCase):
 
             with open(os.path.join(d, "02_glossary.json"), "r", encoding="utf-8") as f:
                 doc = json.load(f)
-            self.assertEqual(len(doc["terms"]), 25)
-            self.assertEqual([t["matched_term"] for t in doc["terms"]], [f"term{i}" for i in range(25)])
+            self.assertEqual(len(doc["terms"]), 5)
+            self.assertEqual([t["matched_term"] for t in doc["terms"]], [f"term{i}" for i in range(5)])
 
             data = runlog.read(d)
-            self.assertEqual(data["stages"]["glossary"]["checks"]["dropped_cap"], 5)
+            self.assertEqual(data["stages"]["glossary"]["checks"]["dropped_cap"], 25)
 
     def test_schema_invalid_raw_prints_errors_and_exits_1(self):
         with tempfile.TemporaryDirectory() as d:
