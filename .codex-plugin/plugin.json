@@ -1,7 +1,7 @@
 {
   "name": "simplify-med",
   "version": "0.1.0",
-  "description": "Turns supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail.",
+  "description": "Helps patients around a medical visit: prepare for an appointment, simplify supplied clinical documents into a plain-language, source-anchored care plan, and take a brief personal health-literacy screen.",
   "author": {
     "name": "Tejit Pabari"
   },
@@ -12,13 +12,15 @@
     "health",
     "plain-language",
     "care-plan",
-    "patient"
+    "patient",
+    "appointment-prep",
+    "health-literacy"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Simplify Med",
     "shortDescription": "Turn medical paperwork into a fact-checked plain-language report.",
-    "longDescription": "Simplify supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail.",
+    "longDescription": "Prep gets a patient ready for an appointment with stated requirements, a things-to-bring checklist, and prioritized questions. Simplify turns supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail. Med Lit runs a brief, opt-in health-literacy screen and returns a personal support profile.",
     "developerName": "Tejit Pabari",
     "category": "Productivity",
     "capabilities": [

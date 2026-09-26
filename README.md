@@ -1,6 +1,12 @@
 # simplify-med
 
-An OpenAI plugin that turns supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail.
+An OpenAI plugin with three patient-facing skills:
+
+- **`prep`** — before a visit: capture the appointment's stated requirements, the patient's prioritized concerns, a things-to-bring checklist, and questions to ask.
+- **`simplify`** — after a visit: turn supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail.
+- **`med-lit`** — for each person: an opt-in, brief health-literacy screen (BHLS) plus self-reported support needs, returned as a basic profile.
+
+`prep` and `med-lit` are instruction-only skills (no scripts) with basic Markdown output.
 
 ## Plugin Structure
 
@@ -10,6 +16,16 @@ The repository root is the plugin folder OpenAI uses:
 plugin.json                    portable Agent Plugins manifest
 .codex-plugin/plugin.json      Codex compatibility manifest
 build-versions.json            repository-only prod/dev version counters
+skills/prep/
+  SKILL.md                     pre-visit workflow and safety boundaries
+  agents/openai.yaml           OpenAI skill metadata
+  assets/                      skill icons
+  references/                  concern prompts, question bank, brief template
+skills/med-lit/
+  SKILL.md                     screening workflow and safety boundaries
+  agents/openai.yaml           OpenAI skill metadata
+  assets/                      skill icons
+  references/                  BHLS items and scoring, support needs, profile template
 skills/simplify/
   SKILL.md                     workflow and safety boundaries
   agents/openai.yaml           OpenAI skill metadata
@@ -23,7 +39,7 @@ skills/simplify/
 
 `mcp/openai/` remains in the repository for possible future work. It is not connected to the plugin, declared by either manifest, or included in the ZIP.
 
-## What It Does
+## What `simplify` Does
 
 1. Splits extracted document text into numbered source units.
 2. Extracts atomic facts anchored to exact source lines.
@@ -86,7 +102,18 @@ It excludes `build-versions.json`, `mcp/`, `docs/`, `tests/`, repository metadat
 
 ## Use in OpenAI
 
-Install or import the generated ZIP as an OpenAI plugin. The plugin exposes the `simplify` skill and requires no MCP server, connector, endpoint, API key, or separate deployment.
+Install or import the generated ZIP as an OpenAI plugin. The plugin exposes the `prep`, `simplify`, and `med-lit` skills and requires no MCP server, connector, endpoint, API key, or separate deployment.
+
+### `prep`
+
+Ask for help getting ready for an appointment (implicit invocation is allowed). Optionally share the appointment message, referral, or preparation sheet. The skill asks a few optional questions, then returns an editable Markdown visit brief: appointment details, ordered priorities in the patient's words, clinic-stated preparation steps and items to confirm, a required-versus-optional things-to-bring checklist, and 3–5 prioritized questions. It never invents preparation requirements, diagnoses, or triage advice, and it keeps clinic instructions, patient statements, and generated suggestions visibly separate.
+
+### `med-lit`
+
+Explicitly invoke `med-lit` (implicit invocation is disabled because the screen is opt-in). It administers the three-item Brief Health Literacy Screen verbatim, scores it 3–15 only when all items are answered, asks optional support-needs and preference questions, and returns a Markdown profile plus a structured JSON block. It never infers literacy from conversation, never emits a universal low/medium/high level, and states that published cutoffs may not apply to chat administration. Wiring the profile into other skills is deferred.
+
+### `simplify`
+
 
 Explicitly invoke the `simplify` skill for a visit note, discharge summary, lab report, imaging report, or similar clinical document. Implicit invocation is disabled so this relatively expensive medical workflow does not activate accidentally. Input text should be extracted to UTF-8 `.txt`; page boundaries may be represented with form-feed characters (`\f`).
 
@@ -98,7 +125,8 @@ Completed schema-v1 final reports remain renderable. Partial schema-v1 runs cann
 
 ## Safety Boundary
 
-- The plugin explains supplied records; it does not diagnose or prescribe.
+- The plugin explains supplied records and helps patients prepare; it does not diagnose, prescribe, or triage.
+- `prep` uses only patient statements and supplied appointment materials; `med-lit` scores only the patient's answers to the screen.
 - Every medical statement must be supported by the source documents.
 - Missing information stays missing rather than being guessed.
 - Numeric details are checked independently.
@@ -112,7 +140,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 When the OpenAI plugin and skill validators are available in your development
-environment, run them against `.` and `skills/simplify` before distribution.
+environment, run them against `.`, `skills/prep`, `skills/simplify`, and `skills/med-lit` before distribution.
 Run `build.py` only when you intend to consume the next production or development version.
 
 ## Documentation

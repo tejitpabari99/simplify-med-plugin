@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Med Lit placeholder icon">
+  <title>Med Lit placeholder icon</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="14.125" fill="url(#bg)"/>
+  <path d="M32 20 C26 16 19 16 13 18 L13 46 C19 44 26 44 32 48 Z" fill="#FFFFFF"/>
+  <path d="M32 20 C38 16 45 16 51 18 L51 46 C45 44 38 44 32 48 Z" fill="#E0ECF1"/>
+  <rect x="17" y="25" width="11" height="2.5" rx="1.25" fill="#BFD6E0"/>
+  <rect x="17" y="31" width="11" height="2.5" rx="1.25" fill="#BFD6E0"/>
+  <rect x="17" y="37" width="8" height="2.5" rx="1.25" fill="#BFD6E0"/>
+  <circle cx="43" cy="30" r="4.5" fill="#0D9488"/>
+  <path d="M35.5 42 C35.5 37 39 35 43 35 C47 35 50.5 37 50.5 42 Z" fill="#0D9488"/>
+</svg>

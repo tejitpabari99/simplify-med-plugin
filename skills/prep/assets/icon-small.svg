@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Prep placeholder icon">
+  <title>Prep placeholder icon</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="14.125" fill="url(#bg)"/>
+  <rect x="16" y="12" width="32" height="40" rx="4" fill="#FFFFFF"/>
+  <rect x="25" y="8.5" width="14" height="7" rx="2.5" fill="#BFD6E0"/>
+  <polyline points="21,25 23.5,27.5 27.5,23" fill="none" stroke="#0D9488" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="31" y="24" width="12" height="2.75" rx="1.375" fill="#BFD6E0"/>
+  <polyline points="21,33 23.5,35.5 27.5,31" fill="none" stroke="#0D9488" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="31" y="32" width="12" height="2.75" rx="1.375" fill="#BFD6E0"/>
+  <rect x="21" y="40" width="5" height="5" rx="1.25" fill="none" stroke="#BFD6E0" stroke-width="1.5"/>
+  <rect x="31" y="41" width="9" height="2.75" rx="1.375" fill="#BFD6E0"/>
+</svg>

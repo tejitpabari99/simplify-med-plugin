@@ -135,6 +135,8 @@ class TestOpenAiPluginBuild(unittest.TestCase):
         self.assertIn("simplify-med/plugin.json", names)
         self.assertIn("simplify-med/.codex-plugin/plugin.json", names)
         self.assertIn("simplify-med/skills/simplify/SKILL.md", names)
+        self.assertIn("simplify-med/skills/prep/SKILL.md", names)
+        self.assertIn("simplify-med/skills/med-lit/SKILL.md", names)
         self.assertNotIn("simplify-med/build-versions.json", names)
         self.assertFalse(any("__pycache__" in name or name.endswith(".pyc") for name in names))
         for excluded in ("mcp/", "packaging/", "tests/", "docs/", "agent_files/", "agents/"):

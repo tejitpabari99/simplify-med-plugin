@@ -1,0 +1,8 @@
+interface:
+  display_name: Prep
+  short_description: Get ready for an appointment with requirements, a checklist, and questions to ask.
+  icon_small: ./assets/icon-small.svg
+  icon_large: ./assets/icon-large.png
+  default_prompt: Use $prep to help me get ready for my upcoming medical appointment.
+policy:
+  allow_implicit_invocation: true

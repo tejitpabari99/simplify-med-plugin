@@ -4,7 +4,13 @@
 
 `simplify-med` helps a patient understand supplied clinical paperwork. It converts extracted document text into a structured, plain-language care plan while preserving traceability to the source.
 
-It is an OpenAI plugin with one bundled skill: `simplify`.
+It is an OpenAI plugin with three bundled skills:
+
+- `prep` prepares a patient for an upcoming appointment (requirements, priorities, things to bring, questions to ask);
+- `simplify` explains supplied clinical paperwork (the rest of this document);
+- `med-lit` runs an opt-in brief health-literacy screen and returns a personal support profile.
+
+`prep` and `med-lit` are instruction-only skills with basic Markdown output; see their `SKILL.md` files and `references/` folders.
 
 ## Supported Inputs
 

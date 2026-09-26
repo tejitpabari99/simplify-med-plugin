@@ -1,0 +1,8 @@
+interface:
+  display_name: Med Lit
+  short_description: Take a brief, opt-in health-literacy screen and get a personal support profile.
+  icon_small: ./assets/icon-small.svg
+  icon_large: ./assets/icon-large.png
+  default_prompt: Use $med-lit to run my brief health-literacy screen and build my support profile.
+policy:
+  allow_implicit_invocation: false

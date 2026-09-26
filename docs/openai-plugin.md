@@ -63,6 +63,8 @@ skills/<skill-name>/
 
 The existing `simplify` skill predates the `references/` naming convention and retains `stages/`, `reference/`, `schema/`, and `templates/` because they are stable pipeline resources. New skills should use the conventional directories above. Do not copy the legacy layout unless the new skill truly needs a staged, schema-validated pipeline.
 
+`prep` and `med-lit` are the reference examples of this convention: `SKILL.md`, `agents/openai.yaml`, `assets/` icons, and on-demand `references/`, with no scripts. Their language judgments (question drafting, requirement extraction, faithful instrument administration) belong to the model, and their outputs are conversational Markdown rather than validated run artifacts.
+
 ### `SKILL.md` rules
 
 - Frontmatter must include a lowercase hyphenated `name` and a concise `description`.
