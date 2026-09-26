@@ -35,12 +35,12 @@ PLATFORMS = {
     },
     "claude-ai": {
         "ignore_file": os.path.join("claude-ai", "claude-ai.ignore"),
-        "walk_root": os.path.join("skills", "simplify-med"),
+        "walk_root": os.path.join("skills", "simplify"),
         "layout": "skill",
     },
     "openai": {
         "ignore_file": os.path.join("openai", "openai.ignore"),
-        "walk_root": os.path.join("skills", "simplify-med"),
+        "walk_root": os.path.join("skills", "simplify"),
         "layout": "openai",
     },
 }
@@ -60,7 +60,7 @@ def load_manifest(repo_root: str = _REPO_ROOT) -> dict:
 
 
 def load_version_constant(repo_root: str = _REPO_ROOT) -> str:
-    path = os.path.join(repo_root, "skills", "simplify-med", "scripts", "_version.py")
+    path = os.path.join(repo_root, "skills", "simplify", "scripts", "_version.py")
     namespace: dict = {}
     with open(path, "r", encoding="utf-8") as f:
         code = f.read()
@@ -84,7 +84,7 @@ def check_versions(repo_root: str = _REPO_ROOT) -> str:
     if meta_version != version_py:
         print(
             "Version mismatch: plugin.meta.json version="
-            f"{meta_version!r} vs skills/simplify-med/scripts/_version.py "
+            f"{meta_version!r} vs skills/simplify/scripts/_version.py "
             f"PLUGIN_VERSION={version_py!r}",
             file=sys.stderr,
         )
@@ -350,9 +350,9 @@ def _assert_no_mcp_traces(plugin_stage: str) -> None:
 def _stage_openai(
     repo_root, plugin_stage, patterns, endpoint_override, release, include_mcp=True, app_id=None
 ):
-    skill_source = os.path.join(repo_root, "skills", "simplify-med")
-    skill_destination = os.path.join(plugin_stage, "skills", "simplify-med")
-    files = sorted(iter_included_files(repo_root, os.path.join("skills", "simplify-med"), patterns))
+    skill_source = os.path.join(repo_root, "skills", "simplify")
+    skill_destination = os.path.join(plugin_stage, "skills", "simplify")
+    files = sorted(iter_included_files(repo_root, os.path.join("skills", "simplify"), patterns))
     _copy_files(files, skill_source, skill_destination)
     if include_mcp:
         _copy_default_custom_files(repo_root, skill_destination)
@@ -420,11 +420,11 @@ def _stage_openai(
                 json.dump(app_document, f, indent=2)
                 f.write("\n")
 
-        no_mcp_skill_md = os.path.join(overlay, "skills", "simplify-med", "SKILL.md")
+        no_mcp_skill_md = os.path.join(overlay, "skills", "simplify", "SKILL.md")
         if not os.path.isfile(no_mcp_skill_md):
             raise SystemExit(
                 "Missing OpenAI skills-only SKILL.md: "
-                "packaging/openai/skills/simplify-med/SKILL.md"
+                "packaging/openai/skills/simplify/SKILL.md"
             )
         shutil.copy2(no_mcp_skill_md, os.path.join(skill_destination, "SKILL.md"))
 
@@ -473,7 +473,7 @@ def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include
     source_root = repo_root if walk_root == "." else os.path.join(repo_root, walk_root)
     _copy_files(sorted(iter_included_files(repo_root, walk_root, patterns)), source_root, plugin_stage)
     skill_destination = (
-        os.path.join(plugin_stage, "skills", "simplify-med")
+        os.path.join(plugin_stage, "skills", "simplify")
         if config["layout"] == "repository"
         else plugin_stage
     )

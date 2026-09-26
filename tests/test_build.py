@@ -24,7 +24,7 @@ def _run_build(args, cwd=None):
 
 def _skill_digest():
     digest = hashlib.sha256()
-    root = os.path.join(_paths.REPO_ROOT, "skills", "simplify-med")
+    root = os.path.join(_paths.REPO_ROOT, "skills", "simplify")
     for dirpath, _, filenames in os.walk(root):
         for filename in sorted(filenames):
             path = os.path.join(dirpath, filename)
@@ -48,11 +48,11 @@ class TestBuildClaudeCode(unittest.TestCase):
             with zipfile.ZipFile(zip_path) as zf:
                 names = zf.namelist()
 
-            self.assertIn("simplify-med/skills/simplify-med/schema/care_plan.schema.json", names)
+            self.assertIn("simplify-med/skills/simplify/schema/care_plan.schema.json", names)
             self.assertIn("simplify-med/.claude-plugin/plugin.json", names)
             self.assertTrue(any(n.startswith("simplify-med/README.md") for n in names))
-            self.assertIn("simplify-med/skills/simplify-med/custom_start.md", names)
-            self.assertIn("simplify-med/skills/simplify-med/custom_end.md", names)
+            self.assertIn("simplify-med/skills/simplify/custom_start.md", names)
+            self.assertIn("simplify-med/skills/simplify/custom_end.md", names)
 
             for n in names:
                 self.assertFalse(n.startswith("simplify-med/docs/"), n)
@@ -110,10 +110,10 @@ class TestBuildOpenAi(unittest.TestCase):
                 staged_mcp = zf.read("simplify-med/mcp.json")
                 staged_compat_mcp = zf.read("simplify-med/.mcp.json")
                 yaml = zf.read(
-                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                    "simplify-med/skills/simplify/agents/openai.yaml"
                 ).decode()
                 custom_end = zf.read(
-                    "simplify-med/skills/simplify-med/custom_end.md"
+                    "simplify-med/skills/simplify/custom_end.md"
                 ).decode()
 
             self.assertEqual(plugin["$schema"], "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json")
@@ -139,7 +139,7 @@ class TestBuildOpenAi(unittest.TestCase):
             self.assertIn("url: https://PLUGIN_DOMAIN.example/mcp", yaml)
             self.assertIn("render_simplify_med_report", custom_end)
             self.assertIn("06_plan.final.json", custom_end)
-            self.assertIn("simplify-med/skills/simplify-med/schema/care_plan.schema.json", names)
+            self.assertIn("simplify-med/skills/simplify/schema/care_plan.schema.json", names)
             self.assertNotIn("simplify-med/agents/ground.md", names)
             self.assertFalse(any(name.startswith("simplify-med/mcp/openai/") for name in names))
             self.assertFalse(any(name.startswith("simplify-med/docs/") for name in names))
@@ -158,7 +158,7 @@ class TestBuildOpenAi(unittest.TestCase):
             with zipfile.ZipFile(os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")) as zf:
                 staged_mcp = json.loads(zf.read("simplify-med/mcp.json"))
                 staged_compat_mcp = json.loads(zf.read("simplify-med/.mcp.json"))
-                yaml = zf.read("simplify-med/skills/simplify-med/agents/openai.yaml").decode()
+                yaml = zf.read("simplify-med/skills/simplify/agents/openai.yaml").decode()
         self.assertEqual(
             staged_mcp["mcpServers"]["simplify-med-ui"]["url"],
             "https://mcp.simplify-med.dev/mcp",
@@ -234,10 +234,10 @@ class TestBuildOpenAi(unittest.TestCase):
                     zf.read("simplify-med/.codex-plugin/plugin.json")
                 )
                 yaml_text = zf.read(
-                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                    "simplify-med/skills/simplify/agents/openai.yaml"
                 ).decode()
                 staged_skill_md = zf.read(
-                    "simplify-med/skills/simplify-med/SKILL.md"
+                    "simplify-med/skills/simplify/SKILL.md"
                 ).decode()
                 all_text_blobs = []
                 for name in names:
@@ -257,8 +257,8 @@ class TestBuildOpenAi(unittest.TestCase):
 
             # No custom_start.md/custom_end.md hand-off files are staged either
             # (D1/D3): the overlay SKILL.md is fully self-contained.
-            self.assertNotIn("simplify-med/skills/simplify-med/custom_start.md", names)
-            self.assertNotIn("simplify-med/skills/simplify-med/custom_end.md", names)
+            self.assertNotIn("simplify-med/skills/simplify/custom_start.md", names)
+            self.assertNotIn("simplify-med/skills/simplify/custom_end.md", names)
 
             # The compatibility manifest keeps its other keys but drops mcpServers
             # and trims capabilities to the non-interactive set (D2).
@@ -281,7 +281,7 @@ class TestBuildOpenAi(unittest.TestCase):
             # canonical file staged verbatim, and contains none of the
             # hand-off/dispatch/render-tool references the canonical file uses.
             canonical_skill_md_path = os.path.join(
-                _paths.REPO_ROOT, "skills", "simplify-med", "SKILL.md"
+                _paths.REPO_ROOT, "skills", "simplify", "SKILL.md"
             )
             with open(canonical_skill_md_path, "r", encoding="utf-8") as f:
                 canonical_skill_md = f.read()
@@ -335,7 +335,7 @@ class TestBuildOpenAi(unittest.TestCase):
                     zf.read("simplify-med/.codex-plugin/plugin.json")
                 )
                 yaml_text = zf.read(
-                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                    "simplify-med/skills/simplify/agents/openai.yaml"
                 ).decode()
                 all_text_blobs = []
                 for name in names:
@@ -417,7 +417,7 @@ class TestBuildOpenAi(unittest.TestCase):
                 plugin = json.loads(zf.read("simplify-med/plugin.json"))
                 compat_plugin = json.loads(zf.read("simplify-med/.codex-plugin/plugin.json"))
                 yaml_text = zf.read(
-                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                    "simplify-med/skills/simplify/agents/openai.yaml"
                 ).decode()
 
             interface = plugin["extensions"]["com.openai"]["interface"]
@@ -440,9 +440,9 @@ class TestBuildOpenAi(unittest.TestCase):
                 )
 
             # `agents/openai.yaml` icon_small/icon_large are resolved relative to the
-            # *skill* directory (skills/simplify-med/), not the plugin root -- extract
+            # *skill* directory (skills/simplify/), not the plugin root -- extract
             # the declared paths and confirm each resolves to a real staged entry there.
-            skill_prefix = "simplify-med/skills/simplify-med/"
+            skill_prefix = "simplify-med/skills/simplify/"
             for key in ("icon_small", "icon_large"):
                 match = re.search(rf"^\s*{key}:\s*(\S+)\s*$", yaml_text, re.MULTILINE)
                 self.assertIsNotNone(match, f"{key} missing from staged openai.yaml")
@@ -468,7 +468,7 @@ class TestBuildOpenAi(unittest.TestCase):
                 self.assertNotIn("simplify-med/plugin.json", names)
                 compat_plugin = json.loads(zf.read("simplify-med/.codex-plugin/plugin.json"))
                 yaml_text = zf.read(
-                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                    "simplify-med/skills/simplify/agents/openai.yaml"
                 ).decode()
 
             interface = compat_plugin["interface"]
@@ -486,8 +486,8 @@ class TestBuildOpenAi(unittest.TestCase):
                 )
 
             # `agents/openai.yaml` icon_small/icon_large are resolved relative to
-            # the *skill* directory (skills/simplify-med/).
-            skill_prefix = "simplify-med/skills/simplify-med/"
+            # the *skill* directory (skills/simplify/).
+            skill_prefix = "simplify-med/skills/simplify/"
             for key in ("icon_small", "icon_large"):
                 match = re.search(rf"^\s*{key}:\s*(\S+)\s*$", yaml_text, re.MULTILINE)
                 self.assertIsNotNone(match, f"{key} missing from staged openai.yaml")
@@ -578,7 +578,7 @@ class TestBuildVersionMismatch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_copy:
             self._copy_repo(repo_copy)
 
-            version_py_path = os.path.join(repo_copy, "skills", "simplify-med", "scripts", "_version.py")
+            version_py_path = os.path.join(repo_copy, "skills", "simplify", "scripts", "_version.py")
             with open(version_py_path, "w", encoding="utf-8") as f:
                 f.write('PLUGIN_VERSION = "9.9.9"\nSCHEMA_VERSION = "1.0"\n')
 

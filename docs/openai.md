@@ -15,7 +15,7 @@ The OpenAI layer does not replace or reorder that pipeline.
 
 ## Scope and status
 
-The `0.1.0` OpenAI package combines the portable `simplify-med` skill with a minimal,
+The `0.1.0` OpenAI package combines the portable `simplify` skill with a minimal,
 presentation-only MCP server. ChatGPT runs the skill and its bundled Python scripts,
 producing the same verified final JSON, Markdown, and self-contained HTML as other
 hosts. The MCP server supplies one render tool and one static UI resource. It does not
@@ -30,13 +30,13 @@ ChatGPT account against the deployed endpoint.
 
 | Component | Location | Role |
 |---|---|---|
-| Portable skill | `skills/simplify-med/` | Runs the unchanged fact-first medical pipeline in the host. |
+| Portable skill | `skills/simplify/` | Runs the unchanged fact-first medical pipeline in the host. |
 | Platform hooks | staged `custom_start.md`, `custom_end.md` | Add host-specific instructions before Stage 0 and after finalization. Blank defaults are no-ops. |
 | Portable manifest | staged root `plugin.json` | Identifies the plugin and carries OpenAI listing metadata. |
 | MCP declaration | `mcp/openai/mcp.json`, copied to staged root | Points the installed package at the deployed streamable-HTTP endpoint. |
 | Compatibility manifest | staged `.codex-plugin/plugin.json` | Supports OpenAI hosts that still use the Codex compatibility ingestion path. |
 | Compatibility MCP declaration | staged `.mcp.json` | Mirrors the root MCP server map without the portable-only schema field. |
-| Skill dependency | staged `skills/simplify-med/agents/openai.yaml` | Declares the same endpoint as a report-viewer dependency. |
+| Skill dependency | staged `skills/simplify/agents/openai.yaml` | Declares the same endpoint as a report-viewer dependency. |
 | MCP server | `mcp/openai/src/` | Registers one read-only render tool and serves the static UI resource. |
 | Report widget | `mcp/openai/ui/` | Loads the final JSON from OpenAI in the iframe and renders inline/fullscreen views. |
 | Portable reports | run folder `report.md`, `report.html` | Remain the complete downloadable fallback; `report.html` works offline. |
@@ -234,7 +234,7 @@ For manual connector setup in ChatGPT (the owner adds the MCP connector by hand 
 of shipping it in the package), build with `--no-mcp` to omit all MCP connection info
 from the archive: no root `mcp.json` or `.mcp.json` is written, the staged
 `.codex-plugin/plugin.json` drops its `mcpServers` key, and the staged
-`skills/simplify-med/agents/openai.yaml` drops its `dependencies` block (the MCP tool
+`skills/simplify/agents/openai.yaml` drops its `dependencies` block (the MCP tool
 declaration) while keeping `interface`/`policy` intact. `--no-mcp` cannot be combined
 with `--mcp-url` (there is no endpoint to override); `--release` is still accepted and
 simply skips endpoint validation, since there is no endpoint to validate. The build
@@ -275,7 +275,7 @@ https://helene-unreconnoitred-overslowly.ngrok-free.dev/mcp
 
 Builds run against a temporary staging tree. Shared build code checks the version,
 installs blank default custom files, applies the platform overlay, processes exclusions,
-and writes the ZIP. A build must leave `skills/simplify-med/` byte-for-byte unchanged.
+and writes the ZIP. A build must leave `skills/simplify/` byte-for-byte unchanged.
 
 The OpenAI archive contains this logical root:
 
@@ -290,7 +290,7 @@ simplify-med/
     logo.png
     logo.svg
     composer-icon.png
-  skills/simplify-med/
+  skills/simplify/
     SKILL.md
     custom_start.md
     custom_end.md
@@ -313,7 +313,7 @@ declarations drift.
 
 The plugin-root `assets/` directory (staged from `packaging/openai/assets/`) supplies the
 `interface.logo` and `interface.composerIcon` images referenced by both `plugin.json` and
-`.codex-plugin/plugin.json`. The skill-level `skills/simplify-med/assets/` directory
+`.codex-plugin/plugin.json`. The skill-level `skills/simplify/assets/` directory
 (staged from `packaging/openai/skill-assets/`) supplies the `icon_small`/`icon_large`
 images referenced by `agents/openai.yaml`; the Codex ingestion validator resolves those
 two paths relative to the skill directory, not the plugin root, so they cannot live in

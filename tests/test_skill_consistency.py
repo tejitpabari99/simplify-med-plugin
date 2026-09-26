@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
 REPO_ROOT = _paths.REPO_ROOT
-SKILL_DIR = os.path.join(REPO_ROOT, "skills", "simplify-med")
+SKILL_DIR = os.path.join(REPO_ROOT, "skills", "simplify")
 SKILL_MD_PATH = os.path.join(SKILL_DIR, "SKILL.md")
 AGENTS_DIR = os.path.join(REPO_ROOT, "agents")
 STAGES_DIR = os.path.join(SKILL_DIR, "stages")
@@ -71,8 +71,8 @@ class TestSkillFrontmatter(unittest.TestCase):
         keys = set(self.frontmatter["__order__"])
         self.assertEqual(keys, {"name", "description"})
 
-    def test_frontmatter_name_is_simplify_med(self):
-        self.assertEqual(self.frontmatter["name"], "simplify-med")
+    def test_frontmatter_name_is_simplify(self):
+        self.assertEqual(self.frontmatter["name"], "simplify")
 
     def test_frontmatter_description_nonempty(self):
         self.assertTrue(self.frontmatter["description"])

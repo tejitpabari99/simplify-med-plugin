@@ -1,10 +1,10 @@
 ---
-name: simplify-med
+name: simplify
 description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces report.html and report.md in a run folder.
 ---
 
 Resolve `<skill>` once, at the start, to the absolute path of the directory
-containing this file (`skills/simplify-med/` in a plugin checkout). Every
+containing this file (`skills/simplify/` in a plugin checkout). Every
 run also has a `<run>` directory, resolved once you have it (Stage 0
 prints it). Use these two absolute paths in every command and every
 dispatch message below -- never a relative path.

@@ -1,6 +1,6 @@
 ---
 name: simplify-med-review-fidelity
-description: Reviews the assembled care plan against its cited facts and reports fidelity corrections as a raw JSON file; dispatched by the simplify-med skill with explicit file paths.
+description: Reviews the assembled care plan against its cited facts and reports fidelity corrections as a raw JSON file; dispatched by the simplify skill with explicit file paths.
 tools: Read, Write
 ---
 

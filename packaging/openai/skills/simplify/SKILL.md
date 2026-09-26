@@ -1,5 +1,5 @@
 ---
-name: simplify-med
+name: simplify
 description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces report.html and report.md in a run folder.
 ---
 

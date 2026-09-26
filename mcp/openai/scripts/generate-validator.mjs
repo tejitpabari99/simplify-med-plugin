@@ -5,7 +5,7 @@ import Ajv from "ajv";
 import standaloneCode from "ajv/dist/standalone/index.js";
 
 const schemaPath = fileURLToPath(
-  new URL("../../../skills/simplify-med/schema/care_plan.schema.json", import.meta.url),
+  new URL("../../../skills/simplify/schema/care_plan.schema.json", import.meta.url),
 );
 const outputPath = fileURLToPath(new URL("../ui/generated/validate-report.js", import.meta.url));
 const schema = JSON.parse(readFileSync(schemaPath, "utf8"));

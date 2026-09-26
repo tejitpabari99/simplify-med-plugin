@@ -1,5 +1,5 @@
 interface:
-  display_name: Simplify Med
+  display_name: Simplify
   short_description: Turn medical paperwork into a fact-checked plain-language report.
   icon_small: ./assets/icon-small.svg
   icon_large: ./assets/icon-large.png

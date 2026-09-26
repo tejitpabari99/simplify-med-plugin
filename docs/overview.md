@@ -41,7 +41,7 @@ change the pipeline above.
 claude --plugin-dir /path/to/simplify-med-plugin
 ```
 
-Then invoke the `simplify-med` skill from within Claude Code.
+Then invoke the `simplify` skill from within Claude Code.
 
 **Packaged install**, built from the root dispatcher:
 
@@ -212,7 +212,7 @@ and one simplification level (`standard`, ~6th-grade reading level) — see
 
 `plugin.meta.json` is the single source of truth for the plugin's version —
 currently `0.1.0`, semantic versioning starting from there. `.claude-plugin/plugin.json`
-and `skills/simplify-med/scripts/_version.py`'s `PLUGIN_VERSION` must both
+and `skills/simplify/scripts/_version.py`'s `PLUGIN_VERSION` must both
 match it; `packaging/build.py` checks all three and refuses to build (exit
 status 2) on any mismatch. Every JSON file a run produces carries its own
 `schema_version` and `plugin_version`.

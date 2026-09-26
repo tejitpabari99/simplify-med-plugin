@@ -19,10 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
 REPO_ROOT = _paths.REPO_ROOT
-SKILL_DIR = os.path.join(REPO_ROOT, "skills", "simplify-med")
+SKILL_DIR = os.path.join(REPO_ROOT, "skills", "simplify")
 CANONICAL_SKILL_MD = os.path.join(SKILL_DIR, "SKILL.md")
 OPENAI_SKILL_MD = os.path.join(
-    REPO_ROOT, "packaging", "openai", "skills", "simplify-med", "SKILL.md"
+    REPO_ROOT, "packaging", "openai", "skills", "simplify", "SKILL.md"
 )
 SCRIPTS_DIR = os.path.join(SKILL_DIR, "scripts")
 STAGES_DIR = os.path.join(SKILL_DIR, "stages")
@@ -96,8 +96,8 @@ class TestScriptAndStageOrderMatchesCanonical(unittest.TestCase):
         self.assertEqual(
             openai,
             canonical,
-            "packaging/openai/skills/simplify-med/SKILL.md's scripts/*.py "
-            f"references {openai!r} do not match canonical skills/simplify-med/"
+            "packaging/openai/skills/simplify/SKILL.md's scripts/*.py "
+            f"references {openai!r} do not match canonical skills/simplify/"
             f"SKILL.md's {canonical!r} (same set, same order expected)",
         )
 
@@ -108,8 +108,8 @@ class TestScriptAndStageOrderMatchesCanonical(unittest.TestCase):
         self.assertEqual(
             openai,
             canonical,
-            "packaging/openai/skills/simplify-med/SKILL.md's stages/*.md "
-            f"references {openai!r} do not match canonical skills/simplify-med/"
+            "packaging/openai/skills/simplify/SKILL.md's stages/*.md "
+            f"references {openai!r} do not match canonical skills/simplify/"
             f"SKILL.md's {canonical!r} (same set, same order expected)",
         )
 
@@ -123,8 +123,8 @@ class TestOpenAiSkillFrontmatter(unittest.TestCase):
         keys = set(self.frontmatter["__order__"])
         self.assertEqual(keys, {"name", "description"})
 
-    def test_frontmatter_name_is_simplify_med(self):
-        self.assertEqual(self.frontmatter["name"], "simplify-med")
+    def test_frontmatter_name_is_simplify(self):
+        self.assertEqual(self.frontmatter["name"], "simplify")
 
 
 class TestOpenAiSkillIsSelfContained(unittest.TestCase):
@@ -148,7 +148,7 @@ class TestOpenAiSkillIsSelfContained(unittest.TestCase):
 
 class TestOpenAiSkillReferencesExist(unittest.TestCase):
     """Every script and stage file the OpenAI orchestrator names must
-    actually exist under the canonical skills/simplify-med/ tree (it has
+    actually exist under the canonical skills/simplify/ tree (it has
     no scripts/stages of its own -- it only reads the shared ones)."""
 
     def setUp(self):
@@ -162,7 +162,7 @@ class TestOpenAiSkillReferencesExist(unittest.TestCase):
             self.assertTrue(
                 os.path.isfile(path),
                 f"OpenAI SKILL.md mentions scripts/{name}, which does not exist under "
-                "skills/simplify-med/scripts/",
+                "skills/simplify/scripts/",
             )
 
     def test_every_mentioned_stage_file_exists(self):
@@ -173,7 +173,7 @@ class TestOpenAiSkillReferencesExist(unittest.TestCase):
             self.assertTrue(
                 os.path.isfile(path),
                 f"OpenAI SKILL.md mentions stages/{name}, which does not exist under "
-                "skills/simplify-med/stages/",
+                "skills/simplify/stages/",
             )
 
 

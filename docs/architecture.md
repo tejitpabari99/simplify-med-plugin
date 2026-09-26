@@ -28,7 +28,7 @@ porting the pipeline.
 plugin.meta.json               source of truth for name/version/description/schema_version
 .claude-plugin/plugin.json     Claude Code manifest (version must match plugin.meta.json)
 build.py                       root dispatcher for platform packages
-skills/simplify-med/           the portable Agent Skill (SKILL.md + bundled files)
+skills/simplify/               the portable Agent Skill (SKILL.md + bundled files)
   SKILL.md                     orchestration: stage list, file handoffs, parallel groups, fallback
   stages/                      one prompt per LLM stage
   scripts/                     stdlib-only Python: the deterministic pipeline
@@ -46,7 +46,7 @@ simplify-runs/                 gitignored; one folder per run
 ## The run folder
 
 Files in write order, script or agent that writes them, and the schema
-each is checked against (schemas live in `skills/simplify-med/schema/`):
+each is checked against (schemas live in `skills/simplify/schema/`):
 
 | File | Written by | Schema |
 |---|---|---|
@@ -293,7 +293,7 @@ every item with its facts as `file:page:line "quote"`; facts in
 ## Data contracts
 
 All files are UTF-8 JSON with `schema_version`/`plugin_version` at the top
-level except where noted; full definitions in `skills/simplify-med/schema/*.json`.
+level except where noted; full definitions in `skills/simplify/schema/*.json`.
 
 **`01_units.json`** (`units`): `units[] {id, file, page, line, text,
 extraction_method}` (`native`/`ocr`/`pasted`); `chunks[] {k, first_id, last_id}`.
@@ -344,7 +344,7 @@ ok|degraded|failed|skipped, attempts, started_at, finished_at, checks}}`;
 
 ## Stage prompt design
 
-Prompts live once, in `skills/simplify-med/stages/*.md`; `agents/*.md` are
+Prompts live once, in `skills/simplify/stages/*.md`; `agents/*.md` are
 thin wrappers that tell the sub-agent to read the matching stage file,
 follow it, then reply in one line.
 

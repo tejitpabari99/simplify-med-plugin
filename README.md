@@ -34,7 +34,7 @@ connector, or viewer at all — see the [Packaging](#packaging) section below an
 plugin.meta.json               source of truth for name/version/description
 .claude-plugin/plugin.json     Claude Code manifest (version must match plugin.meta.json)
 build.py                       root platform build dispatcher
-skills/simplify-med/
+skills/simplify/
   SKILL.md                     skill entry point
   stages/                      one prompt per LLM stage: ground, glossary, assemble,
                                 review_fidelity, review_coverage, assemble_missing, correct
@@ -48,7 +48,7 @@ skills/simplify-med/
   templates/                   report.html
 agents/                        thin Claude Code agent definitions, one per LLM stage
 packaging/                     shared staging plus claude-code, claude-ai, openai profiles;
-                                packaging/openai/skills/simplify-med/SKILL.md overlays a
+                                packaging/openai/skills/simplify/SKILL.md overlays a
                                 self-contained orchestrator used only by `openai --no-mcp`
 mcp/openai/                    presentation-only MCP server and report widget, used only by
                                 the default OpenAI build (absent from `openai --no-mcp`)
@@ -58,7 +58,7 @@ docs/agent_files/...           design brief and futures list (excluded from pack
 
 ## How a run works
 
-`SKILL.md` (`skills/simplify-med/SKILL.md`) is the entry point: it walks the
+`SKILL.md` (`skills/simplify/SKILL.md`) is the entry point: it walks the
 model running the skill through unitizing the input, dispatching each LLM
 stage to its `agents/simplify-med-<stage>` agent (or running the stage
 in-context if sub-agents aren't available), and running the deterministic
@@ -91,7 +91,7 @@ degrades gracefully and the report carries a plain-language notice.
 claude --plugin-dir /path/to/simplify-med-plugin
 ```
 
-Then invoke the `simplify-med` skill from within Claude Code.
+Then invoke the `simplify` skill from within Claude Code.
 
 ## Try it
 
@@ -158,7 +158,7 @@ All modes write a zip to `dist/` (gitignored). The existing `python3 packaging/b
 
 `plugin.meta.json` is the source of truth for the plugin's version.
 `.claude-plugin/plugin.json` must carry the same `version`, and
-`skills/simplify-med/scripts/_version.py`'s `PLUGIN_VERSION` must match it too —
+`skills/simplify/scripts/_version.py`'s `PLUGIN_VERSION` must match it too —
 `packaging/build.py` checks all three and exits with status 2 on any mismatch,
 before writing anything.
 

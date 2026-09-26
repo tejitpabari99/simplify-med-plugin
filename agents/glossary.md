@@ -1,6 +1,6 @@
 ---
 name: simplify-med-glossary
-description: Proposes plain-language definitions for medical jargon terms in a clinical note into a raw glossary JSON file; dispatched by the simplify-med skill with explicit file paths.
+description: Proposes plain-language definitions for medical jargon terms in a clinical note into a raw glossary JSON file; dispatched by the simplify skill with explicit file paths.
 tools: Read, Write
 ---
 
