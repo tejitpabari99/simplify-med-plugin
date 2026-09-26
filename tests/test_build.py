@@ -226,7 +226,8 @@ class TestBuildOpenAi(unittest.TestCase):
             result = _run_build(["--platform", "openai", "--out", out_dir, "--no-mcp"])
             self.assertEqual(result.returncode, 0, msg=result.stderr)
 
-            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")
+            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai-no-mcp.zip")
+            self.assertTrue(zip_path.endswith("-openai-no-mcp.zip"))
             with zipfile.ZipFile(zip_path) as zf:
                 names = set(zf.namelist())
                 compat_plugin = json.loads(
@@ -326,7 +327,7 @@ class TestBuildOpenAi(unittest.TestCase):
             ])
             self.assertEqual(result.returncode, 0, msg=result.stderr)
 
-            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")
+            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai-no-mcp.zip")
             with zipfile.ZipFile(zip_path) as zf:
                 names = set(zf.namelist())
                 app_manifest = json.loads(zf.read("simplify-med/.app.json"))
@@ -461,7 +462,7 @@ class TestBuildOpenAi(unittest.TestCase):
             result = _run_build(["--platform", "openai", "--out", out_dir, "--no-mcp"])
             self.assertEqual(result.returncode, 0, msg=result.stderr)
 
-            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")
+            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai-no-mcp.zip")
             with zipfile.ZipFile(zip_path) as zf:
                 names = set(zf.namelist())
                 self.assertNotIn("simplify-med/plugin.json", names)

@@ -519,7 +519,8 @@ def build(
     plugin_name = load_meta(repo_root)["name"]
     out_dir_abs = out_dir if os.path.isabs(out_dir) else os.path.join(repo_root, out_dir)
     os.makedirs(out_dir_abs, exist_ok=True)
-    zip_path = os.path.join(out_dir_abs, f"{plugin_name}-{version}-{platform}.zip")
+    zip_suffix = f"{platform}-no-mcp" if platform == "openai" and not include_mcp else platform
+    zip_path = os.path.join(out_dir_abs, f"{plugin_name}-{version}-{zip_suffix}.zip")
 
     with tempfile.TemporaryDirectory(prefix="simplify-med-build-") as temp_dir:
         plugin_stage = os.path.join(temp_dir, plugin_name)

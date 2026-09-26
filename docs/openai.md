@@ -239,7 +239,8 @@ declaration) while keeping `interface`/`policy` intact. `--no-mcp` cannot be com
 with `--mcp-url` (there is no endpoint to override); `--release` is still accepted and
 simply skips endpoint validation, since there is no endpoint to validate. The build
 asserts that no endpoint token or example/ngrok URL survives anywhere in the resulting
-archive. The zip filename is unchanged (`simplify-med-0.1.0-openai.zip`).
+archive. The zip filename gets a distinct suffix so it never collides with the
+default MCP build in the same `--out` directory: `simplify-med-0.1.0-openai-no-mcp.zip`.
 
 ```bash
 python3 build.py openai --no-mcp --release --out dist
