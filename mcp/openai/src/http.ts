@@ -26,6 +26,11 @@ export function createHttpApp(options: HttpOptions): Express {
   const widgetBundle = options.widgetBundle ?? loadWidgetBundle();
   const loopback = ["localhost", "127.0.0.1", "[::1]"];
   const allowedHosts = options.allowedHosts ?? (loopback.includes(options.host) || options.host === "::1" ? loopback : []);
+  // Browser-origin allowlist is derived from the same allowedHosts used for the Host
+  // header check above (ALLOWED_HOSTS / the loopback default), not a second hardcoded
+  // loopback-only list. This lets the server's own public host (e.g. the ngrok/PUBLIC_ORIGIN
+  // hostname) pass a browser Origin check without opening the door to arbitrary origins.
+  const browserOriginAllowlist = new Set(allowedHosts);
 
   app.disable("x-powered-by");
   app.use((request, response, next) => {
@@ -40,8 +45,7 @@ export function createHttpApp(options: HttpOptions): Express {
     const origin = request.get("origin");
     if (!origin) return next();
     try {
-      const hostname = new URL(origin).hostname;
-      if (["localhost", "127.0.0.1", "[::1]", "::1"].includes(hostname)) return next();
+      if (browserOriginAllowlist.has(new URL(origin).hostname)) return next();
     } catch { /* Reject malformed origins below. */ }
     return response.status(403).json({ error: "Origin not allowed" });
   });
@@ -62,7 +66,15 @@ export function createHttpApp(options: HttpOptions): Express {
       connectDomains: options.connectDomains,
       widgetDomain: options.widgetDomain,
     });
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    // This server is stateless and never streams multiple messages per request, so a
+    // plain JSON response is correct here (the streamable-HTTP spec allows either per
+    // request) and avoids the default SSE (`text/event-stream`) response mode, which was
+    // observed to hang/truncate through the public ngrok tunnel (200 status, a
+    // Content-Length matching the full body, but zero bytes actually delivered) even
+    // though the identical request succeeded against 127.0.0.1 directly. Returning a
+    // single complete `application/json` body sidesteps whatever proxy/stream handling
+    // was mishandling the SSE framing.
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     response.on("close", () => {
       void transport.close();
       void server.close();

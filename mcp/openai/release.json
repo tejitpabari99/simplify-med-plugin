@@ -13,8 +13,8 @@
   "ui_resource": "ui://simplify-med/report-v1.html",
   "ui_bundle": {
     "path": "ui/dist/report-viewer.js",
-    "sha256": "e7acf9e7ffce24642bd4c4704eeeda324e79a0399de19f5fc3c217c518169c27",
-    "bytes": 1127407
+    "sha256": "301463f04a1896ea8233a21938c35d8f2798e9f20b6eae3b7f727b0c98aa03d5",
+    "bytes": 587875
   },
   "prototype_status": "Local contracts pass; ChatGPT generated-file handoff, download origin, surfaces, tiers, and production logging remain operator gates."
 }
