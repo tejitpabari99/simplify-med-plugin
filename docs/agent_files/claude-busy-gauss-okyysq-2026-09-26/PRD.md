@@ -29,7 +29,7 @@ Root causes (details in `research.md` §1):
 
 | Goal | Measure (user will measure before/after) |
 |---|---|
-| Much faster | Clean path = **2 model calls** (write + verify), ~2–4k model output tokens, ≤ 4 script runs. Worst case = 5 model calls. |
+| Much faster | Clean path = **2 model calls** (write + verify), ~2–4k model output tokens, ≤ 4 script runs. Worst case = 8 model calls (one retry per stage per round, one repair round). |
 | Short and relevant | Report targets **150–300 words**; warning above 350; hard fail above 500. No "more details" section. |
 | Same safety bar where it matters | Every visible bullet cites source units; numbers/doses/units match cited units; negation and uncertainty preserved; protected content (below) is shown or explicitly declared absent; an independent verifier runs before release; fail closed. |
 

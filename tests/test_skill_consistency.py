@@ -6,8 +6,8 @@ dispatch any agent, so it is fast and needs no fixtures.
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import re
 import sys
 import unittest
@@ -32,25 +32,47 @@ DEFAULT_PROMPT = (
     "Do not summarize the documents directly."
 )
 
-OBSOLETE_REFERENCES = {
-    "stages/review_fidelity.md",
-    "stages/review_coverage.md",
-    "stages/correct.md",
-    "stages/assemble_missing.md",
-    "scripts/sanitize_review.py",
-    "scripts/diff_guard.py",
-    "schema/manifest.schema.json",
-    "schema/coverage_raw.schema.json",
-    "schema/coverage.schema.json",
-    "schema/additions_raw.schema.json",
-    "schema/additions.schema.json",
-    "02_facts.txt",
-    "04_coverage.json",
-    "05_plan.corrected.raw.json",
-    "05_plan.corrected.json",
-    "05_additions.raw.json",
-    "05_additions.json",
-}
+# Names from retired pipelines that must not reappear in the skill or its prompts.
+OBSOLETE_NAMES = (
+    "ground.md",
+    "assemble.md",
+    "stages/review.md",
+    "review_fidelity",
+    "review_coverage",
+    "assemble_missing",
+    "correct.md",
+    "categories.md",
+    "cite_check.py",
+    "anchor_check.py",
+    "merge_facts.py",
+    "numeric_parity.py",
+    "settle_review.py",
+    "facts_raw",
+    "care_plan_agent",
+    "review_raw",
+    "flags.schema",
+    "02_facts",
+    "03_plan",
+    "03_flags",
+    "04_review",
+    "05_plan.settled",
+    "06_plan.final",
+    "01_units.<k>",
+    "omitted_facts",
+    "fact_id",
+    "reassemble",
+    "CRITICAL VS SUPPORTING",
+)
+
+# The PRD section 4 graph, in execution order.
+CORE_SEQUENCE = (
+    "scripts/unitize.py",
+    "stages/write.md",
+    "scripts/check_draft.py",
+    "stages/verify.md",
+    "scripts/settle.py",
+    "scripts/finalize.py",
+)
 
 
 def _read(path: str) -> str:
@@ -61,6 +83,14 @@ def _read(path: str) -> str:
 def _read_json(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _stage_texts() -> dict:
+    return {
+        name: _read(os.path.join(STAGES_DIR, name))
+        for name in sorted(os.listdir(STAGES_DIR))
+        if name.endswith(".md")
+    }
 
 
 def _yaml_scalar(text: str, key: str) -> str:
@@ -97,115 +127,124 @@ class TestSkillFrontmatter(unittest.TestCase):
         self.frontmatter = _parse_frontmatter(self.text)
 
     def test_frontmatter_has_exactly_name_and_description(self):
-        keys = set(self.frontmatter["__order__"])
-        self.assertEqual(keys, {"name", "description"})
+        self.assertEqual(set(self.frontmatter["__order__"]), {"name", "description"})
 
     def test_frontmatter_name_is_simplify(self):
         self.assertEqual(self.frontmatter["name"], "simplify")
 
-    def test_frontmatter_description_nonempty(self):
-        self.assertTrue(self.frontmatter["description"])
+    def test_description_states_trigger_and_boundary(self):
+        description = self.frontmatter["description"]
+        self.assertIn("Use when", description)
+        self.assertIn("Do not use", description)
 
 
-class TestScriptAndStageMentionsExist(unittest.TestCase):
+class TestMentionedPathsExist(unittest.TestCase):
+    """Every script, stage, reference, and schema named by SKILL.md or a stage exists."""
+
     def setUp(self):
-        stage_text = "\n".join(
-            _read(os.path.join(STAGES_DIR, name))
-            for name in sorted(os.listdir(STAGES_DIR))
-            if name.endswith(".md")
-        )
-        self.text = _read(SKILL_MD_PATH) + "\n" + stage_text
+        self.text = _read(SKILL_MD_PATH) + "\n" + "\n".join(_stage_texts().values())
+
+    def _assert_all_exist(self, pattern: str, directory: str, label: str):
+        mentioned = sorted(set(re.findall(pattern, self.text)))
+        self.assertTrue(mentioned, f"expected at least one {label} mention")
+        missing = [name for name in mentioned if not os.path.isfile(os.path.join(directory, name))]
+        self.assertEqual(missing, [], f"mentioned {label} files do not exist: {missing}")
 
     def test_every_mentioned_script_exists(self):
-        mentioned = sorted(set(re.findall(r"scripts/([A-Za-z_]+\.py)", self.text)))
-        self.assertTrue(mentioned, "SKILL.md should mention at least one script")
-        for name in mentioned:
-            path = os.path.join(SCRIPTS_DIR, name)
-            self.assertTrue(os.path.isfile(path), f"SKILL.md mentions scripts/{name}, which does not exist")
+        self._assert_all_exist(r"scripts/([A-Za-z_]+\.py)", SCRIPTS_DIR, "scripts/")
 
-    def test_every_mentioned_stage_file_exists(self):
-        mentioned = sorted(set(re.findall(r"stages/([A-Za-z_]+\.md)", self.text)))
-        self.assertTrue(mentioned, "SKILL.md should mention at least one stage file")
-        for name in mentioned:
-            path = os.path.join(STAGES_DIR, name)
-            self.assertTrue(os.path.isfile(path), f"SKILL.md mentions stages/{name}, which does not exist")
+    def test_every_mentioned_stage_exists(self):
+        self._assert_all_exist(r"stages/([A-Za-z_]+\.md)", STAGES_DIR, "stages/")
 
-    def test_every_mentioned_reference_file_exists(self):
-        mentioned = sorted(set(re.findall(r"reference/([A-Za-z0-9_.]+\.(?:md|json))", self.text)))
-        self.assertTrue(mentioned, "SKILL.md should mention at least one reference file")
-        for name in mentioned:
-            path = os.path.join(REFERENCE_DIR, name)
-            self.assertTrue(os.path.isfile(path), f"SKILL.md mentions reference/{name}, which does not exist")
+    def test_every_mentioned_reference_exists(self):
+        self._assert_all_exist(r"reference/([A-Za-z0-9_.]+\.(?:md|json))", REFERENCE_DIR, "reference/")
 
-    def test_every_mentioned_schema_file_exists(self):
-        mentioned = sorted(set(re.findall(r"schema/([A-Za-z0-9_.]+\.json)", self.text)))
-        self.assertTrue(mentioned, "SKILL.md should mention at least one schema file")
-        for name in mentioned:
-            path = os.path.join(SCHEMA_DIR, name)
-            self.assertTrue(os.path.isfile(path), f"SKILL.md mentions schema/{name}, which does not exist")
+    def test_every_mentioned_schema_exists(self):
+        self._assert_all_exist(r"schema/([A-Za-z0-9_.]+\.json)", SCHEMA_DIR, "schema/")
 
 
-class TestMandatoryWorkflowContract(unittest.TestCase):
-    def setUp(self):
-        self.text = _read(SKILL_MD_PATH)
-
-    def test_execution_contract_is_prominent_and_forbids_direct_answers(self):
-        heading = "## Non-Negotiable Execution Contract"
-        self.assertIn(heading, self.text)
-        self.assertLess(self.text.index(heading), self.text.index("## Core Rules"))
-        self.assertIn("Never simplify, summarize, or answer directly", self.text)
-        self.assertIn("Do not present clinical content until finalization succeeds", self.text)
-
-    def test_contract_requires_validated_final_artifacts_and_report_only(self):
-        self.assertIn("validated `06_plan.final.json` and `report.md`", self.text)
-        self.assertIn("Present only `<run>/report.md`", self.text)
-        self.assertIn("Do not create a second summary", self.text)
-
-    def test_contract_is_fail_closed_without_substitute_summary(self):
-        self.assertIn("one retry", self.text.lower())
-        self.assertIn("workflow failure", self.text.lower())
-        self.assertIn("without providing a substitute medical summary", self.text)
-        self.assertNotIn("Fall back to the draft plan", self.text)
-        self.assertNotIn("Continue with a recorded notice if a review fails", self.text)
-
-    def test_core_graph_and_bounded_reassembly_are_current(self):
-        self.assertIn("ground[1..K]", self.text)
-        self.assertIn("assemble", self.text)
-        self.assertIn("combined independent review", self.text)
-        self.assertIn("deterministic settlement", self.text)
-        self.assertIn("approximately 13 core artifacts", self.text)
-        self.assertIn("reassemble once", self.text.lower())
-        self.assertIn("fresh independent review", self.text.lower())
-        self.assertIn("A second reassembly request fails the run", self.text)
-
-    def test_output_remains_concise_and_critical_first(self):
-        self.assertIn("concise and action-first", self.text)
-        self.assertIn("critical", self.text.lower())
-        self.assertIn("generic", self.text.lower())
-        self.assertIn("omitted", self.text.lower())
-
-    def test_current_core_stage_script_and_schema_names_are_used(self):
-        required = {
+class TestObsoleteNamesAbsent(unittest.TestCase):
+    def test_retired_files_are_deleted(self):
+        for relative in (
             "stages/ground.md",
             "stages/assemble.md",
             "stages/review.md",
-            "scripts/unitize.py",
-            "scripts/anchor_check.py",
-            "scripts/merge_facts.py",
-            "scripts/cite_check.py",
-            "scripts/numeric_parity.py",
-            "scripts/settle_review.py",
-            "scripts/finalize.py",
-            "schema/facts_raw.schema.json",
-            "schema/care_plan_agent.schema.json",
-            "schema/review_raw.schema.json",
-        }
-        for reference in sorted(required):
-            self.assertIn(reference, self.text)
+            "reference/categories.md",
+        ):
+            self.assertFalse(os.path.exists(os.path.join(SKILL_DIR, relative)), relative)
 
-    def test_obsolete_workflow_references_are_absent(self):
-        for reference in sorted(OBSOLETE_REFERENCES):
-            self.assertNotIn(reference, self.text)
+    def test_skill_and_stages_do_not_name_retired_pipeline_parts(self):
+        documents = {"SKILL.md": _read(SKILL_MD_PATH)}
+        documents.update({f"stages/{k}": v for k, v in _stage_texts().items()})
+        documents["reference/style_rules.md"] = _read(os.path.join(REFERENCE_DIR, "style_rules.md"))
+        for name, text in documents.items():
+            for obsolete in OBSOLETE_NAMES:
+                self.assertNotIn(obsolete, text, f"{name} still mentions {obsolete!r}")
+
+
+class TestExecutionContract(unittest.TestCase):
+    def setUp(self):
+        self.text = _read(SKILL_MD_PATH)
+
+    def test_core_graph_runs_in_prd_order(self):
+        workflow = self.text[self.text.index("## Workflow"):]
+        positions = []
+        for step in CORE_SEQUENCE:
+            self.assertIn(step, workflow)
+            positions.append(workflow.index(step))
+        self.assertEqual(positions, sorted(positions), "SKILL.md lists the core steps out of order")
+
+    def test_model_stages_name_their_inputs_and_outputs(self):
+        for artifact in (
+            "01_source.txt",
+            "01_protected.json",
+            "schema/draft.schema.json",
+            "02_draft.raw.json",
+            "02_draft.json",
+            "02_check.json",
+            "schema/verify_raw.schema.json",
+            "03_verify.raw.json",
+            "reference/style_rules.md",
+        ):
+            self.assertIn(artifact, self.text)
+
+    def test_repair_round_is_bounded_and_uses_round_two(self):
+        self.assertIn("scripts/check_draft.py --run-dir <run> --round 2", self.text)
+        self.assertIn("scripts/settle.py --run-dir <run> --round 2", self.text)
+        for artifact in ("04_repair.json", "02_draft.r2.raw.json", "02_draft.r2.json",
+                         "02_check.r2.json", "03_verify.r2.raw.json"):
+            self.assertIn(artifact, self.text)
+        self.assertRegex(self.text, r"(?i)at most once|one repair round")
+
+    def test_settle_exit_codes_are_handled(self):
+        for code in ("Exit 0", "Exit 1", "Exit 3"):
+            self.assertIn(code, self.text)
+        self.assertIn("Any other exit stops the run", self.text)
+
+    def test_verify_is_independent(self):
+        self.assertIn("fresh sub-agent", self.text)
+
+    def test_host_never_reads_units_json(self):
+        for line in self.text.splitlines():
+            if "01_units.json" in line:
+                self.assertRegex(line, r"(?i)\bnever\b", f"line may instruct reading 01_units.json: {line}")
+
+    def test_fail_closed_and_report_only(self):
+        self.assertIn("Never simplify, summarize, or answer directly", self.text)
+        self.assertIn("05_plan.final.json", self.text)
+        self.assertIn("Present only `<run>/report.md`", self.text)
+        self.assertIn("Do not create a second summary", self.text)
+        self.assertIn("never write your own summary", self.text)
+        self.assertIn("show no clinical content", self.text)
+
+    def test_optional_outputs_only_on_request(self):
+        for command in ("scripts/glossary_check.py", "scripts/render_html.py", "scripts/render_audit.py",
+                        "stages/glossary.md"):
+            self.assertIn(command, self.text)
+        self.assertIn("Only when the user asks", self.text)
+
+    def test_skill_md_stays_short(self):
+        self.assertLess(len(self.text.splitlines()), 130)
 
 
 class TestEntryPointConsistency(unittest.TestCase):

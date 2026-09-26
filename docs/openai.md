@@ -68,9 +68,9 @@ The current plugin:
 - declares no `mcpServers`, app connection, endpoint, or MCP tool dependency;
 - requires no server deployment or authentication setup;
 - does not invoke an MCP viewer from `SKILL.md`;
-- returns Markdown and JSON files directly, with local HTML and audit rendering available on request.
+- returns the short `report.md` directly, with the final JSON plan, glossary, HTML, and audit views available on request.
 
-The existing `mcp/openai/` directory is retained as repository source for potential future work. `build.py` cannot package it because the builder only includes explicitly allowlisted plugin paths.
+The existing `mcp/openai/` directory is parked repository source for potential future work. It still reads the old plan shape and has not been updated to the current `simplify` pipeline (write, check, verify, settle, finalize). `build.py` cannot package it because the builder only includes explicitly allowlisted plugin paths.
 
 ## Install and Test
 

@@ -3,7 +3,7 @@
 An OpenAI plugin with three patient-facing skills:
 
 - **`prep`** — before a visit: capture the appointment's stated requirements, the patient's prioritized concerns, a things-to-bring checklist, and questions to ask.
-- **`simplify`** — after a visit: turn supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail.
+- **`simplify`** — after a visit: turn supplied clinical documents into a short, plain-language report in which every statement cites the source and is independently verified.
 - **`med-lit`** — for each person: an opt-in, brief health-literacy screen (BHLS) plus self-reported support needs, returned as a basic profile.
 
 `prep` and `med-lit` are instruction-only skills (no scripts) with basic Markdown output.
@@ -37,20 +37,20 @@ skills/simplify/
   templates/                   report template
 ```
 
-`mcp/openai/` remains in the repository for possible future work. It is not connected to the plugin, declared by either manifest, or included in the ZIP.
+`mcp/openai/` remains in the repository for possible future work. It is parked: not connected to the plugin, not declared by either manifest, not included in the ZIP, and not yet updated to the current plan shape.
 
 ## What `simplify` Does
 
-1. Splits extracted document text into numbered source units.
-2. Extracts atomic facts anchored to exact source lines.
-3. Builds a concise, critical-first care plan from checked facts only.
-4. Accounts for every fact as visible content or an audited omission.
-5. Independently reviews fidelity, omissions, and numeric preservation.
-6. Applies exact bounded corrections and finalizes only after every core gate passes.
+1. Numbers every source line as a unit, drops portal boilerplate (URL-only lines, page counters, exact repeats), and flags candidate lines for six protected categories: medication changes, follow-up, return precautions, diagnoses, disposition, and abnormal or pending results.
+2. Writes the short report in one model call, directly from the numbered source. Every visible item cites the source units that support it.
+3. Checks the draft with a script: schema, valid citations, word budget, numbers that do not appear in the cited units, and protected candidates that no item cites.
+4. Verifies every visible item in a second, independent model call against the original source, returning only bounded edits (replace, clear, remove), numeric-flag resolutions, and a decision for each uncited protected candidate.
+5. Applies those edits exactly with a script. If the verifier marks protected content as missing, the writer gets one repair round, which is checked and verified again.
+6. Finalizes only after every step passes, then renders `report.md`.
 
-The fact ledger remains comprehensive for verification. The default patient view is selective: it emphasizes the main conclusion, medication changes, next actions, follow-up, and explicit warning instructions. Generic education, technical mechanics, duplicate details, and routine non-actionable information stay out of the patient report but remain traceable through audited omission records.
+The report targets 150-300 words and answers four questions: what happened, what did they find, what do I do now, and when do I come back. It shows one bottom-line bullet per test area, the diagnoses and disposition stated for this visit, next steps, medicine changes (or a source-stated "no new medicines"), and return precautions. Lab inventories, vital signs, test technique, empty medication lists, charted background, and radiology boilerplate stay out.
 
-The model has three core responsibilities: grounding each source chunk, assembling the concise draft, and independently reviewing the draft. Python is reserved for deterministic work such as source anchoring, schema validation, citation and omission checks, numeric parity, exact settlement, audit logging, rendering, and fail-closed finalization. See `docs/openai-plugin.md` for the governing authoring rules and the per-script rationale.
+The model has two core responsibilities: writing the draft and independently verifying it. Python owns the deterministic work: unitizing, protected-candidate scanning, schema and citation checks, numeric parity, exact settlement, audit logging, rendering, and fail-closed finalization. See `docs/openai-plugin.md` for the governing authoring rules and the per-script rationale.
 
 ## Build the Plugin ZIP
 
@@ -119,9 +119,9 @@ Explicitly invoke the `simplify` skill for a visit note, discharge summary, lab 
 
 Explicit invocation requires the complete workflow. The skill must not return a direct, ad hoc simplification or expose clinical content before fail-closed finalization succeeds. The only default clinical output is the validated `report.md`; the host must not rewrite it into a second summary.
 
-Each run writes `simplify-runs/<run-id>/` in the working directory. A clean one-chunk schema-v2 run has approximately 13 core artifacts, including `run.json`, the fact ledger, draft, independent review, settled plan, final JSON plan, and `report.md`. Glossary JSON, `report.html`, and `report.audit.md` are post-finalization outputs created only when requested.
+Each run writes `simplify-runs/<run-id>/` in the working directory. A clean run has two model calls and about a dozen artifacts: `run.json`, the numbered source and protected candidates, the draft and its check, the verification record, the settled plan, `05_plan.final.json`, and `report.md`. Glossary JSON, `report.html`, and `report.audit.md` are post-finalization outputs created only when requested.
 
-Completed schema-v1 final reports remain renderable. Partial schema-v1 runs cannot be resumed or finalized by the schema-v2 pipeline.
+Runs started under an earlier schema version cannot be resumed; start a fresh run.
 
 ## Safety Boundary
 
@@ -129,7 +129,8 @@ Completed schema-v1 final reports remain renderable. Partial schema-v1 runs cann
 - `prep` uses only patient statements and supplied appointment materials; `med-lit` scores only the patient's answers to the screen.
 - Every medical statement must be supported by the source documents.
 - Missing information stays missing rather than being guessed.
-- Numeric details are checked independently.
+- Numeric details are checked against the cited source units.
+- Protected content (medication changes, follow-up, return precautions, diagnoses, disposition, abnormal or pending results) is shown or explicitly dismissed by the verifier.
 - Missing, failed, degraded, stale, or invalid core stages prevent publication.
 - The result is a reading aid, not a replacement for clinical or emergency care.
 

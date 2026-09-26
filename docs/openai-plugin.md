@@ -13,7 +13,7 @@ It is based on OpenAI's current plugin and skill documentation and the public Fi
 
 ## Principles
 
-1. **A plugin packages capabilities; a skill defines one workflow.** The current plugin packages skills and assets only. MCP source is retained outside the distributable package.
+1. **A plugin packages capabilities; a skill defines one workflow.** The current plugin packages skills and assets only. MCP source (`mcp/openai/`) is parked outside the distributable package and is not yet updated to the current plan shape.
 2. **Keep each skill focused on one job.** Add a new skill when a future workflow has a different trigger, outcome, or safety boundary. Do not grow one universal medical skill.
 3. **Prefer instructions over code.** Add scripts only for deterministic behavior, repeatable transformations, validation, or external tooling.
 4. **Use progressive disclosure.** Put trigger and core workflow guidance in `SKILL.md`. Put detailed rules, schemas, examples, and specialized modes in supporting files that are read only when needed.
@@ -117,26 +117,27 @@ The existing Python is retained because it implements deterministic safeguards a
 
 | Files | Decision | Reason |
 |---|---|---|
-| `unitize.py`, `textnorm.py` | Keep | Stable line numbering, chunking, normalized matching, and source offsets are foundational to traceability. |
-| `anchor_check.py`, `merge_facts.py` | Keep | Independently verify source quotes and combine checked facts without asking the model to validate itself. |
-| `glossary_check.py`, `cite_check.py`, `numeric_parity.py` | Keep | Enforce schema, valid citations, bounded fields, and preservation of clinically important numbers. |
-| `settle_review.py` | Keep | Validate exhaustive independent review, apply exact bounded operations, require numeric resolutions, and prevent unsupported edits. |
+| `unitize.py`, `textnorm.py`, `protected.py` | Keep | Stable line numbering, boilerplate suppression, normalized matching, and a high-recall protected-content scan are foundational to traceability and safety. |
+| `check_draft.py`, `numbers.py` | Keep | Enforce the draft schema, valid non-skipped citations, the word budget, and preservation of numbers against the cited units without asking the model to validate itself. |
+| `settle.py` | Keep | Validate the independent verification contract, apply exact bounded operations, require numeric and protected-unit resolutions, and request at most one repair. |
+| `plan_paths.py` | Keep as internal helper | The single definition of patient-visible item paths shared by the check, settlement, verifier claims, and renderers. |
+| `glossary_check.py` | Keep | Validates the optional glossary against visible finalized text. |
 | `validate.py`, `runlog.py`, `_version.py` | Keep as internal helpers | Shared schema validation, atomic audit logging, and version fields are reused across the pipeline. They are not separate model workflow steps. |
 | `finalize.py`, `plan_view.py`, `readability.py` | Keep | Assert complete current-run state, construct the patient view, calculate reading level, and publish only validated final artifacts. |
 | `render_md.py`, `render_html.py`, `render_audit.py` | Keep | Produce repeatable downloadable artifacts from validated JSON without a new model rewrite. |
 
 Do not add another Python file unless its deterministic responsibility cannot fit cleanly in an existing module. Revisit consolidation only when two modules have the same responsibility or are never reused independently; file size alone is not a reason to move logic into the model.
 
-The model owns language judgment: complete-clause fact extraction, concise critical-first assembly, and one independent semantic review. Python owns repeatable enforcement: source anchoring, schemas, citation and omission accounting, numeric parity, exact settlement, run identity, rendering, and final publication gates. Do not move medical-language judgment into Python merely to reduce model calls, and do not move deterministic safeguards into prompts merely to reduce file count.
+The model owns language judgment: writing the short report from the numbered source and one independent verification of every visible item. Python owns repeatable enforcement: unitizing, protected-candidate scanning, schemas, citation checks, numeric parity, the word budget, exact settlement, run identity, rendering, and final publication gates. Do not move medical-language judgment into Python merely to reduce model calls, and do not move deterministic safeguards into prompts merely to reduce file count.
 
 ## Medical workflow boundaries
 
 - The plugin explains supplied records; it does not diagnose, prescribe, triage beyond directing urgent concerns to appropriate care, or create facts absent from the documents.
 - Source anchoring and numeric preservation are product requirements, not optional implementation details.
-- Critical patient-specific content remains visible; generic education, technical mechanics, duplicate facts, and routine non-actionable detail may be omitted only with an audited disposition reviewed independently.
+- Protected patient-specific content (medication changes, follow-up, return precautions, diagnoses, disposition, abnormal or pending results) is shown or explicitly dismissed by the independent verifier; generic education, technical mechanics, duplicates, and routine detail stay out of the report.
 - Required clinical stages fail closed. A missing, failed, degraded, stale, or invalid core stage cannot produce a report.
 - Completed legacy reports may remain renderable, but an in-progress run must not cross a schema boundary.
-- Source documents, fact ledgers, and audit artifacts remain local to the skill run unless the user explicitly moves or shares them.
+- Source documents and run artifacts remain local to the skill run unless the user explicitly moves or shares them.
 
 ## Adding a skill
 
@@ -164,7 +165,7 @@ The model owns language judgment: complete-clause fact extraction, concise criti
 - Does the package contain only manifests and skills?
 - Are medical claims source-bound and independently checked?
 - Does explicit invocation complete every required stage before presenting clinical content?
-- Is every verified fact visible or covered by an independently reviewed omission disposition?
+- Is every protected candidate shown or dismissed with a reason by the independent verifier?
 - Do bounded repairs receive a fresh review whenever they add patient-facing prose?
 - Are tests checking behavior rather than prose formatting?
 
