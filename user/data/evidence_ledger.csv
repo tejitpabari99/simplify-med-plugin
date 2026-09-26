@@ -1,0 +1,28 @@
+audience,theme,source_ref,excerpt,supports
+Patient interview,Simplify,Patients index 153 / sheet row 155,I kind of go dumb when they start talking.,Stress and overload reduce in-visit comprehension and recall.
+Patient interview,Simplify,Patients index 164 / sheet row 166,It is hard to search things.,Users need searchable key points rather than another long record.
+Patient interview,Question prioritization,Patients index 41 / sheet row 43,Sometimes I can't think of the questions at the time.,Questions often emerge after the appointment.
+Patient interview,Prep,Patients index 155 / sheet row 157,"What to expect beforehand, what to ask.",Patients already seek preparation and question prompts.
+Patient interview,Medical literacy,Patients index 148 / sheet row 150,"Understanding results, what they mean.",Test results and borderline values create interpretation needs.
+Patient interview,Evidence provenance,Patients index 61 / sheet row 63,Show me the citations from research.,"Some users need transparent sources, not unsupported AI answers."
+Patient interview,Longitudinal continuity,Patients index 159 / sheet row 161,Documentation between visits.,"Users want continuity across appointments, not isolated summaries."
+Patient interview,Care circle,Patients index 148 / sheet row 150,My family will have follow-up questions.,Visit information must often be relayed to absent family.
+Clinician interview,Question prioritization,Clinicians sheet row 5,What are your top three questions?,Question support should prioritize a short agenda.
+Clinician interview,Prep,Clinicians sheet row 2,"Written medication list, questions and concerns, recent vital signs.",Preparation needs concrete documents and data.
+Clinician interview,Medical literacy,Clinicians sheet row 2,"Depends on education level, medical literacy, anxiety, cognitive status.",Communication needs are multi-dimensional and encounter-specific.
+Clinician interview,Clinician control,Clinicians sheet row 5,It would have to be a must that we see the summary.,Some settings require review before patient release.
+Clinician interview,Accuracy and workload,Clinicians sheet row 4,For me to write three lines is faster than reviewing four lines for errors.,Review burden can erase the product's workflow value.
+Clinician interview,Care circle,Clinicians sheet row 6,Presence or engagement of a care partner is instrumental.,Care partners are a core communication support for high-need patients.
+Clinician interview,Interoperability,Clinicians sheet row 4,"A thousand pages, but only two usable ones.","The problem is relevant-record selection, not merely record collection."
+Clinician interview,Action and adherence,Clinicians sheet rows 15–16,Maybe they remember but do not execute the plan.,Understanding alone does not ensure follow-through.
+Patient survey/interview,Prep,Patients sheet row 54,I write everything down ahead of time to remember it.,Patients already create their own preparation scaffolding.
+Patient survey/interview,Medical literacy,Patients sheet row 91,I forgot all the technical terms.,Terminology is a comprehension and recall barrier.
+Patient survey/interview,Question prioritization,Patients sheet row 150,"I go in with a list of questions, but often forget while listening.",A prepared list still needs in-visit prioritization support.
+Patient survey/interview,Cognitive load,Patients sheet row 166,I often feel overwhelmed with the amount of information shared.,Explanation needs change with encounter load.
+Long-form patient/caregiver interview,Care circle,Long-form interview sheet row 2,I feel better knowing someone else is there to absorb information.,A care partner provides both recall support and reassurance.
+Long-form patient/caregiver interview,Record fragmentation,Long-form interview sheet row 3,Multiple apps and portals have my medical data.,Records are fragmented across systems and formats.
+Patient survey/interview,Symptom tracking,Patients sheet row 162,It would be better to keep a more detailed list of symptoms.,"Users want dated, event-level symptom history."
+Patient survey/interview,Accessibility,Patients sheet row 163,Cannot keep track of it due to executive dysfunction.,Tracking must reduce executive-function demands.
+Clinician interview,Medication reconciliation,Clinicians sheet rows 19 and 21 duplicate pair,"What are you taking, and why are you taking it?","Medication lists need purpose and reconciliation, not names alone."
+Clinician interview,Interoperability,Clinicians sheet row 6,The report is only a statement; we need to see the image.,Some decisions require original clinical artifacts.
+Clinician interview,Grounded research,Clinicians sheet rows 2 and 10,AI can be over-inclusive and has to be succinct.,Research support must filter for relevance and currency.

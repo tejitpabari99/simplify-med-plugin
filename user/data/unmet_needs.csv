@@ -1,0 +1,7 @@
+opportunity,patient_count,patient_denominator,clinician_count,clinician_denominator,ask,patient_percent,clinician_percent
+Permissioned care circle,16,21,12,19,"Granular, revocable sharing and caregiver participation before and after visits.",76.2,63.2
+Medication and action adherence,8,21,13,19,"Confirmed tasks, medication reconciliation, reminders, and between-visit check-ins.",38.1,68.4
+Portal and record aggregation,12,21,11,19,"Unify relevant notes, labs, images, device data, and follow-up questions.",57.1,57.9
+"Privacy, consent, and recording governance",12,21,11,19,"Consent workflow, policy checks, audit trail, and control over downstream use.",57.1,57.9
+Accuracy and evidence provenance,13,21,9,19,"Citations, uncertainty cues, concise output, and clinician review where needed.",61.9,47.4
+Longitudinal symptom and decision timeline,12,21,11,19,"A single timeline for symptoms, photos, decisions, tasks, and unresolved questions.",57.1,57.9
