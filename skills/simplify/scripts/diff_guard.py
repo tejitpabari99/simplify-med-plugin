@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diff-guards the corrector agent's output against the review corrections.
+"""Diff-guards the correction stage output against the review corrections.
 
 CLI: python3 diff_guard.py --run-dir D [--strict]
 
@@ -14,8 +14,8 @@ correction accounts for it, tracked by original-index survivorship.
 
 Without --strict, a guard violation falls back to a byte-identical copy of
 the draft plus a run notice ("degraded", prefer passing over failure). With
---strict, a violation exits 1 instead, for the orchestrator's single retry
-and for tests.
+--strict, a violation exits 1 instead so the correction stage can be retried
+and the behavior can be tested.
 
 Stdlib only. Importable as `diff_guard`.
 """
@@ -151,7 +151,7 @@ def _copy_file(src: str, dst: str) -> None:
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Diff-guard the corrector agent's output against the review corrections")
+    parser = argparse.ArgumentParser(description="Diff-guard the correction stage output against the review corrections")
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--strict", action="store_true", help="Exit 1 on a guard violation instead of falling back")
     return parser

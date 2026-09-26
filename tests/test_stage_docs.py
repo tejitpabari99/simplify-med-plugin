@@ -17,30 +17,11 @@ import _paths  # noqa: E402
 REPO_ROOT = _paths.REPO_ROOT
 SKILL_MD_PATH = os.path.join(REPO_ROOT, "skills", "simplify", "SKILL.md")
 STAGES_DIR = os.path.join(REPO_ROOT, "skills", "simplify", "stages")
-AGENTS_DIR = os.path.join(REPO_ROOT, "agents")
 
 
 def _read(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
-
-
-class TestSkillMdAgentLocation(unittest.TestCase):
-    """Fix #1: agents/ lives at <plugin>/agents/, a sibling of skills/, not
-    under <skill>. SKILL.md must say so and never imply <skill>/agents/."""
-
-    def setUp(self):
-        self.text = _read(SKILL_MD_PATH)
-
-    def test_plugin_agents_path_documented(self):
-        self.assertIn("<plugin>/agents/<stage>.md", self.text)
-        self.assertIn("parent directory of `skills/`", self.text)
-
-    def test_no_path_implies_skill_slash_agents(self):
-        self.assertNotIn("<skill>/agents/", self.text)
-
-    def test_unitize_status_line_exception_documented(self):
-        self.assertIn("second-to-last stdout line", self.text)
 
 
 class TestReviewFidelityNumeracyCarveout(unittest.TestCase):
@@ -107,27 +88,6 @@ class TestNotStatedIsAStatedReason(unittest.TestCase):
     def test_review_fidelity_md_has_general_indication(self):
         text = _read(os.path.join(STAGES_DIR, "review_fidelity.md"))
         self.assertIn("general indication", text)
-
-
-class TestAgentsSingleLineReply(unittest.TestCase):
-    """Fix #5: every agent file's reply instruction is strengthened to the
-    exact one-line contract, and tools stay Read, Write."""
-
-    EXPECTED_REPLY_LINE = (
-        "Your entire reply is exactly one line: "
-        "`<output path> — <N> items written`. No preamble, no summary."
-    )
-
-    def test_every_agent_has_the_strengthened_reply_instruction(self):
-        agent_files = sorted(
-            name for name in os.listdir(AGENTS_DIR) if name.endswith(".md")
-        )
-        self.assertTrue(agent_files, "no agent files found under agents/")
-        for name in agent_files:
-            path = os.path.join(AGENTS_DIR, name)
-            text = _read(path)
-            self.assertIn(self.EXPECTED_REPLY_LINE, text, f"{path} missing the strengthened reply line")
-            self.assertIn("tools: Read, Write", text, path)
 
 
 if __name__ == "__main__":

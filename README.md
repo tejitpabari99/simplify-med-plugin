@@ -1,183 +1,116 @@
 # simplify-med
 
-## What it is
+An OpenAI plugin that turns supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail.
 
-simplify-med is a portable Agent Skill, packaged for Claude Code, claude.ai, and OpenAI,
-that turns a clinical document into a plain-language, fact-checked care plan. A
-deterministic pipeline of scripts and LLM stages grounds every statement to a line of
-the original document, assembles a structured care plan, reviews and corrects it for
-fidelity and coverage, and renders it to Markdown and a single self-contained HTML
-page. Every interim file the pipeline writes is schema-validated and logged, so a full
-run leaves an auditable trail from source text to final output.
+## Plugin Structure
 
-The OpenAI package can be built two ways. The default build (`python3 build.py openai`)
-adds a presentation-only MCP viewer after finalization; medical processing still runs in
-the host, and the developer-operated endpoint is designed not to download or process
-document or report bytes — see [`docs/openai.md`](docs/openai.md) for the exact data
-flow, privacy boundary, deployment requirements, and PHI limitations. `python3 build.py
-openai --no-mcp` instead produces a plain skills-only plugin with no MCP server,
-connector, or viewer at all — see the [Packaging](#packaging) section below and
-[`docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md`](docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md).
+The repository root is the plugin folder OpenAI uses:
 
-## Documentation
-
-- [`docs/README.md`](docs/README.md) — index of the documentation suite.
-- [`docs/overview.md`](docs/overview.md) — what simplify-med is, how to install and run it, and what a report contains.
-- [`docs/architecture.md`](docs/architecture.md) — a deep dive: the run folder, the stage graph, every deterministic check, the data contracts, and testing.
-- [`docs/plugins.md`](docs/plugins.md) — for adding support for another platform.
-- [`docs/openai.md`](docs/openai.md) — the OpenAI package, MCP viewer, data flow,
-  security boundary, deployment, testing, and operator checklist.
-
-## Layout
-
-```
-plugin.meta.json               source of truth for name/version/description
-.claude-plugin/plugin.json     Claude Code manifest (version must match plugin.meta.json)
-build.py                       root platform build dispatcher
+```text
+plugin.json                    portable Agent Plugins manifest
+.codex-plugin/plugin.json      Codex compatibility manifest
+build-versions.json            repository-only prod/dev version counters
 skills/simplify/
-  SKILL.md                     skill entry point
-  stages/                      one prompt per LLM stage: ground, glossary, assemble,
-                                review_fidelity, review_coverage, assemble_missing, correct
-  scripts/                     stdlib-only Python: unitize, validate, anchor_check,
-                                merge_facts, cite_check, numeric_parity, sanitize_review,
-                                diff_guard, finalize, render_md, render_html, render_audit,
-                                readability, runlog
-  schema/                      JSON Schema for every interim and final file
-  reference/                   style_rules.md, categories.md, abbreviations.json,
-                                ahrq_plain_language.json
-  templates/                   report.html
-agents/                        thin Claude Code agent definitions, one per LLM stage
-packaging/                     shared staging plus claude-code, claude-ai, openai profiles;
-                                packaging/openai/skills/simplify/SKILL.md overlays a
-                                self-contained orchestrator used only by `openai --no-mcp`
-mcp/openai/                    presentation-only MCP server and report widget, used only by
-                                the default OpenAI build (absent from `openai --no-mcp`)
-tests/                         unittest modules and fixtures
-docs/agent_files/...           design brief and futures list (excluded from packages)
+  SKILL.md                     workflow and safety boundaries
+  agents/openai.yaml           OpenAI skill metadata
+  assets/                      skill icons
+  stages/                      language-stage instructions
+  scripts/                     deterministic checks and renderers
+  schema/                      structured-data contracts
+  reference/                   medical plain-language rules and dictionaries
+  templates/                   report template
 ```
 
-## How a run works
+`mcp/openai/` remains in the repository for possible future work. It is not connected to the plugin, declared by either manifest, or included in the ZIP.
 
-`SKILL.md` (`skills/simplify/SKILL.md`) is the entry point: it walks the
-model running the skill through unitizing the input, dispatching each LLM
-stage to its `agents/simplify-med-<stage>` agent (or running the stage
-in-context if sub-agents aren't available), and running the deterministic
-check script after each one, with one retry on a validation failure.
+## What It Does
 
-1. **Unitize** (script) splits the input into numbered units and chunks.
-2. **Ground** (one agent per chunk) `‖` **Glossary** (one agent) run in
-   parallel, then `merge_facts` verifies and renumbers the surviving facts.
-3. **Assemble** (one agent) turns the fact ledger into a typed care plan;
-   `cite_check` drops anything uncited and `numeric_parity` flags number
-   mismatches as hints for the next stage.
-4. **Review: fidelity** `‖` **Review: coverage** run in parallel, then
-   `sanitize_review` resolves both into a corrections list and a missing-facts
-   list.
-5. **Correct** (skipped if there are no corrections) `‖` **Assemble-missing**
-   (skipped if nothing is missing) run in parallel; `diff_guard` and
-   `cite_check --additions` verify their output stays inside its bounds.
-6. **Finalize** (script) merges everything, re-checks citations, re-detects
-   the glossary against the final text, sweeps for leaked names, scores
-   readability, and renders `report.md`. `render_html.py` builds
-   `report.html` and `render_audit.py` builds `report.audit.md`, both on
-   request, offered as follow-up next steps, never automatically.
+1. Splits extracted document text into numbered source units.
+2. Extracts atomic facts anchored to exact source lines.
+3. Builds a structured plain-language care plan from checked facts only.
+4. Reviews fidelity, coverage, and numeric preservation.
+5. Applies bounded corrections and fills verified omissions.
+6. Produces Markdown, with HTML and a source audit available on request.
 
-Every stage's outcome (`ok` / `degraded` / `skipped` / `failed`) is recorded
-in `run.json`; ground and assemble failing stops the run, everything else
-degrades gracefully and the report carries a plain-language notice.
+The language work lives in `skills/simplify/stages/`. Python is reserved for deterministic work such as source anchoring, schema validation, citations, numeric checks, bounded diffs, audit logging, and rendering. See `docs/openai-plugin.md` for the governing authoring rules and the per-script rationale.
 
-## Install for local dev
+## Build the Plugin ZIP
 
-```
-claude --plugin-dir /path/to/simplify-med-plugin
+Production build:
+
+```bash
+python3 build.py
 ```
 
-Then invoke the `simplify` skill from within Claude Code.
+Development build:
 
-## Try it
-
-```
-claude --plugin-dir /path/to/simplify-med-plugin
+```bash
+python3 build.py --dev
 ```
 
-Then ask Claude to simplify a clinical document, e.g. "simplify this visit
-note for me" with a `.txt` file attached or pasted. Each run is written to
-`simplify-runs/<run-id>/` in the current working directory (gitignored) --
-that folder is the full audit trail, from the numbered source units through
-the final report. Ask for a printable/shareable report to get `report.html`.
-Ask "how was this verified?" or "show your sources" to get
-`report.audit.md`, which pairs every statement in the plan with the exact
-line of the original document it came from.
+`build-versions.json` stores independent production and development versions.
+Every successful build increments the selected version's patch number before
+creating the archive. Failed builds do not consume a version.
 
-## Input contract
+Production builds:
 
-- One `.txt` file per source document.
-- Insert a form-feed character (`\f`) between pages when page boundaries are known.
-- Optionally suffix a file with `:native` (default), `:ocr`, or `:pasted` to label
-  its extraction method in the audit trail.
+- package `simplify-med`;
+- update `plugin.json`, `.codex-plugin/plugin.json`, and the pipeline version in the source tree;
+- write `dist/simplify-med-<version>-openai.zip`.
 
-## Run folder layout
+Development builds:
 
-Each run lives in `simplify-runs/<run-id>/` (gitignored) and contains:
+- package `simplify-med-dev`;
+- stamp the dev name and version into both packaged manifests and the packaged pipeline version;
+- leave the production manifests in the source tree unchanged;
+- write `dist/simplify-med-dev-<version>-openai.zip`.
 
-- Numbered stage output files (e.g. `01_units.json`, `02_facts.json`, ... through
-  the care plan, review, coverage, and additions stages), each schema-validated
-  and each carrying top-level `schema_version` and `plugin_version` fields.
-- `run.json` — the run's audit trail, written and updated by every stage through
-  `runlog.py`: per-stage status, attempts, timestamps, checks, and run-level
-  notices.
-- `report.md` — the final rendered care plan. `report.html` (printable/shareable)
-  and `report.audit.md` (audit trail) are rendered on request, not by default.
+The version ledger is repository-only and is never included in either archive.
 
-## Packaging
+Use a different output directory with:
 
-```
-python3 build.py claude-code
-python3 build.py claude-ai
-python3 build.py openai            # default: includes the presentation MCP viewer
-python3 build.py openai --no-mcp   # skills-only plugin, no MCP server/connector
+```bash
+python3 build.py --out /path/to/output
+python3 build.py --dev --out /path/to/output
 ```
 
-Claude Code and claude.ai packages preserve the existing host behavior. The default
-OpenAI build adds portable root manifests, OpenAI-specific final handoff instructions,
-and a dependency on the separately deployed presentation MCP endpoint; an OpenAI
-production build needs that deployed HTTPS endpoint, which the ZIP itself does not
-deploy — follow [`docs/openai.md`](docs/openai.md#deploy).
+The builder uses an allowlist. The ZIP contains only:
 
-`python3 build.py openai --no-mcp` instead produces a distinct `simplify-med-noui`
-skills-only plugin: no root
-`plugin.json`, no `mcp.json`/`.mcp.json`, no connector wiring, and only
-`.codex-plugin/plugin.json` as the manifest, with an OpenAI-specific self-contained
-`SKILL.md` — there is no server to deploy for this mode. Its archive root and manifest
-name match (`simplify-med-noui`), so it can coexist with the UI-backed `simplify-med`
-plugin without a post-build ZIP rewrite. Install it either by unzipping its contents
-under `~/plugins/simplify-med-noui/` (or adding a repo/team
-`.agents/plugins/marketplace.json` entry pointing at it), or by uploading/importing the
-generated `simplify-med-noui-<version>-openai.zip` directly in ChatGPT. See
-[`docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md`](docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md)
-(D2, D8) for the exact package tree and rationale.
+- `plugin.json`
+- `.codex-plugin/plugin.json`
+- `skills/`
 
-All modes write a zip to `dist/` (gitignored). The existing `python3 packaging/build.py
---platform <platform> --out dist` form remains available for compatibility.
+It excludes `build-versions.json`, `mcp/`, `docs/`, `tests/`, `agent_files/`, repository metadata, caches, and the builder itself.
 
-## Versioning
+## Use in OpenAI
 
-`plugin.meta.json` is the source of truth for the plugin's version.
-`.claude-plugin/plugin.json` must carry the same `version`, and
-`skills/simplify/scripts/_version.py`'s `PLUGIN_VERSION` must match it too —
-`packaging/build.py` checks all three and exits with status 2 on any mismatch,
-before writing anything.
+Install or import the generated ZIP as an OpenAI plugin. The plugin exposes the `simplify` skill and requires no MCP server, connector, endpoint, API key, or separate deployment.
 
-## Tests
+Ask it to simplify a visit note, discharge summary, lab report, imaging report, or similar clinical document. Input text should be extracted to UTF-8 `.txt`; page boundaries may be represented with form-feed characters (`\f`).
 
-```
+Each run writes `simplify-runs/<run-id>/` in the working directory. The folder contains the stage artifacts, `run.json`, the final JSON plan, and `report.md`. `report.html` and `report.audit.md` are created only when requested.
+
+## Safety Boundary
+
+- The plugin explains supplied records; it does not diagnose or prescribe.
+- Every medical statement must be supported by the source documents.
+- Missing information stays missing rather than being guessed.
+- Numeric details are checked independently.
+- The result is a reading aid, not a replacement for clinical or emergency care.
+
+## Validation
+
+```bash
 python3 -m unittest discover -s tests -v
 ```
 
-All tests use the Python standard library only (no pip installs, no network
-access) and must pass from a clean checkout.
+When the OpenAI plugin and skill validators are available in your development
+environment, run them against `.` and `skills/simplify` before distribution.
+Run `build.py` only when you intend to consume the next production or development version.
 
-## Design docs
+## Documentation
 
-See `docs/agent_files/2026-09-22-simplify-med-plugin-brief/` for the design brief
-and futures list this plugin was built from.
+- `docs/openai-plugin.md` — defining rules for manifests, skill creation, resources, scripts, and future skills.
+- `docs/architecture.md` — the medical transformation pipeline and deterministic safeguards.
+- `docs/overview.md` — user-facing behavior, inputs, outputs, and limitations.
+- `docs/openai.md` — the current skills-only OpenAI package and archive boundary.

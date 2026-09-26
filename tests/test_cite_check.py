@@ -210,7 +210,7 @@ class TestCiteCheckAssemble(unittest.TestCase):
     # care_plan_agent.schema.json itself enforces maxItems 3 on `questions`, so
     # a raw plan with 4+ questions never reaches the guard through the full CLI
     # (it is rejected -- correctly -- at the schema-validation step first, and
-    # the assemble agent is retried). _apply_guards is exercised directly here
+    # the assemble stage is retried). _apply_guards is exercised directly here
     # to prove the truncation guard itself is correct in isolation / as a
     # defense-in-depth safety net.
 

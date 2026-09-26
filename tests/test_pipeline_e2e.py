@@ -450,7 +450,7 @@ class TestPipelineNothingToCorrect(unittest.TestCase):
                 "missing": [],
             })
             # No misses -> no additions file, mirroring the real dispatcher
-            # skipping the assemble-missing agent entirely.
+            # skipping the assemble-missing stage entirely.
             additions_path = os.path.join(run_dir, "05_additions.json")
             if os.path.isfile(additions_path):
                 os.remove(additions_path)

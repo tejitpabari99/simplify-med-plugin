@@ -35,15 +35,13 @@ def _utc_now_iso() -> str:
 def plugin_version() -> str:
     """Return the plugin version.
 
-    Prefers reading plugin.meta.json by walking up from this file's
-    directory (so a dev checkout always reflects the source of truth in
-    plugin.meta.json). Falls back to the PLUGIN_VERSION constant in
-    _version.py if plugin.meta.json cannot be found -- e.g. when packaged
-    for claude.ai, where plugin.meta.json is excluded from the archive.
+    Prefers reading the portable root plugin.json by walking up from this
+    file's directory. Falls back to the embedded constant when the scripts
+    run outside a complete plugin checkout.
     """
     current = _SCRIPTS_DIR
     while True:
-        candidate = os.path.join(current, "plugin.meta.json")
+        candidate = os.path.join(current, "plugin.json")
         if os.path.isfile(candidate):
             try:
                 with open(candidate, "r", encoding="utf-8") as f:

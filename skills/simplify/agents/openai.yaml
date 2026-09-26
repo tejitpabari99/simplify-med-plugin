@@ -6,10 +6,3 @@ interface:
   default_prompt: Simplify this medical document into a plain-language care plan.
 policy:
   allow_implicit_invocation: true
-dependencies:
-  tools:
-    - type: mcp
-      value: simplify-med-ui
-      description: Render a completed Simplify Med JSON report in ChatGPT
-      transport: streamable_http
-      url: __SIMPLIFY_MED_MCP_URL__

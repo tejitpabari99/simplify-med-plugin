@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Citation guard for the assemble path.
 
-Default mode validates the assemble agent's raw output
+Default mode validates the assemble stage's raw output
 (``03_plan.raw.json``) against ``care_plan_agent.schema.json``, then applies
 a set of deterministic guards -- ported from simplify-med's
 ``_verify_assembly`` (``backend/care_plan/pipeline.py``) -- that drop or
-repair anything the agent asserted without a fact behind it, and writes
+repair anything the model asserted without a fact behind it, and writes
 ``03_plan.draft.json``.
 
-``--additions`` mode does the analogous job for the assemble-missing agent's
+``--additions`` mode does the analogous job for the assemble-missing stage's
 output (``05_additions.raw.json``): every addition must cite only facts
 listed as missing in ``04_coverage.json``, or it is dropped.
 
@@ -210,7 +210,7 @@ def _run_assemble(run_dir: str) -> int:
     if not os.path.isfile(raw_path):
         return _fatal(
             "cite_check: could not find 03_plan.raw.json in the run directory. "
-            "The assemble agent must write this file before cite_check can run."
+            "The assemble stage must write this file before cite_check can run."
         )
     try:
         raw = _read_json(raw_path)
@@ -222,7 +222,7 @@ def _run_assemble(run_dir: str) -> int:
     if schema_errors:
         print(
             "cite_check: 03_plan.raw.json does not match care_plan_agent.schema.json. "
-            "The assemble agent should be retried with these errors:",
+            "Retry the assemble stage with these errors:",
             file=sys.stderr,
         )
         for error in schema_errors:
@@ -256,7 +256,7 @@ def _run_assemble(run_dir: str) -> int:
         print(
             "cite_check: internal bug -- the guarded plan does not match "
             "care_plan.schema.json (this is a bug in cite_check.py, not in "
-            "the assemble agent's output):",
+            "the assemble stage output):",
             file=sys.stderr,
         )
         for error in plan_errors:
@@ -320,8 +320,8 @@ def _run_additions(run_dir: str) -> int:
     if schema_errors:
         print(
             "cite_check --additions: 05_additions.raw.json does not match "
-            "additions_raw.schema.json. The assemble-missing agent should be "
-            "retried with these errors:",
+            "additions_raw.schema.json. Retry the assemble-missing stage with "
+            "these errors:",
             file=sys.stderr,
         )
         for error in schema_errors:
@@ -387,7 +387,7 @@ def _run_additions(run_dir: str) -> int:
         print(
             "cite_check --additions: internal bug -- the guarded additions do "
             "not match additions.schema.json (this is a bug in cite_check.py, "
-            "not in the assemble-missing agent's output):",
+            "not in the assemble-missing stage output):",
             file=sys.stderr,
         )
         for error in result_errors:

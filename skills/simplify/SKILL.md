@@ -1,252 +1,103 @@
 ---
 name: simplify
-description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces a plain-language report (Markdown) in a run folder, with a printable HTML version and an audit trail available on request.
+description: Simplify visit notes, discharge summaries, lab reports, imaging reports, and other clinical documents into a plain-language, source-anchored care plan. Use when a user wants help understanding supplied medical paperwork. Do not use to diagnose, prescribe, or replace urgent medical care.
 ---
 
-Resolve `<skill>` once, at the start, to the absolute path of the directory
-containing this file (`skills/simplify/` in a plugin checkout). Every
-run also has a `<run>` directory, resolved once you have it (Stage 0
-prints it). Use these two absolute paths in every command and every
-dispatch message below -- never a relative path.
+# Simplify Medical Documents
 
-If `<skill>/custom_start.md` exists, read it now and follow its
-platform-specific instructions before Stage 0. If it does not exist or is
-empty, continue unchanged.
+Turn the supplied clinical documents into a plain-language report without adding medical claims that are not present in the source.
 
-## 1. What this does
+## Core Rules
 
-This is a fact-first pipeline: a clinical document is first broken into
-atomic facts, each one anchored to a specific line of the source text, and
-only those facts are ever assembled into a plain-language care plan.
-Nothing is invented -- a reason, dose, or cause that the document does not
-state is shown to the patient as "not stated," never guessed. The plan is
-reviewed and corrected against its own facts before it is shown to anyone.
-Every interim file the pipeline writes is kept in the run folder as an
-audit trail from source text to final report.
+- Treat the source documents as the only authority. Never infer a diagnosis, reason, dose, cause, severity, or recommendation that the documents do not state.
+- Keep every clinical statement traceable to source text through the fact ledger and `source_fact_ids`.
+- Preserve uncertainty. Use “not stated” or an empty optional field instead of guessing.
+- Keep source documents and run artifacts local unless the user explicitly asks to share them.
+- Present the result as a reading aid, not medical advice or a treatment instruction.
 
-## 2. Before you start
+## Inputs
 
-- Confirm `python3 --version` runs.
-- Get the input as one or more `.txt` files, one per source document. If
-  the user supplied a PDF, DOCX, image, or scan, extract its text with
-  your own tools first and save the result as `.txt`. If page boundaries
-  are known, insert a form-feed character (`\f`) between pages.
-- Treat every file the user gave you for this request as one visit.
-- Do not ask the user about a simplification level -- there is exactly one.
-- Tell the user, in one line, that you are starting and that it takes
-  several steps.
+Use one UTF-8 text file per source document. Extract text from PDFs, DOCX files, images, or scans with the tools available in the current environment before starting. Preserve known page boundaries with form-feed characters (`\f`). Treat all files supplied for one request as a single visit.
 
-## 3. How to run a script
+Paths such as `scripts/...`, `stages/...`, `reference/...`, and `schema/...` are relative to this skill directory. Resolve them when using tools; do not add a separate path-resolution or environment-checking stage to the workflow.
 
-Always invoke a script as `python3 <skill>/scripts/<name>.py --run-dir
-<run> ...` (the one exception is Stage 0, which establishes `<run>`
-itself). Every script exits 0 whether its own outcome was ok, degraded, or
-skipped, and exits 1 only on a fatal error or an invalid agent output that
-needs a retry. On exit 1, read stderr -- it is written for a human. On exit
-0, the last line of stdout is always a status line of the shape `<stage>:
-<status> | <key>=<value> ...`, where `<status>` is `ok`, `degraded`, or
-`skipped` -- read it to know what happened without inspecting output files
-(Stage 0's unitize is the one exception; see section 5).
+## Why Scripts Are Used
 
-## 4. How to dispatch an LLM stage
+The model performs the language work in `stages/*.md`. The bundled Python scripts handle deterministic operations that should not be improvised: source line numbering, schema validation, citation checks, numeric parity, bounded correction checks, audit logging, and rendering. Run the required command directly. If the environment cannot execute it, report that limitation and stop rather than recreating the check by hand.
 
-If you can dispatch sub-agents, dispatch the agent named `simplify-med-<stage>`
-(defined under `agents/`) with this exact message shape. This plugin
-registers these agents; their definitions are at `<plugin>/agents/<stage>.md`
-(`<plugin>` being the parent directory of `skills/`, a sibling of `skills/`,
-not a child of `<skill>`) -- if agents are not auto-registered for you, read
-this file yourself and use it as the sub-agent's system prompt.
+## Stage Protocol
 
-```
-Stage file: <skill>/stages/<stage>.md
-Inputs: <absolute paths, one per line>
-Output: <absolute path>
-Reference dir: <skill>/reference
-Schema dir: <skill>/schema
+For each model stage:
+
+1. Read only the named stage prompt and its named inputs, references, and schema.
+2. Write only the requested JSON output file.
+3. Run the listed deterministic check.
+4. If the check reports invalid model output, retry that stage once using the reported errors. Apply the failure behavior below if the retry also fails.
+
+Independent stages may run in parallel when the host supports it. Otherwise run them sequentially in the order below.
+
+## Workflow
+
+### 1. Prepare the Run
+
+Run:
+
+```bash
+python3 scripts/unitize.py --runs-dir <workspace>/simplify-runs --input <file> [--input <file> ...]
 ```
 
-Run every task of a parallel group at the same time when you can run tasks
-in parallel, respecting any concurrency limit you have. Otherwise, read
-the stage file yourself and perform the stage in the current context,
-writing the output file, one stage at a time, in the same order as below
--- never skip a stage because it feels redundant.
+Append `:ocr` to text transcribed from an image or scan and `:pasted` to manually entered text. Native text files and text extracted from digital documents need no suffix. The final output line is the run directory; use it as `<run>` below. Read `<run>/01_units.json` to find the numbered chunk files.
 
-**Validation and one retry.** After each agent task, run its check
-script. If the check exits 1 with validator errors, re-dispatch the same
-agent ONCE, with the dispatch message suffixed:
+### 2. Extract Facts and Glossary
 
-```
-Retry: the previous output failed validation. Fix exactly these errors and rewrite the output file:
-<the check's stderr>
-```
+- For each chunk, follow `stages/ground.md` and write `<run>/02_facts.<k>.raw.json`. Check it with `python3 scripts/anchor_check.py --run-dir <run> --chunk <k>`.
+- Once per run, follow `stages/glossary.md` and write `<run>/02_glossary.raw.json`. Check it with `python3 scripts/glossary_check.py --run-dir <run>`.
+- After all fact chunks pass, run `python3 scripts/merge_facts.py --run-dir <run>`.
 
-If it fails again, treat the stage as failed per the failure table in
-section 12 and continue.
+### 3. Assemble the Draft
 
-## 5. Stage 0 -- unitize (script)
+- Follow `stages/assemble.md` and write `<run>/03_plan.raw.json`.
+- Run `python3 scripts/cite_check.py --run-dir <run>`.
+- Run `python3 scripts/numeric_parity.py --run-dir <run>`. Numeric flags inform review but do not fail the run by themselves.
 
-```
-python3 <skill>/scripts/unitize.py --runs-dir <cwd>/simplify-runs --input <file> [--input <file> ...]
-```
+### 4. Review Fidelity and Coverage
 
-Append `:ocr` to a file you transcribed from an image or scanned page,
-`:pasted` to text the user typed or pasted; otherwise nothing (default
-`native`). This only labels the audit trail.
+These reviews are independent and may run in parallel:
 
-The last line of stdout is `<run>` -- resolve it to an absolute path and
-use it for everything below. This is unitize's one exception to section
-3's status-line rule: its status line is printed too, but as the
-second-to-last stdout line, immediately before `<run>`, so that `<run>`
-can stay the last line. Read `<run>/01_units.json`'s `chunks` array
-to learn the chunk count K. On exit 1, this is fatal: stop and explain the
-input problem in plain words (an empty file or a file with no usable
-text).
+- Follow `stages/review_fidelity.md`, write `<run>/04_review.raw.json`, then run `python3 scripts/sanitize_review.py --run-dir <run> --only review`.
+- Follow `stages/review_coverage.md`, write `<run>/04_coverage.raw.json`, then run `python3 scripts/sanitize_review.py --run-dir <run> --only coverage`.
 
-## 6. Stage 1 -- ground and glossary (parallel group A)
+If either review fails twice, remove its invalid raw output and run its sanitizer once more so the audit trail records that review as skipped.
 
-Dispatch K ground tasks, one per chunk `k` in 1..K:
+### 5. Correct and Fill Gaps
 
-- Agent `simplify-med-ground`, stage file `<skill>/stages/ground.md`.
-- Inputs: `<run>/01_units.<k>.txt`, `<skill>/reference/categories.md`,
-  `<skill>/reference/abbreviations.json`.
-- Output: `<run>/02_facts.<k>.raw.json`.
-- Check: `python3 <skill>/scripts/anchor_check.py --run-dir <run> --chunk <k>`.
+Read the correction count in `<run>/04_review.json` and the missing-fact count in `<run>/04_coverage.json`.
 
-Alongside them, dispatch one glossary task:
+- If corrections exist, follow `stages/correct.md` and write `<run>/05_plan.corrected.raw.json`. Run `python3 scripts/diff_guard.py --run-dir <run> --strict`; retry the stage once if needed. Then run `python3 scripts/diff_guard.py --run-dir <run>` to produce the settled corrected plan. If no corrections exist, run only the non-strict command so the stage is recorded as skipped.
+- If missing facts exist, follow `stages/assemble_missing.md` and write `<run>/05_additions.raw.json`. Run `python3 scripts/cite_check.py --run-dir <run> --additions`. If no facts are missing, run the same command without creating model output so the stage is recorded as skipped.
 
-- Agent `simplify-med-glossary`, stage file `<skill>/stages/glossary.md`.
-- Inputs: every `<run>/01_units.<k>.txt` for this run.
-- Output: `<run>/02_glossary.raw.json`.
-- Check: `python3 <skill>/scripts/glossary_check.py --run-dir <run>`.
+### 6. Finalize
 
-When every ground task has been checked (and retried if needed), run:
+Run:
 
-```
-python3 <skill>/scripts/merge_facts.py --run-dir <run>
+```bash
+python3 scripts/finalize.py --run-dir <run>
 ```
 
-Exit 1 here is fatal: stop and tell the user, in plain words, that the
-document could not be read into facts (quote stderr).
+Finalization writes `<run>/06_plan.final.json` and `<run>/report.md`, reports the reading level, and records any degraded or skipped checks.
 
-## 7. Stage 2 -- assemble (sequential)
+## Present the Result
 
-- Agent `simplify-med-assemble`, stage file `<skill>/stages/assemble.md`.
-- Inputs: `<run>/02_facts.txt`, `<skill>/reference/style_rules.md`,
-  `<skill>/reference/ahrq_plain_language.json`,
-  `<skill>/schema/care_plan_agent.schema.json`.
-- Output: `<run>/03_plan.raw.json`.
-- Check: `python3 <skill>/scripts/cite_check.py --run-dir <run>` (writes
-  `<run>/03_plan.draft.json`). Fatal after one retry -- stop and explain.
+- Give a concise summary of the most important next actions, medication changes or questions, tests, appointments, follow-up timing, and uncertainty explicitly present in the report.
+- Link or attach `<run>/report.md` and `<run>/06_plan.final.json`. Do not expose fact IDs, line numbers, chunk counts, or other pipeline internals in the user-facing summary.
+- If the user wants a printable file, run `python3 scripts/render_html.py --run-dir <run>` and provide `<run>/report.html`.
+- If the user asks how statements were verified or requests sources, run `python3 scripts/render_audit.py --run-dir <run>` and provide `<run>/report.audit.md`.
+- State that the output is a reading aid based on the supplied documents, not a new diagnosis or treatment instruction. For urgent symptoms, direct the user to appropriate emergency or clinical care rather than relying on the report.
 
-Then always run:
+## Failure Behavior
 
-```
-python3 <skill>/scripts/numeric_parity.py --run-dir <run>
-```
-
-(writes `<run>/03_flags.json`; this check never fails the run).
-
-## 8. Stage 3 -- review (parallel group B)
-
-- Agent `simplify-med-review-fidelity`, stage file
-  `<skill>/stages/review_fidelity.md`. Inputs: `<run>/02_facts.txt`,
-  `<run>/03_plan.draft.json`, `<run>/03_flags.json`. Output:
-  `<run>/04_review.raw.json`. Check:
-  `python3 <skill>/scripts/sanitize_review.py --run-dir <run> --only review`.
-- Agent `simplify-med-review-coverage`, stage file
-  `<skill>/stages/review_coverage.md`. Inputs: `<run>/02_facts.txt`,
-  `<run>/03_plan.draft.json`. Output: `<run>/04_coverage.raw.json`. Check:
-  `python3 <skill>/scripts/sanitize_review.py --run-dir <run> --only coverage`.
-
-If an agent fails twice, delete its raw output file if one exists, then
-run its `sanitize_review` command anyway (it will write the sanitized
-file with that side recorded as skipped).
-
-## 9. Stage 4 -- correct and fill gaps (parallel group C)
-
-Read `<run>/04_review.json`'s `corrections` count and
-`<run>/04_coverage.json`'s `missing` count first.
-
-**C1 -- correct.** If `corrections` > 0: dispatch agent
-`simplify-med-correct`, stage file `<skill>/stages/correct.md`. Inputs:
-`<run>/03_plan.draft.json`, `<run>/04_review.json`,
-`<skill>/reference/style_rules.md`. Output:
-`<run>/05_plan.corrected.raw.json`. Check:
-`python3 <skill>/scripts/diff_guard.py --run-dir <run> --strict`; on exit
-1, retry once with the reported violation paths. Then, regardless, run
-`python3 <skill>/scripts/diff_guard.py --run-dir <run>` (no `--strict`) to
-settle -- it writes `<run>/05_plan.corrected.json`.
-If `corrections` == 0: skip the agent and just run
-`python3 <skill>/scripts/diff_guard.py --run-dir <run>` directly (it
-records the stage as skipped).
-
-**C2 -- assemble-missing.** If `missing` > 0: dispatch agent
-`simplify-med-assemble-missing`, stage file
-`<skill>/stages/assemble_missing.md`. Inputs: `<run>/02_facts.txt`,
-`<run>/03_plan.draft.json`, `<run>/04_coverage.json`,
-`<skill>/reference/style_rules.md`,
-`<skill>/schema/additions_raw.schema.json`. Output:
-`<run>/05_additions.raw.json`. Check:
-`python3 <skill>/scripts/cite_check.py --run-dir <run> --additions`.
-If `missing` == 0: skip the agent and just run
-`python3 <skill>/scripts/cite_check.py --run-dir <run> --additions`
-directly (it records the stage as skipped).
-
-## 10. Stage 5 -- finalize (script)
-
-```
-python3 <skill>/scripts/finalize.py --run-dir <run>
-```
-
-Stdout gives, one per line: the Markdown report path, the reading-level
-line, then any notices, then (per section 3) the `finalize: ...` status
-line as the last line -- that last line is not a notice. Exit 1 is fatal
--- show the user its stderr text.
-
-After finalization succeeds, if `<skill>/custom_end.md` exists, read it and
-follow its platform-specific result-presentation instructions before
-presenting the results. If it does not exist or is empty, continue unchanged.
-
-## 11. What to tell the user
-
-Give the report path (`report.md`); the reading-level line verbatim; each
-notice verbatim; and one sentence that this is a reading aid, not medical
-advice. Do NOT paste the plan into chat, and do NOT mention fact ids, line
-numbers, chunk counts, or any other run internals. If you can offer file
-downloads, offer `report.md`.
-
-Then, briefly and naturally (not as a menu), offer relevant next steps,
-for example:
-
-- A printable/shareable HTML report -- run
-  `python3 <skill>/scripts/render_html.py --run-dir <run>` and point to
-  `<run>/report.html`.
-- The audit trail, if they ask how a statement was verified or want
-  sources -- run
-
-  ```
-  python3 <skill>/scripts/render_audit.py --run-dir <run>
-  ```
-
-  and point them to `<run>/report.audit.md`.
-
-## 12. Failure table
-
-| Stage | On failure |
-|---|---|
-| unitize | Stop; explain the input problem. |
-| ground | Stop; the document could not be read into facts. |
-| glossary | Continue without a glossary. |
-| assemble | Stop; explain the failure. |
-| review-fidelity / review-coverage | Continue; recorded as skipped; finalize adds a notice. |
-| correct | The diff guard falls back to the draft plan and adds a notice. |
-| assemble-missing | Continue without additions. |
-| finalize | Stop; show its error text. |
-
-## 13. Run folder
-
-Each run lives in `<cwd>/simplify-runs/<run-id>/` and contains numbered
-stage files (`01_units.json` ... `06_plan.final.json`), `run.json` (the
-audit trail: per-stage status, attempts, checks), and `report.md`, plus,
-on request, `report.html` and `report.audit.md`. Everything in it stays on
-the user's machine; deleting the folder removes all traces of the run.
+- Stop on invalid or unusable input, failed fact extraction, failed draft assembly, or failed finalization. Explain the error in plain language.
+- Continue without a glossary if glossary generation fails twice.
+- Continue with a recorded notice if a review fails twice.
+- Fall back to the draft plan if bounded correction cannot be validated.
+- Continue without additions if gap filling fails twice.

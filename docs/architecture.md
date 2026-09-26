@@ -3,14 +3,14 @@
 A deep dive into the pipeline: the run folder, the stage graph, every
 deterministic check by name, the data contracts, the stage prompts,
 rendering, testing, and known gaps. Read [overview.md](overview.md) first
-for the patient-facing picture; this document is for someone changing or
-porting the pipeline.
+for the patient-facing picture; this document is for someone changing the
+pipeline.
 
 ## Principles
 
 - **Fact-first.** Nothing reaches the plan without first being an atomic
   fact anchored to a line of the source text.
-- **Extraction before generation.** The assemble agent never sees the
+- **Extraction before generation.** The assemble stage never sees the
   original document, only the fact ledger.
 - **Deterministic wherever possible.** Every LLM stage is followed by a
   script that validates its output against a JSON Schema and applies
@@ -25,19 +25,19 @@ porting the pipeline.
 ## Repository layout
 
 ```
-plugin.meta.json               source of truth for name/version/description/schema_version
-.claude-plugin/plugin.json     Claude Code manifest (version must match plugin.meta.json)
-build.py                       root dispatcher for platform packages
-skills/simplify/               the portable Agent Skill (SKILL.md + bundled files)
-  SKILL.md                     orchestration: stage list, file handoffs, parallel groups, fallback
+plugin.json                    portable OpenAI plugin manifest
+.codex-plugin/plugin.json      Codex compatibility manifest
+build.py                       allowlist-based OpenAI ZIP builder
+skills/simplify/               the bundled OpenAI skill
+  SKILL.md                     stage list, file handoffs, checks, and failure behavior
+  agents/openai.yaml           OpenAI skill metadata
+  assets/                      skill icons
   stages/                      one prompt per LLM stage
   scripts/                     stdlib-only Python: the deterministic pipeline
   schema/                      JSON Schema for every interim and final file
   reference/                   style rules, category checklist, abbreviation/plain-language dictionaries
   templates/                   report.html
-agents/                        thin Claude Code agent definitions, one per LLM stage
-packaging/                     shared staging plus per-platform profiles/overlays
-mcp/openai/                    presentation-only MCP server and ChatGPT report widget
+mcp/openai/                    retained future source; excluded from the plugin ZIP
 tests/                         unittest modules and fixtures
 docs/                          this documentation suite, plus agent_files/ (design history)
 simplify-runs/                 gitignored; one folder per run
@@ -45,7 +45,7 @@ simplify-runs/                 gitignored; one folder per run
 
 ## The run folder
 
-Files in write order, script or agent that writes them, and the schema
+Files in write order, script or model stage that writes them, and the schema
 each is checked against (schemas live in `skills/simplify/schema/`):
 
 | File | Written by | Schema |
@@ -54,19 +54,19 @@ each is checked against (schemas live in `skills/simplify/schema/`):
 | `00_input/manifest.json` | `unitize.py` | `manifest` |
 | `01_units.json` | `unitize.py` | `units` |
 | `01_units.<k>.txt` | `unitize.py` (one per chunk) | — |
-| `02_facts.<k>.raw.json` | `ground` agent (one per chunk) | `facts_raw` |
-| `02_glossary.raw.json` | `glossary` agent | `glossary_raw` |
+| `02_facts.<k>.raw.json` | `ground` model stage (one per chunk) | `facts_raw` |
+| `02_glossary.raw.json` | `glossary` model stage | `glossary_raw` |
 | `02_facts.json` / `.txt` | `merge_facts.py` | `facts` |
 | `02_glossary.json` | `glossary_check.py` | `glossary` |
-| `03_plan.raw.json` | `assemble` agent | `care_plan_agent` |
+| `03_plan.raw.json` | `assemble` model stage | `care_plan_agent` |
 | `03_plan.draft.json` | `cite_check.py` | `care_plan` |
 | `03_flags.json` | `numeric_parity.py` | `flags` |
-| `04_review.raw.json` | `review-fidelity` agent | `review_raw` |
-| `04_coverage.raw.json` | `review-coverage` agent | `coverage_raw` |
+| `04_review.raw.json` | `review-fidelity` model stage | `review_raw` |
+| `04_coverage.raw.json` | `review-coverage` model stage | `coverage_raw` |
 | `04_review.json` | `sanitize_review.py --only review` | `review` |
 | `04_coverage.json` | `sanitize_review.py --only coverage` | `coverage` |
-| `05_plan.corrected.raw.json` | `correct` agent (skip if 0 corrections) | `care_plan` |
-| `05_additions.raw.json` | `assemble-missing` agent (skip if 0 missing) | `additions_raw` |
+| `05_plan.corrected.raw.json` | `correct` model stage (skip if 0 corrections) | `care_plan` |
+| `05_additions.raw.json` | `assemble-missing` model stage (skip if 0 missing) | `additions_raw` |
 | `05_plan.corrected.json` | `diff_guard.py` | `care_plan` |
 | `05_additions.json` | `cite_check.py --additions` | `additions` |
 | `06_plan.final.json` | `finalize.py` | `care_plan` |
@@ -77,18 +77,19 @@ each is checked against (schemas live in `skills/simplify/schema/`):
 
 ## The stage graph
 
-`‖` marks a parallel group. Caps are scripts; lowercase are agents.
+`‖` marks an independent group that may run concurrently. Caps are scripts;
+lowercase names are model stages.
 
 ```
 UNITIZE (script) -> 01_units.json, 01_units.<k>.txt
- ground[1..K] (agent) ‖ glossary (agent)              <- group A
+ ground[1..K] (model) ‖ glossary (model)              <- group A
    -> 02_facts.<k>.raw.json            02_glossary.raw.json
 ANCHOR_CHECK (per chunk) + MERGE_FACTS      GLOSSARY_CHECK
    -> 02_facts.json/.txt                     02_glossary.json
- assemble (agent, sequential) -> 03_plan.raw.json
+ assemble (model, sequential) -> 03_plan.raw.json
 CITE_CHECK + NUMERIC_PARITY (never fails)
    -> 03_plan.draft.json               03_flags.json
- review-fidelity (agent) ‖ review-coverage (agent)    <- group B
+ review-fidelity (model) ‖ review-coverage (model)    <- group B
    -> 04_review.raw.json       04_coverage.raw.json
 SANITIZE_REVIEW --only review  +  SANITIZE_REVIEW --only coverage
    -> 04_review.json                    04_coverage.json
@@ -120,7 +121,7 @@ records `unitize: failed` and exits 1 — fatal. **Status line exception:**
 the status line prints second-to-last; the resolved run directory path is
 always the true last line.
 
-### Stage 1 — ground (agent, one per chunk) ‖ glossary (agent)
+### Stage 1 — ground (model stage, one per chunk) ‖ glossary (model stage)
 
 **Ground.** Extracts atomic facts from one chunk, each anchored to one unit
 id with a verbatim quote. Inputs: `01_units.<k>.txt`,
@@ -153,7 +154,7 @@ so it cannot catch a duplicate grounded from two different files/chunks
 `glossary_check.py` is never fatal: a missing/invalid raw file yields an
 empty glossary, `glossary: skipped`.
 
-### Stage 2 — assemble (agent, sequential)
+### Stage 2 — assemble (model stage, sequential)
 
 Turns the fact ledger into a typed, plain-language plan. Inputs:
 `02_facts.txt`, `reference/style_rules.md`,
@@ -179,7 +180,7 @@ Output: `03_plan.raw.json`. Check: `cite_check.py --run-dir <run>` (writes
 Then, always, `numeric_parity.py --run-dir <run>` (writes `03_flags.json`;
 never fails the run).
 
-### Stage 3 — review-fidelity (agent) ‖ review-coverage (agent)
+### Stage 3 — review-fidelity (model stage) ‖ review-coverage (model stage)
 
 **Fidelity.** Finds every place the plan says something its facts don't
 support; emits corrections. Inputs: `02_facts.txt`, `03_plan.draft.json`,
@@ -200,11 +201,11 @@ already covers — **remove wins**, applied last over the kept set).
 
 **Coverage backfill** (`sanitize_review.process_coverage`): an entry
 citing an unknown fact id is dropped (`unknown_dropped`); every fact id the
-agent's walk omitted is backfilled `present: false` (`backfilled`) — the
+coverage stage's walk omitted is backfilled `present: false` (`backfilled`) — the
 output always has exactly one entry per fact id, ascending, no gaps.
 `missing` is every id left `present: false`.
 
-### Stage 4 — correct (agent, skip if 0 corrections) ‖ assemble-missing (agent, skip if 0 missing)
+### Stage 4 — correct (model stage, skip if 0 corrections) ‖ assemble-missing (model stage, skip if 0 missing)
 
 **Correct.** Applies exactly the fixed correction list plus one bounded PII
 sweep. Inputs: `03_plan.draft.json`, `04_review.json`,
@@ -212,7 +213,7 @@ sweep. Inputs: `03_plan.draft.json`, `04_review.json`,
 first `diff_guard.py --run-dir <run> --strict` (retry once with the
 violation paths), then, regardless, `diff_guard.py --run-dir <run>` (no
 `--strict`) to settle and write `05_plan.corrected.json`. If
-`corrections == 0`: agent skipped, `diff_guard.py` run directly (copies the
+`corrections == 0`: model stage skipped, `diff_guard.py` run directly (copies the
 draft through, `correct: skipped`).
 
 **Assemble-missing.** Turns coverage misses into new items, citing only
@@ -220,7 +221,7 @@ those facts, never touching existing items. Inputs: `02_facts.txt`,
 `03_plan.draft.json`, `04_coverage.json`, `reference/style_rules.md`,
 `schema/additions_raw.schema.json`. Output: `05_additions.raw.json`.
 Check: `cite_check.py --run-dir <run> --additions`. If `missing == 0`:
-agent skipped, check run directly (`assemble_missing: skipped`).
+model stage skipped, check run directly (`assemble_missing: skipped`).
 
 **Diff guard rules** (`diff_guard._diff_item`): walks the whole plan tree,
 draft vs. corrected-raw. A changed leaf is allowed only if its path is
@@ -356,9 +357,9 @@ ok|degraded|failed|skipped, attempts, started_at, finished_at, checks}}`;
 
 ## Stage prompt design
 
-Prompts live once, in `skills/simplify/stages/*.md`; `agents/*.md` are
-thin wrappers that tell the sub-agent to read the matching stage file,
-follow it, then reply in one line.
+Prompts live once in `skills/simplify/stages/*.md`. `SKILL.md` tells the
+OpenAI host which prompt and files belong to each stage; there is no second
+agent-wrapper layer.
 
 **`reference/style_rules.md`**, applied by every writing stage (assemble,
 assemble-missing, correct): **PII** (every name → a generic form, the one
@@ -407,7 +408,7 @@ edit, or duplicate anything already in the plan.
 
 **Why the corrector is an LLM.** A `"correct"` value must be re-rendered in
 the document's existing style (units, abbreviations, "you" phrasing) — a
-bare substitution can't do that — so `correct.md` is an agent, and
+bare substitution can't do that — so `correct.md` remains a model stage, and
 `diff_guard.py` is the mechanical backstop keeping its blast radius to the
 named corrections plus a bounded PII sweep.
 
@@ -451,76 +452,26 @@ stylesheet hides checkboxes/hint, shows an empty `☐` glyph instead.
 surface what the view model hides: citations as `file:page:line "quote"`,
 the low-priority list, coverage misses, grounding drops.
 
-## Agents and orchestration
+## Skill orchestration
 
-`SKILL.md` drives the run; `agents/*.md` are deliberately thin (read the
-stage file, follow it, write the output, reply in one line) so the same
-content works as a real sub-agent or in-context.
+`SKILL.md` drives the run. Each language stage is defined once in `stages/`
+and may be performed using the host's normal execution mechanisms. The skill defines inputs, outputs, validation,
+retry behavior, and which stages are independent; it does not prescribe a
+host-specific dispatch message.
 
-**Dispatch message shape** (SKILL.md section 4):
-```
-Stage file: <skill>/stages/<stage>.md
-Inputs: <absolute paths, one per line>
-Output: <absolute path>
-Reference dir: <skill>/reference
-Schema dir: <skill>/schema
-```
+**One retry.** If a check script reports invalid model output, repeat that
+language stage once using the reported errors. A second failure follows the
+stage's documented failure behavior.
 
-**One retry.** If the check script exits 1 with validator errors, the same
-agent is re-dispatched once with the dispatch message suffixed by the
-check's stderr. A second failure is treated as that stage failing.
+**Concurrency.** Grounding chunks and the glossary are independent, as are
+the two review stages and the two correction/fill branches. A host may run
+those groups concurrently when available or sequentially otherwise.
 
-**Running without sub-agents.** Current SKILL.md: "Otherwise, read the
-stage file yourself and perform the stage in the current context, writing
-the output file, one stage at a time, in the same order as below." Every
-parallel group still runs, just sequentially.
+### OpenAI metadata and packaging
 
-**Concurrency.** "Run every task of a parallel group at the same time when
-you can run tasks in parallel, respecting any concurrency limit you have."
-Both kill tests ran under a 2-concurrent-agent cap; group A (ground×K plus
-glossary) split into batches when K+1 exceeded 2; group B always fit in
-one batch. The cap was never the actual bottleneck in either test.
-
-### Platform extension points
-
-`SKILL.md` has two platform extension points. After resolving bundled paths and before
-Stage 0 it reads `custom_start.md`; after Stage 5 finalization and before presenting
-results it reads `custom_end.md`. Canonical defaults are blank no-ops. A platform build
-copies the skill to a temporary staging tree, installs the defaults, and replaces them
-with platform versions when present. It never edits the source skill.
-
-This is the only OpenAI-related change inside orchestration. The OpenAI final hook tells
-ChatGPT to expose the native summary and three generated artifacts, then call the report
-viewer with `06_plan.final.json`. It does not change the stage graph, medical prompts,
-checks, schemas, or failure table.
-
-## OpenAI presentation architecture
-
-The OpenAI package adds a post-finalization presentation path:
-
-```text
-06_plan.final.json --OpenAI file parameter--> render_simplify_med_report
-        |                                        |
-        |                                        +--> generic result + static UI only
-        v
-ChatGPT iframe receives original tool input
-        |
-        +--> getFileDownloadUrl(file_id) --> fetch from OpenAI --> validate --> render
-```
-
-The streamable-HTTP MCP endpoint registers exactly one read-only render tool and one
-versioned `text/html;profile=mcp-app` resource. The endpoint receives the file ID and
-temporary download URL in the tool call but must not fetch, process, store, echo, or log
-them. The browser widget obtains a fresh URL from the ChatGPT bridge and validates the
-final care-plan JSON locally.
-
-The widget is a renderer over the same final JSON, not another pipeline stage. Inline
-mode is compact; fullscreen mode preserves the seven-section information architecture
-and is requested only after the user activates **Open full report**. Markdown and the
-self-contained HTML remain the complete portable fallback.
-
-See [openai.md](openai.md) for the complete tool schema, data flow, privacy boundary,
-CSP, deployment, prototype gates, and PHI/publication constraints.
+`skills/simplify/agents/openai.yaml` supplies skill UI metadata only. The root
+manifests expose the plugin and skills directory. `build.py` packages those manifests
+and `skills/` from an allowlist; it never packages or connects `mcp/openai/`.
 
 ## Uncalibrated constants
 
@@ -529,7 +480,7 @@ current code:
 
 | Constant | Value | Where | Why this value |
 |---|---|---|---|
-| Ground chunk size | 150 units | `unitize.py` (`_DEFAULT_CHUNK_SIZE`) | Fits a typical note in one agent |
+| Ground chunk size | 150 units | `unitize.py` (`_DEFAULT_CHUNK_SIZE`) | Fits a typical note in one model context |
 | Quote informativeness floor | 12 chars, or 7+ char word, or a digit | `textnorm.py` (`is_informative`); own copy of the same constants in `numeric_parity.py` | Inherited from simplify-med PRD 03 |
 | PII substitution token delta | 4 tokens | `diff_guard.py` (`_MAX_PII_TOKEN_DELTA`) | Inherited from simplify-med PRD 05 |
 | Numeric unit-word length | 15 chars | `numeric_parity.py` (`_UNIT_WORD_MAX_LENGTH`) | Inherited from simplify-med PRD 10 |
@@ -550,21 +501,17 @@ proposed calibration protocol.
 `test_unitize.py`, `test_validate.py`) · end-to-end deterministic chain
 (`test_pipeline_e2e.py`: drives the whole script chain via `subprocess`,
 hand-written JSON standing in for every LLM stage) · skill consistency
-(`test_skill_consistency.py`: every script/stage/reference/schema file
-`SKILL.md` names exists, agent-name ↔ stage-file mapping is a total
-bijection, every agent's `tools:` is exactly `Read, Write`) · stage-doc
+(`test_skill_consistency.py`: every named script, stage, reference, and schema exists) · stage-doc
 rules (`test_stage_docs.py`: text-content regression guards for the
 kill-test fixes) · status lines (`test_status_lines.py`: every script ends
 stdout, second-to-last for `unitize`, with `^[a-z_]+: (ok|degraded|failed|skipped) \|`)
 · fixtures (`test_fixtures.py`: structural assertions, not LLM stages) ·
-packaging (`test_build.py`: platform zips, staging/override behavior, archive contents,
-and version mismatches) · OpenAI MCP/widget contract tests (file schema, non-fetching
-handler, non-echoing result, client validation, capability fallbacks, and user-gesture
-fullscreen).
+packaging (`test_build.py`: the allowlisted OpenAI ZIP, no-MCP boundary, source
+immutability, and version mismatches).
 
 **How to run the Python suite:** `python3 -m unittest discover -s tests -v` — stdlib-only,
-no network, and expected to pass from a clean checkout. The OpenAI Node/widget commands
-are documented in [openai.md](openai.md#test-and-verify) and `mcp/openai/README.md`.
+no network, and expected to pass from a clean checkout. The retained future MCP source
+has its own tests under `mcp/openai/`, but those are not part of the current plugin package.
 
 **Fixtures** (`tests/fixtures/documents/`): `synthetic-visit-note.txt`,
 `synthetic-discharge-summary.txt` (173 units, two form-feed page breaks),
@@ -574,7 +521,7 @@ fabricated document as de-identified real data.
 
 **Kill test 1** (`agent_files/.../kill-test-1.md`): host-simulated run on
 `synthetic-visit-note.txt` (1 chunk); every stage `ok`/`skipped`; verdict
-yes. Six friction items found — agent-path ambiguity in `SKILL.md`; agents
+yes. Six friction items found — path ambiguity in `SKILL.md`; model stages
 not honoring their one-line reply; a silent skip-path script; a real
 NUMERACY violation (dropped `mmHg`) no stage was positioned to catch;
 duplicated title/plain_name phrasing; no retry-path exercise. Fixed: path
@@ -588,7 +535,7 @@ new medication's `why` said "For nausea" instead of not-stated, though its
 fact stated no reason was documented (closed afterward via the ondansetron
 example in `assemble.md`/`assemble_missing.md`/`review_fidelity.md`). New
 finding: cross-chunk fact duplication (same lab analytes, two source
-files) deduplicated only by the assemble agent's MERGE rule —
+files) deduplicated only by the assemble stage's MERGE rule —
 `merge_facts.py`'s dedupe key includes `unit_id`, so it can't catch a
 cross-file duplicate — worked here but with no deterministic backstop.
 Retry path still unexercised.
@@ -603,10 +550,6 @@ From `futures.md`, the kill tests, and this documentation pass:
 - **Cross-document duplicate merging has no deterministic backstop** — see
   kill test 2, and `futures.md`'s "Cross-document duplicate merging
   backstop" entry.
-- **Agent reply discipline is not enforced.** `ground` and `assemble` have
-  both replied with an extra sentence before their required one-liner, in
-  both kill tests. Harmless today (control flow reads files and
-  check-script stdout only) but unenforced.
 - **The retry path has never been exercised in a kill test.** Every stage
   validated cleanly on the first attempt in both kill tests.
 - **`render_audit.py` does not surface `extraction_method`.** Every unit
@@ -618,7 +561,7 @@ From `futures.md`, the kill tests, and this documentation pass:
   though the data exists in `01_units.json`. Real, currently-existing gap,
   not a documented feature.
 - **Everything in `futures.md`** — simplification levels, level-based
-  rendering, generated per-platform manifests, follow-up conversation mode,
+  rendering, follow-up conversation mode,
   cross-run history/memory, a caregiver view, visual aids, color-coding,
   translation, external resource links, reviewed (LLM-checked) additions,
   a real evaluation harness — is deliberately out of scope for v0.1.0.

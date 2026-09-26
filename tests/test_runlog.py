@@ -101,7 +101,7 @@ class TestRunlog(unittest.TestCase):
             errors = validate.validate(data, schema)
             self.assertEqual(errors, [])
 
-    def test_plugin_version_reads_meta(self):
+    def test_plugin_version_reads_portable_manifest(self):
         version = runlog.plugin_version()
         self.assertEqual(version, "0.1.0")
 
