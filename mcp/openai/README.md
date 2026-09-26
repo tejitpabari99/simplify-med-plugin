@@ -32,7 +32,13 @@ only synthetic or properly de-identified data until OpenAI gives written clarifi
 
 - `src/mcp.ts` registers the exact one-tool/one-resource surface.
 - `src/http.ts` provides stateless streamable HTTP at `/mcp` and a non-sensitive
-  `/healthz` response.
+  `/healthz` response. Each `/mcp` request gets a fresh, stateless
+  `StreamableHTTPServerTransport` configured with `enableJsonResponse: true`: since this
+  server never streams multiple messages per request, it replies with a single
+  `application/json` body instead of the transport's default `text/event-stream` (SSE)
+  response. This is one of the two response modes allowed by the streamable-HTTP spec for
+  any given request and is friendlier to reverse proxies/tunnels that buffer or mishandle
+  long-lived SSE responses.
 - `ui/src/report-viewer.ts` implements the MCP Apps bridge, ChatGPT file download,
   validation, compact view, fullscreen request, canonical seven sections, minimal
   widget state, accessibility, and fallbacks.
@@ -92,6 +98,17 @@ For ChatGPT developer-mode testing, use a supported secure tunnel or deploy a te
 endpoint, register its `/mcp` URL, and use synthetic files. A tunnel is not acceptable
 for public submission.
 
+If the process is managed by a process supervisor (e.g. pm2) instead of a foreground
+`npm start`, a code or asset change is not picked up until the process is rebuilt and
+restarted — the running Node process does not reload `dist/`/`ui/dist/` on its own:
+
+```bash
+npm run build && pm2 restart simplify-med-mcp --update-env
+```
+
+`--update-env` re-reads the existing `ALLOWED_HOSTS`/`PUBLIC_ORIGIN`/etc. environment
+already set on the pm2 process; it does not require re-specifying them.
+
 ## Production configuration
 
 | Variable | Required | Purpose |
@@ -107,8 +124,11 @@ developer-mode prototype, record the actual production origin, then set the narr
 allowlist and rescan the MCP metadata. The public endpoint must use stable HTTPS and
 support unbuffered streamable HTTP.
 
-The HTTP service rejects browser `Origin` headers unless their hostname is loopback and
-caps JSON request bodies at 64 KiB; oversized requests receive a generic `413` response.
+The HTTP service rejects browser `Origin` headers whose hostname is not in the same
+allowlist computed from `ALLOWED_HOSTS` (the loopback hostnames by default, or exactly
+the configured list on a non-loopback bind, which must include the `PUBLIC_ORIGIN`
+hostname). It caps JSON request bodies at 64 KiB; oversized requests receive a generic
+`413` response.
 The report bytes never pass through that request body. The process intentionally has no
 request logger. The operator must also disable request
 bodies, MCP arguments, file IDs, temporary URLs, and error payload capture in the reverse

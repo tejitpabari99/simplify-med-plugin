@@ -32,7 +32,7 @@ ChatGPT account against the deployed endpoint.
 | MCP server | `mcp/openai/src/` | Registers one read-only render tool and serves the static UI resource. |
 | Report widget | `mcp/openai/ui/` | Loads the final JSON from OpenAI in the iframe and renders inline/fullscreen views. |
 | Portable reports | run folder `report.md`, `report.html` | Remain the complete downloadable fallback; `report.html` works offline. |
-| OpenAI package profile | `packaging/openai/` | Supplies the manifest, hooks, dependency overlay, assets, and exclusions used while staging the OpenAI archive. |
+| OpenAI package profile | `packaging/openai/` | Supplies the manifest, hooks, dependency overlay, plugin-root and skill-level icon assets, and exclusions used while staging the OpenAI archive. |
 
 The MCP server source is deployed separately. It is not included in the plugin ZIP.
 
@@ -235,11 +235,18 @@ simplify-med/
   .mcp.json
   .codex-plugin/
     plugin.json
+  assets/
+    logo.png
+    logo.svg
+    composer-icon.png
   skills/simplify-med/
     SKILL.md
     custom_start.md
     custom_end.md
     agents/openai.yaml
+    assets/
+      icon-small.svg
+      icon-large.png
     reference/
     schema/
     scripts/
@@ -252,6 +259,22 @@ same identity and OpenAI interface metadata, and points legacy ingestion at `.mc
 The build derives `.mcp.json` from the same staged server map as root `mcp.json`, while
 omitting the portable-only `$schema` field, so an endpoint override cannot make the two
 declarations drift.
+
+The plugin-root `assets/` directory (staged from `packaging/openai/assets/`) supplies the
+`interface.logo` and `interface.composerIcon` images referenced by both `plugin.json` and
+`.codex-plugin/plugin.json`. The skill-level `skills/simplify-med/assets/` directory
+(staged from `packaging/openai/skill-assets/`) supplies the `icon_small`/`icon_large`
+images referenced by `agents/openai.yaml`; the Codex ingestion validator resolves those
+two paths relative to the skill directory, not the plugin root, so they cannot live in
+the same `assets/` folder as the root logo. **The current logo/icon artwork is placeholder
+art generated for this build** (see the [Owner action checklist](#owner-action-checklist)).
+
+`interface.capabilities` is `["Interactive", "Write"]` in both `plugin.json` and
+`.codex-plugin/plugin.json`, matching the only concrete example in the Codex
+`plugin-creator` skill's `plugin-json-spec.md`. Neither the live `agent-plugins.org` JSON
+schemas nor the Codex `validate_plugin.py` ingestion validator enforce an enum for this
+field; treat any other capability value as unverified until confirmed in the real
+ChatGPT/Codex developer-mode UI.
 
 The endpoint must come from one build configuration source so the staged `mcp.json` and
 `agents/openai.yaml` cannot drift. Developer builds may use an explicit loopback test
@@ -291,6 +314,23 @@ after the live prototype establishes which origin is needed. Wildcards are rejec
 For ChatGPT developer-mode testing, the endpoint must be reachable through public HTTPS
 or OpenAI's Secure MCP Tunnel. Connect it in ChatGPT developer mode before installing
 the complete plugin package. A localhost URL alone is not sufficient for ChatGPT.
+
+If the server runs under a process supervisor (e.g. pm2) rather than a foreground
+`npm start`, redeploy a code change with:
+
+```bash
+npm run build && pm2 restart simplify-med-mcp --update-env
+```
+
+The running process does not pick up a rebuilt `dist/`/`ui/dist/` until it is restarted.
+The `/mcp` transport replies with a single `application/json` body per request
+(`enableJsonResponse: true`) rather than the streamable-HTTP transport's default SSE
+(`text/event-stream`) response, since this server is stateless and never streams more
+than one response per request; this is spec-compliant and avoids proxies/tunnels that
+buffer or truncate long-lived SSE responses. The HTTP layer's browser-`Origin` allowlist
+is the same host list as `ALLOWED_HOSTS` (loopback by default), so the configured
+`PUBLIC_ORIGIN` hostname is itself always allowed as a browser `Origin`, not only
+loopback.
 
 Always use the synthetic fixtures under `tests/fixtures/`; do not use a real medical
 record to prove connectivity.
@@ -428,6 +468,17 @@ logs, and repeat the canary test before proceeding.
 target production surface and add only that exact origin. Do not use `*` or broaden
 unrelated resource/frame domains.
 
+**`resources/read` returns HTTP 200 with a matching `Content-Length` but delivers zero
+bytes through a reverse proxy or tunnel.** This was reproduced through an ngrok tunnel:
+the request succeeded identically against the loopback address, but the public URL
+served a `text/event-stream` response that the tunnel hop truncated after headers. The
+server now sets `enableJsonResponse: true` on the streamable-HTTP transport so a
+single-response call like `resources/read` returns a complete `application/json` body
+instead of SSE; confirm the fix by repeating `resources/read` for
+`ui://simplify-med/report-v1.html` against the public endpoint and checking the full
+body arrives every time. If it still fails, check the proxy/tunnel's own inspection or
+buffering mode (e.g. ngrok's web inspector) and the built widget bundle size.
+
 ## Release record
 
 For every candidate, record:
@@ -456,6 +507,13 @@ Before production, the owner must:
 - [ ] Disable sensitive capture at the proxy, CDN, load balancer, APM, tracing, and
   error-reporting layers.
 - [ ] Provide public privacy-policy, terms, website/support, and required listing assets.
+  Set the manifest's `interface.privacyPolicyURL` and `interface.termsOfServiceURL` fields
+  (in both `packaging/openai/plugin.json` and `packaging/openai/.codex-plugin/plugin.json`)
+  to the real hosted pages once they exist; both must be absolute `https://` URLs. Do not
+  invent placeholder URLs.
+- [ ] Replace the placeholder logo/icon artwork in `packaging/openai/assets/` (`logo.png`,
+  `logo.svg`, `composer-icon.png`) and `packaging/openai/skill-assets/` (`icon-small.svg`,
+  `icon-large.png`) with reviewed brand assets before submission.
 - [ ] Replace the example endpoint and build the release archive.
 - [ ] Connect the endpoint in ChatGPT developer mode and install the complete package.
 - [ ] Run every prototype gate with synthetic data on each intended workspace tier.

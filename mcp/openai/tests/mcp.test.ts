@@ -41,6 +41,9 @@ describe("presentation MCP contract", () => {
     expect(tool.name).toBe(TOOL_NAME);
     expect(tool.annotations).toEqual({ readOnlyHint: true, openWorldHint: false, destructiveHint: false });
     expect(tool._meta?.["openai/fileParams"]).toEqual(["report"]);
+    expect(tool._meta?.["openai/outputTemplate"]).toBe(RESOURCE_URI);
+    expect(tool._meta?.["openai/toolInvocation/invoking"]).toBe("Opening the report…");
+    expect(tool._meta?.["openai/toolInvocation/invoked"]).toBe("Report opened.");
     expect((tool._meta?.ui as { resourceUri: string }).resourceUri).toBe(RESOURCE_URI);
     const schema = tool.inputSchema as any;
     expect(schema.required).toEqual(["report"]);
@@ -66,6 +69,10 @@ describe("presentation MCP contract", () => {
     expect(content._meta.ui.csp).toEqual({
       connectDomains: ["https://files.example.test"], resourceDomains: [], frameDomains: [],
     });
+    expect(content._meta["openai/widgetDescription"]).toBe(
+      "Static privacy-preserving viewer for a completed Simplify Med report",
+    );
+    expect(content._meta["openai/widgetDomain"]).toBe("https://plugin.example.test");
   });
 
   it("does not fetch, echo, or log the temporary file capability", async () => {
@@ -145,6 +152,42 @@ describe("streamable HTTP service", () => {
       const oversized = await fetch(url, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ canary, padding: "x".repeat(70 * 1024) }) });
       expect(oversized.status).toBe(413);
       expect(await oversized.text()).not.toContain(canary);
+    } finally {
+      await new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("allows a browser Origin whose hostname is in allowedHosts (e.g. the public PUBLIC_ORIGIN host), not only loopback", async () => {
+    const app = createHttpApp({
+      host: "127.0.0.1",
+      widgetBundle: "window.widget=true;",
+      allowedHosts: ["example-tunnel.test", "localhost", "127.0.0.1"],
+    });
+    const httpServer = createServer(app);
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const address = httpServer.address();
+    if (!address || typeof address === "string") throw new Error("missing address");
+    const url = `http://127.0.0.1:${address.port}/mcp`;
+    try {
+      const allowed = await fetch(url, {
+        method: "POST",
+        headers: {
+          origin: "https://example-tunnel.test",
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1, method: "initialize",
+          params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } },
+        }),
+      });
+      expect(allowed.status).not.toBe(403);
+      const rejected = await fetch(url, {
+        method: "POST",
+        headers: { origin: "https://chatgpt.com", "content-type": "application/json" },
+        body: "{}",
+      });
+      expect(rejected.status).toBe(403);
     } finally {
       await new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
     }
