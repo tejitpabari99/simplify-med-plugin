@@ -7,4 +7,4 @@ available and uses this constant only outside a complete plugin checkout.
 """
 
 PLUGIN_VERSION = "0.1.0"
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "3.0"
