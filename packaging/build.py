@@ -312,12 +312,18 @@ def _strip_yaml_top_level_key(text: str, key: str) -> str:
 
 
 _NO_MCP_FORBIDDEN_STRINGS = (_URL_TOKEN, "ngrok", "PLUGIN_DOMAIN.example", "mcpServers")
+_APP_ID_RE = re.compile(r"^plugin_asdk_app_[0-9a-f]{32}$")
 
 
 def _assert_no_mcp_traces(plugin_stage: str) -> None:
-    """Guard for --no-mcp builds: no endpoint token, mcpServers key, or
+    """Guard for --no-mcp (and --app-id, which implies --no-mcp) builds: no
 
-    example/ngrok URL may survive anywhere in the staged tree.
+    endpoint token, mcpServers key, or example/ngrok URL may survive anywhere
+    in the staged tree. A staged ``.app.json`` (EXPERIMENTAL ``--app-id``
+    reference to an existing ChatGPT dev-mode app) is explicitly allowed --
+    it never contains a URL, token, or mcpServers key, so no separate
+    exemption logic is required here; this function still walks every staged
+    file, including ``.app.json``, and simply finds nothing forbidden in it.
     """
     for dirpath, _, filenames in os.walk(plugin_stage):
         for filename in filenames:
@@ -335,7 +341,9 @@ def _assert_no_mcp_traces(plugin_stage: str) -> None:
                     )
 
 
-def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release, include_mcp=True):
+def _stage_openai(
+    repo_root, plugin_stage, patterns, endpoint_override, release, include_mcp=True, app_id=None
+):
     skill_source = os.path.join(repo_root, "skills", "simplify-med")
     skill_destination = os.path.join(plugin_stage, "skills", "simplify-med")
     files = sorted(iter_included_files(repo_root, os.path.join("skills", "simplify-med"), patterns))
@@ -368,6 +376,13 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release,
         compat_manifest_path = os.path.join(plugin_stage, ".codex-plugin", "plugin.json")
         compat_manifest = _read_json(compat_manifest_path)
         compat_manifest.pop("mcpServers", None)
+        if app_id:
+            # EXPERIMENTAL: reference an existing ChatGPT dev-mode app by ID
+            # instead of shipping an MCP endpoint. Documented mechanism per
+            # developers.openai.com/plugins/build/plugins and the Codex
+            # plugin-creator spec: a companion ``.app.json`` at the plugin
+            # root, pointed to from the manifest's ``apps`` field.
+            compat_manifest["apps"] = "./.app.json"
         with open(compat_manifest_path, "w", encoding="utf-8") as f:
             json.dump(compat_manifest, f, indent=2)
             f.write("\n")
@@ -377,6 +392,19 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release,
         stripped = _strip_yaml_top_level_key(template, "dependencies")
         with open(yaml_path, "w", encoding="utf-8") as f:
             f.write(stripped)
+
+        if app_id:
+            app_manifest_path = os.path.join(plugin_stage, ".app.json")
+            app_document = {
+                "apps": {
+                    "simplify-med-ui": {
+                        "id": app_id,
+                    }
+                }
+            }
+            with open(app_manifest_path, "w", encoding="utf-8") as f:
+                json.dump(app_document, f, indent=2)
+                f.write("\n")
 
         _assert_no_mcp_traces(plugin_stage)
         return
@@ -408,11 +436,11 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release,
         f.write(template.replace(_URL_TOKEN, endpoint))
 
 
-def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp=True):
+def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp=True, app_id=None):
     config = PLATFORMS[platform]
     patterns = parse_ignore_file(os.path.join(repo_root, "packaging", config["ignore_file"]))
     if config["layout"] == "openai":
-        _stage_openai(repo_root, plugin_stage, patterns, mcp_url, release, include_mcp)
+        _stage_openai(repo_root, plugin_stage, patterns, mcp_url, release, include_mcp, app_id)
         return
     if mcp_url or release:
         raise SystemExit("--mcp-url and --release apply only to the OpenAI build")
@@ -433,10 +461,33 @@ def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include
         _copy_if_present(os.path.join(overlay, filename), os.path.join(skill_destination, filename))
 
 
-def build(platform, out_dir="dist", repo_root=_REPO_ROOT, mcp_url=None, release=False, include_mcp=True):
+def build(
+    platform,
+    out_dir="dist",
+    repo_root=_REPO_ROOT,
+    mcp_url=None,
+    release=False,
+    include_mcp=True,
+    app_id=None,
+):
     if platform not in PLATFORMS:
         print(f"Unknown platform {platform!r}; choose from {sorted(PLATFORMS)}", file=sys.stderr)
         raise SystemExit(2)
+    if app_id is not None:
+        # EXPERIMENTAL: --app-id references an existing ChatGPT dev-mode app
+        # by ID instead of shipping an MCP endpoint. OpenAI platform only; it
+        # implies the --no-mcp staging path (reused below) and cannot be
+        # combined with an MCP endpoint override.
+        if platform != "openai":
+            raise SystemExit("--app-id applies only to the OpenAI build")
+        if mcp_url:
+            raise SystemExit("--app-id cannot be combined with --mcp-url")
+        if not _APP_ID_RE.fullmatch(app_id):
+            raise SystemExit(
+                "--app-id must match ^plugin_asdk_app_[0-9a-f]{32}$ "
+                f"(32 lowercase hex characters after the prefix); got {app_id!r}"
+            )
+        include_mcp = False
     if not include_mcp and mcp_url:
         raise SystemExit("--no-mcp cannot be combined with --mcp-url")
     version = check_versions(repo_root)
@@ -448,7 +499,7 @@ def build(platform, out_dir="dist", repo_root=_REPO_ROOT, mcp_url=None, release=
     with tempfile.TemporaryDirectory(prefix="simplify-med-build-") as temp_dir:
         plugin_stage = os.path.join(temp_dir, plugin_name)
         os.makedirs(plugin_stage)
-        _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp)
+        _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp, app_id)
         staged_files = sorted(
             os.path.join(dirpath, filename)
             for dirpath, _, filenames in os.walk(plugin_stage)
@@ -482,12 +533,29 @@ def _build_arg_parser():
             "(the connector is added manually in ChatGPT); cannot be combined with --mcp-url"
         ),
     )
+    parser.add_argument(
+        "--app-id",
+        default=None,
+        help=(
+            "EXPERIMENTAL: reference an existing ChatGPT dev-mode app by ID "
+            "(plugin_asdk_app_<32 lowercase hex chars>) instead of shipping an MCP "
+            "endpoint. OpenAI platform only; implies --no-mcp staging; cannot be "
+            "combined with --mcp-url"
+        ),
+    )
     return parser
 
 
 def main(argv=None):
     args = _build_arg_parser().parse_args(argv)
-    build(args.platform, args.out, mcp_url=args.mcp_url, release=args.release, include_mcp=not args.no_mcp)
+    build(
+        args.platform,
+        args.out,
+        mcp_url=args.mcp_url,
+        release=args.release,
+        include_mcp=not args.no_mcp,
+        app_id=args.app_id,
+    )
     return 0
 
 

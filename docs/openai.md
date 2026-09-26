@@ -237,6 +237,26 @@ archive. The zip filename is unchanged (`simplify-med-0.1.0-openai.zip`).
 python3 build.py openai --no-mcp --release --out dist
 ```
 
+**EXPERIMENTAL: `--app-id`.** Instead of shipping MCP connection info, reference an
+existing ChatGPT dev-mode app by ID:
+
+```bash
+python3 build.py openai --app-id plugin_asdk_app_6ab74031b9608191b6aa67d0ac5c1e55 --release --out dist
+```
+
+This is documented for the Codex `plugin-creator` workflow (a companion `.app.json` at
+the plugin root, pointed to by the manifest's `apps` field) but is **not confirmed** to
+be honored by ChatGPT's own plugin-zip ingestion path. `--app-id` is OpenAI-platform-only,
+must match `^plugin_asdk_app_[0-9a-f]{32}$`, and cannot be combined with `--mcp-url`. It
+implies the same no-MCP staging as `--no-mcp` (no `mcp.json`/`.mcp.json`, no
+`mcpServers`, no `openai.yaml` `dependencies` block); combining it with `--no-mcp`
+explicitly is allowed and redundant. It writes a staged `.app.json` at the plugin root
+(`{"apps": {"simplify-med-ui": {"id": "<app-id>"}}}`) and adds `"apps": "./.app.json"`
+to the staged `.codex-plugin/plugin.json`. The root portable `plugin.json` is left
+unchanged: the `agent-plugins.org` 1.0.0 schema does not allow a top-level `apps` field,
+and while `extensions.com.openai` accepts arbitrary content, there is no documented
+OpenAI-ingestion meaning for an `apps` key placed there, so nothing is added speculatively.
+
 After installing a `--no-mcp` package, connect the MCP endpoint manually in ChatGPT
 developer mode. For the current dev tunnel, add:
 

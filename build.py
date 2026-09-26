@@ -30,6 +30,16 @@ def main(argv: list[str] | None = None) -> int:
             "(the connector is added manually in ChatGPT); cannot be combined with --mcp-url"
         ),
     )
+    parser.add_argument(
+        "--app-id",
+        default=None,
+        help=(
+            "EXPERIMENTAL: reference an existing ChatGPT dev-mode app by ID "
+            "(plugin_asdk_app_<32 lowercase hex chars>) instead of shipping an MCP "
+            "endpoint. OpenAI platform only; implies --no-mcp staging; cannot be "
+            "combined with --mcp-url"
+        ),
+    )
     args = parser.parse_args(argv)
     packaging_build.build(
         args.platform,
@@ -38,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         mcp_url=args.mcp_url,
         release=args.release,
         include_mcp=not args.no_mcp,
+        app_id=args.app_id,
     )
     return 0
 

@@ -286,6 +286,91 @@ class TestBuildOpenAi(unittest.TestCase):
             ])
         self.assertEqual(result.returncode, 0, msg=result.stderr)
 
+    def test_app_id_stages_app_manifest_and_no_mcp_traces(self):
+        app_id = "plugin_asdk_app_6ab74031b9608191b6aa67d0ac5c1e55"
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir, "--app-id", app_id,
+            ])
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")
+            with zipfile.ZipFile(zip_path) as zf:
+                names = set(zf.namelist())
+                app_manifest = json.loads(zf.read("simplify-med/.app.json"))
+                compat_plugin = json.loads(
+                    zf.read("simplify-med/.codex-plugin/plugin.json")
+                )
+                yaml_text = zf.read(
+                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                ).decode()
+                all_text_blobs = []
+                for name in names:
+                    if name.endswith((".png", ".ico", ".gif", ".jpg", ".jpeg")):
+                        continue
+                    try:
+                        all_text_blobs.append(zf.read(name).decode())
+                    except UnicodeDecodeError:
+                        continue
+
+            # No MCP connection info at all, same as --no-mcp.
+            self.assertNotIn("simplify-med/mcp.json", names)
+            self.assertNotIn("simplify-med/.mcp.json", names)
+            self.assertNotIn("mcpServers", compat_plugin)
+            self.assertNotIn("dependencies:", yaml_text)
+
+            # `.app.json` content matches the documented mechanism.
+            self.assertEqual(
+                app_manifest,
+                {"apps": {"simplify-med-ui": {"id": app_id}}},
+            )
+
+            # The staged compat manifest points at it.
+            self.assertEqual(compat_plugin["apps"], "./.app.json")
+
+            for blob in all_text_blobs:
+                self.assertNotIn("__SIMPLIFY_MED_MCP_URL__", blob)
+                self.assertNotIn("ngrok", blob)
+                self.assertNotIn("PLUGIN_DOMAIN.example", blob)
+
+    def test_app_id_rejects_invalid_format(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir,
+                "--app-id", "not-a-valid-id",
+            ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--app-id must match", result.stderr)
+
+    def test_app_id_rejects_mcp_url_combination(self):
+        app_id = "plugin_asdk_app_6ab74031b9608191b6aa67d0ac5c1e55"
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir,
+                "--app-id", app_id, "--mcp-url", "https://mcp.simplify-med.dev/mcp",
+            ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--app-id", result.stderr)
+        self.assertIn("--mcp-url", result.stderr)
+
+    def test_app_id_rejects_non_openai_platform(self):
+        app_id = "plugin_asdk_app_6ab74031b9608191b6aa67d0ac5c1e55"
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "claude-code", "--out", out_dir, "--app-id", app_id,
+            ])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--app-id applies only to the OpenAI build", result.stderr)
+
+    def test_app_id_with_no_mcp_is_redundant_but_allowed(self):
+        app_id = "plugin_asdk_app_6ab74031b9608191b6aa67d0ac5c1e55"
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build([
+                "--platform", "openai", "--out", out_dir,
+                "--app-id", app_id, "--no-mcp",
+            ])
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
     def test_icons_exist_at_referenced_paths_and_interfaces_match(self):
         with tempfile.TemporaryDirectory() as out_dir:
             result = _run_build(["--platform", "openai", "--out", out_dir])
