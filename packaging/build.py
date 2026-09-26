@@ -59,6 +59,29 @@ def load_manifest(repo_root: str = _REPO_ROOT) -> dict:
     return _read_json(os.path.join(repo_root, ".claude-plugin", "plugin.json"))
 
 
+def archive_root_name(platform: str, repo_root: str = _REPO_ROOT) -> str:
+    """Return the top-level folder name to use inside a platform's zip.
+
+    A Claude.ai skill upload (the ``"skill"`` layout) is a standalone skill,
+    not a plugin, and the Agent Skills spec requires a skill's declared
+    ``name`` to match its containing directory -- so that archive's top
+    folder must be the skill's own name. ``plugin.meta.json``'s ``skills``
+    list is the existing canonical declaration of that name, so it is
+    derived from there rather than hardcoded. Other platforms (claude-code,
+    openai) ship the whole plugin, or a plugin-shaped bundle, and keep the
+    plugin name as their top folder.
+    """
+    if PLATFORMS[platform]["layout"] != "skill":
+        return load_meta(repo_root)["name"]
+    skills = load_meta(repo_root).get("skills") or []
+    if len(skills) != 1:
+        raise SystemExit(
+            "claude-ai build requires exactly one skill declared in "
+            f"plugin.meta.json 'skills', got {skills!r}"
+        )
+    return skills[0]
+
+
 def load_version_constant(repo_root: str = _REPO_ROOT) -> str:
     path = os.path.join(repo_root, "skills", "simplify", "scripts", "_version.py")
     namespace: dict = {}
@@ -517,13 +540,16 @@ def build(
         raise SystemExit("--no-mcp cannot be combined with --mcp-url")
     version = check_versions(repo_root)
     plugin_name = load_meta(repo_root)["name"]
+    root_name = archive_root_name(platform, repo_root)
     out_dir_abs = out_dir if os.path.isabs(out_dir) else os.path.join(repo_root, out_dir)
     os.makedirs(out_dir_abs, exist_ok=True)
     zip_suffix = f"{platform}-no-mcp" if platform == "openai" and not include_mcp else platform
+    # The zip's FILENAME always uses the plugin name, regardless of platform;
+    # only the archive's internal top-level folder (root_name) varies.
     zip_path = os.path.join(out_dir_abs, f"{plugin_name}-{version}-{zip_suffix}.zip")
 
     with tempfile.TemporaryDirectory(prefix="simplify-med-build-") as temp_dir:
-        plugin_stage = os.path.join(temp_dir, plugin_name)
+        plugin_stage = os.path.join(temp_dir, root_name)
         os.makedirs(plugin_stage)
         _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp, app_id)
         staged_files = sorted(
@@ -534,7 +560,7 @@ def build(
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for source in staged_files:
                 relative = os.path.relpath(source, plugin_stage).replace(os.sep, "/")
-                zf.write(source, f"{plugin_name}/{relative}")
+                zf.write(source, f"{root_name}/{relative}")
 
     print(zip_path)
     print(f"{len(staged_files)} entries")

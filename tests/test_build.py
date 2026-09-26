@@ -22,6 +22,19 @@ def _run_build(args, cwd=None):
     )
 
 
+def _frontmatter_name(text: str) -> str:
+    """Extract the `name:` field from a `---`-delimited frontmatter block
+    at the top of a SKILL.md file's contents."""
+    lines = text.splitlines()
+    assert lines and lines[0].strip() == "---", "file does not start with a frontmatter block"
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith("name:"):
+            return line.split(":", 1)[1].strip()
+    raise AssertionError("frontmatter has no 'name' field")
+
+
 def _skill_digest():
     digest = hashlib.sha256()
     root = os.path.join(_paths.REPO_ROOT, "skills", "simplify")
@@ -47,12 +60,16 @@ class TestBuildClaudeCode(unittest.TestCase):
 
             with zipfile.ZipFile(zip_path) as zf:
                 names = zf.namelist()
+                skill_md = zf.read("simplify-med/skills/simplify/SKILL.md").decode()
 
             self.assertIn("simplify-med/skills/simplify/schema/care_plan.schema.json", names)
             self.assertIn("simplify-med/.claude-plugin/plugin.json", names)
             self.assertTrue(any(n.startswith("simplify-med/README.md") for n in names))
             self.assertIn("simplify-med/skills/simplify/custom_start.md", names)
             self.assertIn("simplify-med/skills/simplify/custom_end.md", names)
+            # The skill's own declared name must match its containing
+            # directory (skills/simplify/), per the Agent Skills spec.
+            self.assertEqual(_frontmatter_name(skill_md), "simplify")
 
             for n in names:
                 self.assertFalse(n.startswith("simplify-med/docs/"), n)
@@ -64,7 +81,7 @@ class TestBuildClaudeCode(unittest.TestCase):
 
 
 class TestBuildClaudeAi(unittest.TestCase):
-    def test_builds_zip_rooted_at_skill_dir(self):
+    def test_builds_zip_rooted_at_skill_name(self):
         with tempfile.TemporaryDirectory() as out_dir:
             result = _run_build(["--platform", "claude-ai", "--out", out_dir])
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -72,23 +89,37 @@ class TestBuildClaudeAi(unittest.TestCase):
             zips = [f for f in os.listdir(out_dir) if f.endswith(".zip")]
             self.assertEqual(len(zips), 1)
             zip_path = os.path.join(out_dir, zips[0])
+            # The zip FILENAME still uses the plugin name.
+            self.assertTrue(os.path.basename(zip_path).startswith("simplify-med-"))
             self.assertTrue(zip_path.endswith("-claude-ai.zip"))
 
             with zipfile.ZipFile(zip_path) as zf:
                 names = zf.namelist()
+                skill_md = zf.read("simplify/SKILL.md").decode()
 
-            self.assertIn("simplify-med/schema/care_plan.schema.json", names)
-            self.assertIn("simplify-med/scripts/validate.py", names)
-            self.assertIn("simplify-med/custom_start.md", names)
-            self.assertIn("simplify-med/custom_end.md", names)
+            # A claude.ai skill upload is a standalone skill, and the Agent
+            # Skills spec requires the skill's declared `name` to match its
+            # containing folder -- so the archive's top-level folder must be
+            # "simplify" (the skill name), not "simplify-med" (the plugin
+            # name).
+            self.assertTrue(names, "zip is empty")
+            for n in names:
+                self.assertTrue(n.startswith("simplify/"), n)
+            self.assertIn("simplify/SKILL.md", names)
+            self.assertEqual(_frontmatter_name(skill_md), "simplify")
+
+            self.assertIn("simplify/schema/care_plan.schema.json", names)
+            self.assertIn("simplify/scripts/validate.py", names)
+            self.assertIn("simplify/custom_start.md", names)
+            self.assertIn("simplify/custom_end.md", names)
 
             for n in names:
-                self.assertFalse(n.startswith("simplify-med/docs/"), n)
-                self.assertFalse(n.startswith("simplify-med/tests/"), n)
-                self.assertFalse(n.startswith("simplify-med/agents/"), n)
-                self.assertFalse(n.startswith("simplify-med/.claude-plugin/"), n)
-                self.assertNotEqual(n, "simplify-med/plugin.meta.json")
-                self.assertNotEqual(n, "simplify-med/README.md")
+                self.assertFalse(n.startswith("simplify/docs/"), n)
+                self.assertFalse(n.startswith("simplify/tests/"), n)
+                self.assertFalse(n.startswith("simplify/agents/"), n)
+                self.assertFalse(n.startswith("simplify/.claude-plugin/"), n)
+                self.assertNotEqual(n, "simplify/plugin.meta.json")
+                self.assertNotEqual(n, "simplify/README.md")
                 self.assertNotIn("__pycache__", n)
 
 
@@ -115,6 +146,7 @@ class TestBuildOpenAi(unittest.TestCase):
                 custom_end = zf.read(
                     "simplify-med/skills/simplify/custom_end.md"
                 ).decode()
+                skill_md = zf.read("simplify-med/skills/simplify/SKILL.md").decode()
 
             self.assertEqual(plugin["$schema"], "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json")
             self.assertEqual(plugin["name"], "simplify-med")
@@ -141,6 +173,9 @@ class TestBuildOpenAi(unittest.TestCase):
             self.assertIn("06_plan.final.json", custom_end)
             self.assertIn("simplify-med/skills/simplify/schema/care_plan.schema.json", names)
             self.assertNotIn("simplify-med/agents/ground.md", names)
+            # The skill's own declared name must match its containing
+            # directory (skills/simplify/), per the Agent Skills spec.
+            self.assertEqual(_frontmatter_name(skill_md), "simplify")
             self.assertFalse(any(name.startswith("simplify-med/mcp/openai/") for name in names))
             self.assertFalse(any(name.startswith("simplify-med/docs/") for name in names))
             self.assertFalse(any(name.startswith("simplify-med/tests/") for name in names))
@@ -286,6 +321,10 @@ class TestBuildOpenAi(unittest.TestCase):
             with open(canonical_skill_md_path, "r", encoding="utf-8") as f:
                 canonical_skill_md = f.read()
             self.assertNotEqual(staged_skill_md, canonical_skill_md)
+
+            # The skill's own declared name must still match its containing
+            # directory (skills/simplify/), per the Agent Skills spec.
+            self.assertEqual(_frontmatter_name(staged_skill_md), "simplify")
             for forbidden in (
                 "agents/",
                 "custom_start.md",
@@ -540,7 +579,7 @@ class TestBuildDispatcherAndOverlays(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
                 with zipfile.ZipFile(os.path.join(out_dir, "simplify-med-0.1.0-claude-ai.zip")) as zf:
-                    self.assertEqual(zf.read("simplify-med/custom_end.md"), b"platform override\n")
+                    self.assertEqual(zf.read("simplify/custom_end.md"), b"platform override\n")
 
 
 class TestBuildVersionMismatch(unittest.TestCase):
