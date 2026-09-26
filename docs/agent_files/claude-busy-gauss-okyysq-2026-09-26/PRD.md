@@ -124,7 +124,9 @@ to its own summary.
   of `01_source.txt`) when it is (a) a line that is only a URL, (b) a page
   counter like `Page 3 of 9`, or (c) an exact repeat (after whitespace
   normalization, ≥ 8 characters) of an earlier unit — repeated portal headers,
-  footers, and duplicated pages. Only the first occurrence is kept. Skipped units
+  footers, and duplicated pages. Only the first occurrence is kept. A repeated
+  line that matches any protected-content pattern (§4.3) is never skipped, so
+  two studies with the same impression both stay citable. Skipped units
   stay in `01_units.json` for audit and are never valid citations.
 - Writes `01_source.txt`: every non-skipped unit as `[<id>] <text>`, with a
   `=== <file> page <n> ===` header line (not a unit) whenever file/page changes.

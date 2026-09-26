@@ -1,11 +1,31 @@
 #!/usr/bin/env python3
 """Deterministic unitizer: turns one or more input text files into a
-numbered list of units, the only thing a grounding agent ever cites.
+numbered list of units, the only thing the writer and verifier ever cite.
+
+Every non-blank line becomes a unit with a contiguous id. Boilerplate units
+are kept for audit but marked `"skip": "<reason>"`: a line that is only a
+URL (`url`), a page counter such as "Page 2 of 3" (`page_counter`), or an
+exact repeat, after whitespace normalization, of an earlier unit of at least
+8 characters that carries no protected-content signal (`repeat`; the first
+occurrence is kept). Skipped units are
+left out of `01_source.txt` and of the protected-content scan and are never
+valid citations.
+
+Writes, inside the run directory:
+    01_units.json      every unit, including skipped ones (schema `units`)
+    01_source.txt      non-skipped units as "[<id>] <text>", with a
+                       "=== <file> page <n> ===" header line whenever the
+                       file or page changes
+    01_protected.json  protected-content candidate unit ids per category
+                       (scripts/protected.py; schema `protected`)
+
+Prints `unitize: ok | files=N units=N skipped=N protected=N` (units counts
+every unit, skipped ones included; protected counts distinct candidate unit
+ids), then the run directory on the last line.
 
 CLI:
     python3 unitize.py (--runs-dir DIR | --run-dir DIR)
         --input PATH[:native|ocr|pasted] [--input PATH[:method] ...]
-        [--chunk-size 150]
 
 Stdlib only. Reads and writes only inside the run directory (and reads the
 paths named by --input). Runnable as a script and importable as `unitize`.
@@ -17,6 +37,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import sys
@@ -24,13 +45,17 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import protected  # noqa: E402
 import runlog  # noqa: E402
 import validate  # noqa: E402
 from _version import PLUGIN_VERSION, SCHEMA_VERSION  # noqa: E402
 
 _METHODS = ("native", "ocr", "pasted")
 _DEFAULT_METHOD = "native"
-_DEFAULT_CHUNK_SIZE = 150
+_REPEAT_MIN_CHARS = 8
+_URL_ONLY = re.compile(r"^[<(\[]?(https?://|www\.)\S+?[>)\].,;]?$", re.IGNORECASE)
+_PAGE_COUNTER = re.compile(r"^[-\u2013\u2014|\s]*(page|pg\.?)\s*\d+(\s*(of|/)\s*\d+)?[-\u2013\u2014|\s]*$",
+                           re.IGNORECASE)
 
 
 def _input_digest(raw_files) -> str:
@@ -90,7 +115,6 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     group.add_argument("--run-dir", default=None, help="Exact run directory to use (created if missing)")
     parser.add_argument("--input", dest="inputs", action="append", required=True,
                          help="Input file, optionally suffixed :native|:ocr|:pasted (default native)")
-    parser.add_argument("--chunk-size", type=int, default=_DEFAULT_CHUNK_SIZE)
     return parser
 
 
@@ -127,10 +151,51 @@ def main(argv: list[str] | None = None) -> int:
     else:
         run_dir = os.path.join(args.runs_dir, run_id)
     _prepare_run_dir(run_dir)
-    return _run(raw_files, run_dir, run_id, input_digest, args.chunk_size)
+    return _run(raw_files, run_dir, run_id, input_digest)
 
 
-def _run(raw_files, run_dir: str, run_id: str, input_digest: str, chunk_size: int) -> int:
+def _mark_boilerplate(units: list[dict]) -> None:
+    """Set `skip` on URL-only lines, page counters, and exact repeats (in place)."""
+    seen: set[str] = set()
+    for unit in units:
+        normalized = " ".join(unit["text"].split())
+        if _URL_ONLY.match(normalized):
+            unit["skip"] = "url"
+        elif _PAGE_COUNTER.match(normalized):
+            unit["skip"] = "page_counter"
+        elif (
+            len(normalized) >= _REPEAT_MIN_CHARS
+            and normalized in seen
+            and not protected.categories_for(normalized)
+        ):
+            # A repeated line that carries protected content (e.g. a second
+            # study's identical IMPRESSION line) stays citable.
+            unit["skip"] = "repeat"
+        seen.add(normalized)
+
+
+def _source_text(units: list[dict]) -> str:
+    """Render non-skipped units as "[<id>] <text>" under file/page headers."""
+    lines: list[str] = []
+    current = None
+    for unit in units:
+        if unit.get("skip"):
+            continue
+        location = (unit["file"], unit["page"])
+        if location != current:
+            lines.append(f"=== {unit['file']} page {unit['page']} ===")
+            current = location
+        lines.append(f"[{unit['id']}] {unit['text']}")
+    return "".join(line + "\n" for line in lines)
+
+
+def _write_json(path: str, doc: dict) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(doc, f, indent=2)
+        f.write("\n")
+
+
+def _run(raw_files, run_dir: str, run_id: str, input_digest: str) -> int:
     input_dir = os.path.join(run_dir, "00_input")
     os.makedirs(input_dir, exist_ok=True)
 
@@ -217,70 +282,66 @@ def _run(raw_files, run_dir: str, run_id: str, input_digest: str, chunk_size: in
         )
         return 1
 
-    # Chunking: consecutive id ranges, never splitting a page across a chunk
-    # boundary unless the page alone exceeds chunk_size.
-    chunks_units: list[list[dict]] = []
-    current: list[dict] = []
-    for page_units in pages_per_page_list:
-        if not page_units:
-            continue
-        if len(current) + len(page_units) <= chunk_size:
-            current.extend(page_units)
-            continue
-        if current:
-            chunks_units.append(current)
-            current = []
-        if len(page_units) > chunk_size:
-            for i in range(0, len(page_units), chunk_size):
-                chunks_units.append(page_units[i:i + chunk_size])
-        else:
-            current = list(page_units)
-    if current:
-        chunks_units.append(current)
-
-    chunks_meta = [
-        {"k": k, "first_id": group[0]["id"], "last_id": group[-1]["id"]}
-        for k, group in enumerate(chunks_units, start=1)
-    ]
+    _mark_boilerplate(all_units)
+    kept_units = [u for u in all_units if not u.get("skip")]
+    skipped = len(all_units) - len(kept_units)
+    if not kept_units:
+        runlog.record(run_dir, "unitize", "failed", checks={
+            "files": len(raw_files), "pages": total_pages, "units": len(all_units),
+            "skipped": skipped, "input_digest": input_digest,
+        }, artifacts=copied_artifacts, run_id=run_id)
+        _fatal(
+            "unitize found only boilerplate in the input document(s) -- every line was a URL, "
+            "a page counter, or a repeat. There is nothing to extract facts from, so the run cannot continue. "
+            "Check that the right file was provided and that it contains the clinical text."
+        )
+        return 1
 
     units_doc = {
         "schema_version": SCHEMA_VERSION,
         "plugin_version": PLUGIN_VERSION,
         "run_id": run_id,
         "units": all_units,
-        "chunks": chunks_meta,
+    }
+    categories = protected.scan(all_units)
+    protected_doc = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "categories": categories,
     }
     errors = validate.validate(units_doc, validate.load_schema("units"))
+    errors += validate.validate(protected_doc, validate.load_schema("protected"))
     if errors:
         runlog.record(run_dir, "unitize", "failed", checks={"schema_errors": errors}, run_id=run_id)
-        _fatal("unitize produced a units document that failed its own schema; this is a bug in unitize.py.")
+        _fatal("unitize produced a units or protected document that failed its own schema; this is a bug in unitize.py.")
         return 1
 
-    units_path = os.path.join(run_dir, "01_units.json")
-    with open(units_path, "w", encoding="utf-8") as f:
-        json.dump(units_doc, f, indent=2)
-        f.write("\n")
+    _write_json(os.path.join(run_dir, "01_units.json"), units_doc)
+    with open(os.path.join(run_dir, "01_source.txt"), "w", encoding="utf-8") as f:
+        f.write(_source_text(all_units))
+    _write_json(os.path.join(run_dir, "01_protected.json"), protected_doc)
 
-    for k, group in enumerate(chunks_units, start=1):
-        chunk_path = os.path.join(run_dir, f"01_units.{k}.txt")
-        with open(chunk_path, "w", encoding="utf-8") as f:
-            for unit in group:
-                f.write(f"[{unit['id']}] {unit['text']}\n")
-
+    skipped_by_reason: dict[str, int] = {}
+    for unit in all_units:
+        if unit.get("skip"):
+            skipped_by_reason[unit["skip"]] = skipped_by_reason.get(unit["skip"], 0) + 1
     checks = {
         "files": len(raw_files),
         "pages": total_pages,
         "units": len(all_units),
-        "chunks": len(chunks_units),
+        "skipped": skipped,
+        "skipped_by_reason": skipped_by_reason,
+        "protected": len(protected.candidate_ids(categories)),
+        "protected_by_category": {category: len(ids) for category, ids in categories.items()},
         "blank_lines_skipped": blank_lines_skipped,
         "input_digest": input_digest,
     }
-    artifacts = copied_artifacts + ["01_units.json"] + [f"01_units.{k}.txt" for k in range(1, len(chunks_units) + 1)]
+    artifacts = copied_artifacts + ["01_units.json", "01_source.txt", "01_protected.json"]
     runlog.record(run_dir, "unitize", "ok", checks=checks, artifacts=artifacts, run_id=run_id)
 
     print(
         f"unitize: ok | files={checks['files']} units={checks['units']} "
-        f"chunks={checks['chunks']}"
+        f"skipped={checks['skipped']} protected={checks['protected']}"
     )
     print(run_dir)
     return 0

@@ -1,4 +1,4 @@
-"""Structural checks for the synthetic schema-v2 document fixtures."""
+"""Structural checks for the synthetic schema-v3 document fixtures."""
 
 from __future__ import annotations
 
@@ -12,10 +12,13 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
+import _version  # noqa: E402
+
 DOCS_DIR = _paths.FIXTURE_DOCUMENTS_DIR
 DISCHARGE = os.path.join(DOCS_DIR, "synthetic-discharge-summary.txt")
 LAB_REPORT = os.path.join(DOCS_DIR, "synthetic-lab-report.txt")
 VISIT_NOTE = os.path.join(DOCS_DIR, "synthetic-visit-note.txt")
+ER_VISIT = os.path.join(DOCS_DIR, "synthetic-er-visit.txt")
 
 
 def _unitize_script() -> str:
@@ -36,7 +39,7 @@ def _read_json(path: str):
 
 class TestFixturesExistAndParse(unittest.TestCase):
     def test_every_document_is_explicitly_synthetic(self):
-        for path in (DISCHARGE, LAB_REPORT, VISIT_NOTE):
+        for path in (DISCHARGE, LAB_REPORT, VISIT_NOTE, ER_VISIT):
             with self.subTest(path=path):
                 self.assertTrue(os.path.isfile(path))
                 with open(path, "r", encoding="utf-8") as f:
@@ -73,32 +76,41 @@ class TestFixturesExistAndParse(unittest.TestCase):
             for current in (run_dir, run_dir2):
                 units = _read_json(os.path.join(current, "01_units.json"))
                 run_log = _read_json(os.path.join(current, "run.json"))
-                self.assertEqual(units["schema_version"], "2.0")
-                self.assertEqual(run_log["schema_version"], "2.0")
+                self.assertEqual(units["schema_version"], _version.SCHEMA_VERSION)
+                self.assertEqual(run_log["schema_version"], _version.SCHEMA_VERSION)
                 self.assertEqual(units["run_id"], run_log["run_id"])
                 self.assertEqual(units["plugin_version"], run_log["plugin_version"])
                 self.assertFalse(os.path.exists(os.path.join(current, "00_input", "manifest.json")))
                 self.assertEqual(run_log["stages"]["unitize"]["status"], "ok")
 
 
-class TestDischargeSummaryChunking(unittest.TestCase):
-    """The discharge summary alone must yield exactly 2 chunks at the
-    default chunk size (150)."""
+class TestDischargeSummarySource(unittest.TestCase):
+    """The discharge summary (three form-feed pages) is written as one
+    numbered source with a header per page; there is no chunking."""
 
-    def test_discharge_summary_yields_exactly_two_chunks(self):
+    def test_discharge_summary_source_has_one_header_per_page_and_no_chunks(self):
         with tempfile.TemporaryDirectory() as d:
             run_dir = os.path.join(d, "run")
             result = _run_unitize(run_dir, f"{DISCHARGE}:native")
             self.assertEqual(result.returncode, 0, result.stderr)
 
             units_doc = _read_json(os.path.join(run_dir, "01_units.json"))
-            self.assertEqual(len(units_doc["chunks"]), 2)
-            self.assertEqual(
-                [chunk["k"] for chunk in units_doc["chunks"]],
-                [1, 2],
-            )
-            for chunk in units_doc["chunks"]:
-                self.assertTrue(os.path.isfile(os.path.join(run_dir, f"01_units.{chunk['k']}.txt")))
+            self.assertNotIn("chunks", units_doc)
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "01_units.1.txt")))
+
+            with open(os.path.join(run_dir, "01_source.txt"), encoding="utf-8") as f:
+                source_lines = f.read().splitlines()
+            headers = [line for line in source_lines if line.startswith("=== ")]
+            self.assertEqual(headers, [
+                f"=== synthetic-discharge-summary.txt page {page} ===" for page in (1, 2, 3)
+            ])
+            kept = [u for u in units_doc["units"] if not u.get("skip")]
+            self.assertEqual(len(source_lines), len(kept) + len(headers))
+            self.assertTrue(os.path.isfile(os.path.join(run_dir, "01_protected.json")))
+
+            first_line = result.stdout.splitlines()[0]
+            self.assertRegex(first_line, r"^unitize: ok \| files=1 units=\d+ skipped=\d+ protected=\d+$")
+            self.assertEqual(result.stdout.strip().splitlines()[-1], run_dir)
 
 
 class TestTwoFileRunContinuousIds(unittest.TestCase):
@@ -136,7 +148,7 @@ class TestTwoFileRunContinuousIds(unittest.TestCase):
     def test_fixture_readme_forbids_model_output_and_fail_open_routes(self):
         with open(os.path.join(_paths.FIXTURES_DIR, "README.md"), encoding="utf-8") as handle:
             text = handle.read().lower()
-        self.assertIn("schema-v2", text)
+        self.assertIn("schema-v3", text)
         self.assertIn("no fixture can preserve a direct-summary", text)
         self.assertIn("fail-open publication route", text)
 

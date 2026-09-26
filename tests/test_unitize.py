@@ -5,15 +5,21 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
+import _version  # noqa: E402
+import protected  # noqa: E402
 import runlog  # noqa: E402
 import unitize  # noqa: E402
 import validate  # noqa: E402
 
 UNITIZE_PY = os.path.join(_paths.SCRIPTS_DIR, "unitize.py")
+ER_VISIT = os.path.join(_paths.FIXTURE_DOCUMENTS_DIR, "synthetic-er-visit.txt")
 
 
 def _write(path: str, content: str) -> None:
@@ -82,42 +88,6 @@ class TestUnitizeFunction(unittest.TestCase):
                 units_doc = json.load(f)
             self.assertEqual(units_doc["units"][0]["extraction_method"], "native")
 
-    def test_chunking_page_aligned(self):
-        with tempfile.TemporaryDirectory() as d:
-            a = os.path.join(d, "a.txt")
-            # Two pages of 2 lines each; chunk size 2 -> each page its own chunk.
-            _write(a, "p1l1\np1l2\n\x0cp2l1\np2l2\n")
-            run_dir = os.path.join(d, "run")
-            unitize.main(["--run-dir", run_dir, "--input", a, "--chunk-size", "2"])
-            with open(os.path.join(run_dir, "01_units.json"), "r", encoding="utf-8") as f:
-                units_doc = json.load(f)
-            chunks = units_doc["chunks"]
-            self.assertEqual(len(chunks), 2)
-            self.assertEqual((chunks[0]["first_id"], chunks[0]["last_id"]), (1, 2))
-            self.assertEqual((chunks[1]["first_id"], chunks[1]["last_id"]), (3, 4))
-            self.assertTrue(os.path.isfile(os.path.join(run_dir, "01_units.1.txt")))
-            self.assertTrue(os.path.isfile(os.path.join(run_dir, "01_units.2.txt")))
-            with open(os.path.join(run_dir, "01_units.1.txt"), "r", encoding="utf-8") as f:
-                self.assertEqual(f.read(), "[1] p1l1\n[2] p1l2\n")
-
-    def test_oversized_page_is_split_at_chunk_size(self):
-        with tempfile.TemporaryDirectory() as d:
-            a = os.path.join(d, "a.txt")
-            _write(a, "\n".join(f"line{i}" for i in range(1, 8)))  # 7 lines, one page
-            run_dir = os.path.join(d, "run")
-            unitize.main(["--run-dir", run_dir, "--input", a, "--chunk-size", "3"])
-            with open(os.path.join(run_dir, "01_units.json"), "r", encoding="utf-8") as f:
-                units_doc = json.load(f)
-            chunks = units_doc["chunks"]
-            ranges = [(c["first_id"], c["last_id"]) for c in chunks]
-            self.assertEqual(ranges, [(1, 3), (4, 6), (7, 7)])
-            covered = set()
-            for first, last in ranges:
-                for i in range(first, last + 1):
-                    self.assertNotIn(i, covered)
-                    covered.add(i)
-            self.assertEqual(covered, {u["id"] for u in units_doc["units"]})
-
     def test_run_json_is_the_only_input_manifest(self):
         with tempfile.TemporaryDirectory() as d:
             a = os.path.join(d, "a.txt")
@@ -185,6 +155,10 @@ class TestUnitizeFunction(unittest.TestCase):
             printed_dir = result.stdout.strip().splitlines()[-1]
             self.assertTrue(os.path.isdir(printed_dir))
             self.assertTrue(os.path.dirname(printed_dir) == runs_dir)
+            self.assertRegex(
+                result.stdout.strip().splitlines()[0],
+                r"^unitize: ok \| files=1 units=1 skipped=0 protected=0$",
+            )
 
     def test_fatal_on_all_blank_document(self):
         with tempfile.TemporaryDirectory() as d:
@@ -213,11 +187,157 @@ class TestUnitizeFunction(unittest.TestCase):
             checks = data["stages"]["unitize"]["checks"]
             self.assertEqual(checks["units"], 2)
             self.assertEqual(checks["files"], 1)
+            self.assertEqual(checks["skipped"], 0)
+            self.assertEqual(checks["protected"], 0)
             self.assertEqual(data["stages"]["unitize"]["attempts"], 1)
             self.assertEqual(
                 [artifact["path"] for artifact in data["stages"]["unitize"]["artifacts"]],
-                ["00_input/a.txt", "01_units.json", "01_units.1.txt"],
+                ["00_input/a.txt", "01_units.json", "01_source.txt", "01_protected.json"],
             )
+
+    def test_fatal_when_every_line_is_boilerplate(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = os.path.join(d, "a.txt")
+            _write(a, "https://portal.example.test/x\nPage 1 of 2\n")
+            run_dir = os.path.join(d, "run")
+            self.assertEqual(unitize.main(["--run-dir", run_dir, "--input", a]), 1)
+            self.assertEqual(runlog.read(run_dir)["stages"]["unitize"]["status"], "failed")
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "01_source.txt")))
+
+    def test_chunking_is_gone(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = os.path.join(d, "a.txt")
+            _write(a, "p1l1\np1l2\n\x0cp2l1\np2l2\n")
+            run_dir = os.path.join(d, "run")
+            with self.assertRaises(SystemExit), redirect_stdout(StringIO()), mock.patch("sys.stderr", StringIO()):
+                unitize.main(["--run-dir", run_dir, "--input", a, "--chunk-size", "2"])
+            self.assertEqual(unitize.main(["--run-dir", run_dir, "--input", a]), 0)
+            with open(os.path.join(run_dir, "01_units.json"), "r", encoding="utf-8") as f:
+                self.assertNotIn("chunks", json.load(f))
+            self.assertEqual(
+                sorted(name for name in os.listdir(run_dir) if name.startswith("01_")),
+                ["01_protected.json", "01_source.txt", "01_units.json"],
+            )
+
+
+class TestBoilerplateAndSource(unittest.TestCase):
+    """Boilerplate suppression, 01_source.txt, 01_protected.json, stdout."""
+
+    def _unitize(self, d: str, *contents: str) -> tuple[str, str]:
+        args = []
+        for index, content in enumerate(contents, start=1):
+            path = os.path.join(d, f"doc{index}.txt")
+            _write(path, content)
+            args += ["--input", path]
+        run_dir = os.path.join(d, "run")
+        out = StringIO()
+        with redirect_stdout(out):
+            rc = unitize.main(["--run-dir", run_dir, *args])
+        self.assertEqual(rc, 0)
+        return run_dir, out.getvalue()
+
+    @staticmethod
+    def _read(run_dir: str, name: str):
+        with open(os.path.join(run_dir, name), "r", encoding="utf-8") as f:
+            return json.load(f) if name.endswith(".json") else f.read()
+
+    def test_skip_reasons_and_contiguous_ids(self):
+        text = (
+            "Portal header text\n"
+            "https://portal.example.test/visits/1\n"
+            "  <www.example.test/a?b=1>  \n"
+            "Page 1 of 3\n"
+            "Real line one\n"
+            "Portal   header   text\n"   # whitespace-normalized repeat
+            "  page 2 / 3 \n"
+            "Short\n"
+            "Short\n"                   # < 8 chars: kept
+            "portal header text\n"      # case differs: kept
+            "See https://example.test for details\n"  # not URL-only: kept
+        )
+        with tempfile.TemporaryDirectory() as d:
+            run_dir, _ = self._unitize(d, text)
+            units = self._read(run_dir, "01_units.json")["units"]
+            self.assertEqual([u["id"] for u in units], list(range(1, 12)))
+            self.assertEqual(
+                {u["id"]: u["skip"] for u in units if "skip" in u},
+                {2: "url", 3: "url", 4: "page_counter", 6: "repeat", 7: "page_counter"},
+            )
+
+    def test_repeat_across_files_and_pages_keeps_first_occurrence(self):
+        with tempfile.TemporaryDirectory() as d:
+            run_dir, _ = self._unitize(d, "Clinic footer line\nA\x0cClinic footer line\n", "Clinic footer line\n")
+            units = self._read(run_dir, "01_units.json")["units"]
+            self.assertEqual([u.get("skip") for u in units], [None, None, "repeat", "repeat"])
+
+    def test_repeated_protected_line_is_not_skipped(self):
+        # Two studies with the same impression must both stay citable.
+        with tempfile.TemporaryDirectory() as d:
+            run_dir, _ = self._unitize(
+                d,
+                "CT HEAD\nIMPRESSION: No acute intracranial abnormality.\n"
+                "MRI BRAIN\nIMPRESSION: No acute intracranial abnormality.\n",
+            )
+            units = self._read(run_dir, "01_units.json")["units"]
+            self.assertEqual([u.get("skip") for u in units], [None, None, None, None])
+            doc = self._read(run_dir, "01_protected.json")
+            self.assertEqual(doc["categories"]["diagnoses"], [2, 4])
+
+    def test_source_txt_headers_and_skipped_units_left_out(self):
+        with tempfile.TemporaryDirectory() as d:
+            run_dir, _ = self._unitize(
+                d,
+                "First line here\nPage 1 of 2\n\x0chttps://x.test\n\x0cThird page line\n",
+                "Other file line\n",
+            )
+            self.assertEqual(
+                self._read(run_dir, "01_source.txt"),
+                "=== doc1.txt page 1 ===\n"
+                "[1] First line here\n"
+                "=== doc1.txt page 3 ===\n"
+                "[4] Third page line\n"
+                "=== doc2.txt page 1 ===\n"
+                "[5] Other file line\n",
+            )
+
+    def test_protected_json_skips_boilerplate_and_validates(self):
+        with tempfile.TemporaryDirectory() as d:
+            run_dir, out = self._unitize(
+                d,
+                "Follow-up with your doctor in 2 weeks.\n"
+                "Disposition: discharged home.\n"
+                "Portal footer line\n"
+                "Portal footer line\n",
+            )
+            doc = self._read(run_dir, "01_protected.json")
+            self.assertEqual(validate.validate(doc, validate.load_schema("protected")), [])
+            self.assertEqual(doc["schema_version"], _version.SCHEMA_VERSION)
+            self.assertEqual(doc["run_id"], runlog.read(run_dir)["run_id"])
+            self.assertEqual(list(doc["categories"]), list(protected.CATEGORIES))
+            self.assertEqual(doc["categories"]["follow_up"], [1])
+            self.assertEqual(doc["categories"]["disposition"], [2])
+            self.assertEqual(out.splitlines(), [
+                "unitize: ok | files=1 units=4 skipped=1 protected=2",
+                run_dir,
+            ])
+            checks = runlog.read(run_dir)["stages"]["unitize"]["checks"]
+            self.assertEqual((checks["units"], checks["skipped"], checks["protected"]), (4, 1, 2))
+            self.assertEqual(checks["skipped_by_reason"], {"repeat": 1})
+
+    def test_er_fixture_outputs_validate(self):
+        with tempfile.TemporaryDirectory() as d:
+            run_dir = os.path.join(d, "run")
+            with redirect_stdout(StringIO()):
+                self.assertEqual(unitize.main(["--run-dir", run_dir, "--input", ER_VISIT]), 0)
+            units_doc = self._read(run_dir, "01_units.json")
+            self.assertEqual(units_doc["schema_version"], _version.SCHEMA_VERSION)
+            self.assertEqual(validate.validate(units_doc, validate.load_schema("units")), [])
+            source = self._read(run_dir, "01_source.txt")
+            self.assertTrue(source.startswith("=== synthetic-er-visit.txt page 1 ===\n[1] # SYNTHETIC DOCUMENT"))
+            self.assertNotIn("https://", source)
+            self.assertNotIn("Page 2 of 3", source)
+            self.assertEqual(source.count("Patient Portal - Visit Summary"), 1)
+            self.assertEqual(source.count("ordering provider"), 1)
 
 
 if __name__ == "__main__":
