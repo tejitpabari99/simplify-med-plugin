@@ -118,7 +118,7 @@ The existing Python is retained because it implements deterministic safeguards a
 | Files | Decision | Reason |
 |---|---|---|
 | `unitize.py`, `textnorm.py`, `protected.py` | Keep | Stable line numbering, boilerplate suppression, normalized matching, and a high-recall protected-content scan are foundational to traceability and safety. |
-| `check_draft.py`, `numbers.py` | Keep | Enforce the draft schema, valid non-skipped citations, the word budget, and preservation of numbers against the cited units without asking the model to validate itself. |
+| `check_draft.py`, `numtokens.py` | Keep | Enforce the draft schema, valid non-skipped citations, the word budget, and preservation of numbers against the cited units without asking the model to validate itself. |
 | `settle.py` | Keep | Validate the independent verification contract, apply exact bounded operations, require numeric and protected-unit resolutions, and request at most one repair. |
 | `plan_paths.py` | Keep as internal helper | The single definition of patient-visible item paths shared by the check, settlement, verifier claims, and renderers. |
 | `glossary_check.py` | Keep | Validates the optional glossary against visible finalized text. |

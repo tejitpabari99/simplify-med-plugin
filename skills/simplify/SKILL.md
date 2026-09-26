@@ -47,7 +47,7 @@ Follow `stages/write.md` with `<run>/01_source.txt`, `<run>/01_protected.json`, 
 python3 scripts/check_draft.py --run-dir <run>
 ```
 
-On a non-zero exit, rerun Write once in retry mode with the printed errors, then rerun the check. A second failure stops the run.
+On exit 1 with `retry=allowed`, rerun Write once in retry mode with the printed errors, then rerun the check. On `retry=exhausted` or any other failure, stop the run.
 
 ### 4. Verify (model call, independent)
 
@@ -60,16 +60,16 @@ python3 scripts/settle.py --run-dir <run>
 ```
 
 - Exit 0: settled; go to Finalize.
-- Exit 1: the verification broke its contract. Rerun Verify once in retry mode with the printed errors, then settle again. A second failure stops the run.
+- Exit 1 with `retry=allowed`: the verification broke its contract. Rerun Verify once in retry mode with the printed errors, then settle again. Exit 1 with `retry=exhausted` stops the run.
 - Exit 3 (`settle: repair requested`): run the repair round below.
 - Any other exit stops the run.
 
 ### 6. Repair round (at most once)
 
 1. Write in repair mode (`stages/write.md`) with `<run>/04_repair.json` added to its inputs. It writes `<run>/02_draft.r2.raw.json`.
-2. `python3 scripts/check_draft.py --run-dir <run> --round 2` (one Write retry on failure).
+2. `python3 scripts/check_draft.py --run-dir <run> --round 2` (one Write retry when it prints `retry=allowed`).
 3. Verify in a fresh sub-agent with `<run>/02_draft.r2.json` and `<run>/02_check.r2.json` in place of the round-1 files. It writes `<run>/03_verify.r2.raw.json`.
-4. `python3 scripts/settle.py --run-dir <run> --round 2` (one Verify retry on exit 1). Exit 3 or any other failure in round 2 stops the run.
+4. `python3 scripts/settle.py --run-dir <run> --round 2` (one Verify retry on exit 1 with `retry=allowed`). Any other non-zero exit in round 2 stops the run.
 
 ### 7. Finalize
 
@@ -81,7 +81,7 @@ Finalization is assertion-only. It writes `<run>/05_plan.final.json` and `<run>/
 
 ## Retry Budget
 
-Per round: Write at most twice (one retry after a failed check), Verify at most twice (one retry after settle exit 1). One repair round per run. Nothing else is retried.
+Per round: Write at most twice, Verify at most twice, and only when the script prints `retry=allowed`. One repair round per run. Nothing else is retried. The scripts record every stage in `run.json`; the host never edits it.
 
 ## Present the Result
 

@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import importlib.util
 import json
 import os
 import re
@@ -47,28 +46,13 @@ import tempfile
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _SCRIPTS_DIR)
 
+import numtokens  # noqa: E402
 import plan_paths  # noqa: E402
+import plan_view  # noqa: E402
 import runlog  # noqa: E402
 import validate  # noqa: E402
 from _version import SCHEMA_VERSION  # noqa: E402
 
-
-def _load_numbers():
-    """Load scripts/numbers.py by path: `import numbers` may resolve to the
-    standard library module of the same name."""
-    cached = sys.modules.get("simplify_numbers")
-    if cached is not None:
-        return cached
-    spec = importlib.util.spec_from_file_location(
-        "simplify_numbers", os.path.join(_SCRIPTS_DIR, "numbers.py"),
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["simplify_numbers"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-numbers = _load_numbers()
 
 BUDGET = {"target": 300, "warn": 350, "max": 500}
 PROTECTED_CATEGORIES = (
@@ -86,7 +70,6 @@ _EMPTY_BRACKETS_RE = re.compile(r"\(\s*\)|\[\s*\]")
 # clinician-name shapes the pipeline has always handled.
 PII_HONORIFIC_RE = re.compile(r"\b(?:Dr\.?|Doctor)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?")
 PII_CREDENTIAL_RE = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+,?\s+(?:MD|DO|NP|PA|RN)\b")
-_WORD_CHAR_RE = re.compile(r"[A-Za-z0-9]")
 
 
 class CheckError(ValueError):
@@ -186,13 +169,8 @@ def load_source(run_dir: str) -> tuple[str, dict, dict]:
 # --- content checks (shared with settle.py and finalize.py) --------------
 
 def word_count(plan: dict) -> int:
-    """Words in the plan's visible strings: whitespace tokens with a letter or digit."""
-    return sum(
-        1
-        for _path, text, _unit_ids in plan_paths.visible_strings(plan)
-        for token in text.split()
-        if _WORD_CHAR_RE.search(token)
-    )
+    """Words the patient sees; one definition shared with the renderers."""
+    return plan_view.word_count(plan)
 
 
 def _unit_id_errors(label: str, unit_ids, units_by_id: dict) -> list[str]:
@@ -278,10 +256,10 @@ def unbacked_numbers(plan: dict, units_by_id: dict) -> list[tuple[str, str, list
     that do not appear in the text of the units its item cites."""
     out = []
     for field_path, text, unit_ids in plan_paths.visible_strings(plan):
-        backing = numbers.backing_tokens(
+        backing = numtokens.backing_tokens(
             units_by_id[unit_id]["text"] for unit_id in unit_ids if unit_id in units_by_id
         )
-        for token in numbers.unbacked_tokens(text, backing):
+        for token in numtokens.unbacked_tokens(text, backing):
             out.append((field_path, token, list(unit_ids)))
     return out
 

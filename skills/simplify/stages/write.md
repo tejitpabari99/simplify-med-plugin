@@ -45,7 +45,7 @@ source does not support it; empty slots are hidden.
 | `why_you_went` | `{text, unit_ids}` | 1-2 sentences: the complaint and the referral reason, in the patient's terms. Required. |
 | `findings_lead` | `{text, unit_ids}` or `null` | One framing line before the findings, only when the source itself frames the results (for example the clinician calls them unremarkable, or says no emergency cause was found). Otherwise `null`. |
 | `findings[]` | `{name, result, unit_ids}`, at most 6 | One bullet per test or exam **area** (brain MRI, CT of head and neck, neurologic exam, blood tests, heart tracing). `name` is the plain test name. `result` is the source's bottom line -- the radiology Impression or the clinician's assessment -- in plain words. Group sub-findings into that one line. |
-| `diagnoses[]` | `{name, plain_name, unit_ids}`, at most 6 | Only diagnoses stated for this visit (clinical impression, final or discharge diagnosis). `name` is the source's term; `plain_name` is the everyday meaning only when it adds something a layperson needs, otherwise `""`. Never old problem-list items. |
+| `diagnoses[]` | `{name, plain_name, unit_ids}`, at most 6 | Only diagnoses stated for this visit (clinical impression, final or discharge diagnosis). Never old problem-list items. When everyday words carry the full meaning, put them in `name` and leave `plain_name` `""` ("left upper extremity paresthesias" -> `name` "Tingling in your left arm/hand"). Keep the medical term as `name` only for a named condition the patient will hear again, and put its everyday meaning in `plain_name` ("Atrial fibrillation" / "an irregular heartbeat"); it renders as `name (plain_name)`. |
 | `disposition` | `{text, unit_ids}` or `null` | Only as stated: discharged, admitted, transferred, stable condition, no emergency cause found. |
 | `next_steps[]` | `{text, unit_ids}`, at most 6 | Follow-up, tests to schedule, and home instructions stated for this patient. Start with a verb. |
 | `medicines.items[]` | `{name, change, text, unit_ids}`, at most 8 | Only starts, stops, dose changes, and home-use instructions. `change` is `start`, `stop`, `change`, `continue`, or `instruction`; `text` keeps the exact dose, unit, and frequency. Use `continue` only when the source explicitly tells the patient to continue a medicine as part of this plan. |
@@ -202,7 +202,7 @@ The draft behind it:
   ],
   "diagnoses": [
     {"name": "Acute headache", "plain_name": "", "unit_ids": [49]},
-    {"name": "Left upper extremity paresthesias", "plain_name": "Tingling in your left arm/hand", "unit_ids": [49]}
+    {"name": "Tingling in your left arm/hand", "plain_name": "", "unit_ids": [49]}
   ],
   "disposition": {"text": "They did not find an emergency cause for your symptoms, and you were discharged in stable condition.", "unit_ids": [45, 50]},
   "next_steps": [

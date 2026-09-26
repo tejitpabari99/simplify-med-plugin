@@ -9,28 +9,13 @@ same 15-char unit-word bound.
 A visible string's number tokens must appear in the text of the source units
 that string's item cites; ``unbacked_tokens`` names the ones that do not.
 
-Stdlib only. Import it with ``check_draft.numbers`` (loaded by path as
-``simplify_numbers``) rather than ``import numbers``: the bare name is the
-standard library's ``numbers`` module, which may already be imported.
-
-Because this file shadows the standard library's ``numbers`` whenever the
-scripts directory is first on ``sys.path``, importing it under that name
-also defines the standard ABCs (``Number``, ``Real``, ...), so ``fractions``,
-``decimal``, and ``statistics`` keep working in the same process.
+Stdlib only. Importable as `numtokens`.
 """
 
 from __future__ import annotations
 
-import os
 import re
-import sysconfig
 from collections import Counter
-
-if __name__ == "numbers":  # pragma: no cover - only when shadowing the stdlib
-    _STDLIB_NUMBERS = os.path.join(sysconfig.get_paths().get("stdlib", ""), "numbers.py")
-    if os.path.isfile(_STDLIB_NUMBERS):
-        with open(_STDLIB_NUMBERS, "r", encoding="utf-8") as _handle:
-            exec(compile(_handle.read(), _STDLIB_NUMBERS, "exec"))  # noqa: S102
 
 _UNIT_WORD_MAX_LENGTH = 15  # reasoned, not calibrated: long enough for the
 # longest realistic compound lab unit (mmol/L, mIU/mL), short enough that it

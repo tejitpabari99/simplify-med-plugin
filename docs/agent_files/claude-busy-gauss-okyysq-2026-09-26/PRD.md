@@ -212,7 +212,7 @@ records `write` as failed after the retry budget.
   `budget: {"target": 300, "warn": 350, "max": 500}`, `over_budget: bool`
   (word_count > warn). word_count > max is a CHECK failure.
 - `numeric_flags[]`: for each visible field, number tokens (reuse the existing
-  tokenizer from `numeric_parity.py`, moved to `scripts/numbers.py`) that do not
+  tokenizer from `numeric_parity.py`, moved to `scripts/numtokens.py`) that do not
   appear in that item's cited units → `{flag_id, path, token, unit_ids}`.
 - `uncited_protected[]`: protected candidate unit ids (from `01_protected.json`)
   that no visible item cites, with their categories.
@@ -341,7 +341,7 @@ Run-log core stages: `unitize`, `write`, `check`, `verify`, `settle`,
 `finalize`; statuses `ok`/`failed`, plus `repair_requested` for `settle`.
 Optional stages unchanged.
 
-Scripts: add `protected.py`, `numbers.py`, `check_draft.py`, `settle.py`;
+Scripts: add `protected.py`, `numtokens.py`, `check_draft.py`, `settle.py`;
 delete `anchor_check.py`, `merge_facts.py`, `cite_check.py`,
 `numeric_parity.py`, `settle_review.py`. Stages: add `write.md`, `verify.md`;
 delete `ground.md`, `assemble.md`, `review.md`. Reference: rewrite

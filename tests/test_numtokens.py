@@ -1,4 +1,4 @@
-"""Numeric tokenizer (scripts/numbers.py), moved unchanged from numeric_parity."""
+"""Numeric tokenizer (scripts/numtokens.py), moved unchanged from numeric_parity."""
 
 import os
 import subprocess
@@ -9,9 +9,7 @@ from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
-import check_draft  # noqa: E402
-
-numbers = check_draft.numbers
+import numtokens as numbers  # noqa: E402
 
 
 class TestExtractNumberTokens(unittest.TestCase):
@@ -63,20 +61,14 @@ class TestBacking(unittest.TestCase):
         self.assertEqual(numbers.token_str("25", ""), "25")
 
 
-class TestStdlibShadowing(unittest.TestCase):
-    def test_stdlib_numeric_modules_still_import_with_scripts_first_on_path(self):
+class TestStdlibNotShadowed(unittest.TestCase):
+    def test_stdlib_numbers_module_is_not_shadowed_by_scripts(self):
         code = (
-            "import sys; sys.path.insert(0, sys.argv[1]); import numbers; "
-            "import fractions, decimal, statistics; "
-            "assert hasattr(numbers, 'extract_number_tokens'); "
-            "print(fractions.Fraction(1, 2) + 1, statistics.mean([1, 2]))"
+            "import sys; sys.path.insert(0, sys.argv[1]); import numbers, fractions; "
+            "assert hasattr(numbers, 'Real'); print(fractions.Fraction(1, 2) + 1)"
         )
         result = subprocess.run(
             [sys.executable, "-c", code, _paths.SCRIPTS_DIR], capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.split(), ["3/2", "1.5"])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        self.assertEqual(result.stdout.split(), ["3/2"])

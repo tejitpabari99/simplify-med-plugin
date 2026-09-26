@@ -37,7 +37,7 @@ Owns: `scripts/unitize.py`, `scripts/protected.py` (new), `schema/units.schema.j
 
 ## T2 — Check, settle, finalize, run log (agent: pipeline)
 
-Owns: `scripts/check_draft.py` (new), `scripts/numbers.py` (new, tokenizer moved
+Owns: `scripts/check_draft.py` (new), `scripts/numtokens.py` (new, tokenizer moved
 from `numeric_parity.py`), `scripts/settle.py` (new), `scripts/finalize.py`,
 `scripts/runlog.py`, `scripts/_version.py`, `schema/check.schema.json` (new),
 `schema/verify.schema.json` (new), `schema/run.schema.json`; deletes
@@ -46,11 +46,11 @@ from `numeric_parity.py`), `scripts/settle.py` (new), `scripts/finalize.py`,
 `care_plan_agent`, `care_plan`, `flags`, `review_raw`, `review` and their tests
 (`test_anchor_check.py`, `test_merge_facts.py`, `test_cite_check.py`,
 `test_numeric_parity.py`, `test_settle_review.py`). Owns tests
-`test_check_draft.py`, `test_settle.py`, `test_numbers.py`, `test_finalize.py`,
+`test_check_draft.py`, `test_settle.py`, `test_numtokens.py`, `test_finalize.py`,
 `test_runlog.py`, `test_schemas.py`, `test_validate.py`, `test_status_lines.py`,
 `test_pipeline_e2e.py`, `tests/_runfix.py`, `test_textnorm.py`.
 
-- [ ] `numbers.py` tokenizer (behavior-preserving move) + tests.
+- [ ] `numtokens.py` tokenizer (behavior-preserving move) + tests.
 - [ ] `check_draft.py` per PRD §4.4 (+ `--round 2`, attempt archiving).
 - [ ] `settle.py` per PRD §4.6 (exit 0 / 1 / 3; `04_repair.json`).
 - [ ] `finalize.py` per PRD §4.7 (uses `render_md.render`, `readability`).

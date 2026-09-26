@@ -156,7 +156,7 @@ not find in that item's cited units. Resolve every `flag_id` exactly once (copy
 each `flag_id` exactly as the check file gives it):
 
 ```json
-{"flag_id": "N1", "resolution": "corrected", "correction_path": "medicines.items[0].text"}
+{"flag_id": "n1", "resolution": "corrected", "correction_path": "medicines.items[0].text"}
 ```
 
 - `equivalent` -- the source states the same value and only formatting differs
