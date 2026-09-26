@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Self-contained HTML renderer for a final care plan.
+"""Self-contained HTML renderer for a final plan.
 
-`render(plan, glossary=None) -> str` fills `templates/report.html` (via `string.Template`)
-with HTML-escaped content and produces one file: inline CSS, inline JS, no
-external assets, no network calls. Section order and content come from
+`render(plan, glossary=None) -> str` fills `templates/report.html` (via
+`string.Template`) with HTML-escaped content and produces one printable
+file: inline CSS, a little inline JS for glossary pop-ups, no external
+assets, no network calls. Section order and content come from
 `plan_view`, shared with `render_md.py`.
 
 Stdlib only. Runnable as
-``python3 render_html.py --run-dir D [--plan <path>] [--out <path>]``
-(defaults: read ``06_plan.final.json``, write ``report.html``) and
+``python3 render_html.py --run-dir D [--plan <path>] [--glossary <path>] [--out <path>]``
+(defaults: read ``05_plan.final.json``, write ``report.html``) and
 importable as `render_html`.
 """
 
@@ -31,11 +32,11 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATE_PATH = os.path.normpath(
     os.path.join(_SCRIPTS_DIR, "..", "templates", "report.html")
 )
+GLOSSARY_NAME = "07_glossary.json"
 
-# Sections whose bodies get glossary term spans wrapped in, per the design
-# brief: summary, findings, next steps, watch. Not reason_for_visit,
-# questions, or the glossary list itself.
-_WRAPPABLE_KINDS = {"paragraph", "findings", "next_steps", "watch"}
+# Section keys whose text gets glossary term spans wrapped in. Not
+# questions or the glossary list itself.
+_WRAPPABLE_KEYS = {"why_you_went", "findings", "next_steps", "return_precautions"}
 
 
 def _esc(s) -> str:
@@ -88,111 +89,47 @@ def _wrap_terms(escaped_text, glossary_terms, used_terms, enable):
     return escaped_text
 
 
-def _render_row(row, glossary_terms, used_terms):
-    title = _wrap_terms(_esc(row["title"]), glossary_terms, used_terms, True)
-    detail = _wrap_terms(_esc(row.get("detail", "")), glossary_terms, used_terms, True)
-    checked = " checked" if row["checked"] else ""
-    key = _esc(row["key"])
-
-    parts = ['<div class="row">']
-    parts.append("<label>")
-    parts.append(f'<input type="checkbox" data-key="{key}"{checked}>')
-    parts.append('<span class="print-empty-box">☐</span>')
-    parts.append('<span class="row-body">')
-    parts.append(f'<span class="row-title">{title}</span> ')
-    parts.append(f'<span class="type-label">({_esc(row["type_label"])})</span>')
-    if detail:
-        parts.append(f'<span class="row-detail">{detail}</span>')
-    parts.append("</span>")
-    parts.append("</label>")
-    if row["sub"]:
-        parts.append('<details><summary>Details</summary><ul>')
-        for s in row["sub"]:
-            wrapped = _wrap_terms(_esc(s), glossary_terms, used_terms, True)
-            parts.append(f"<li>{wrapped}</li>")
-        parts.append("</ul></details>")
-    parts.append("</div>")
-    return "\n".join(parts)
-
-
-def _render_watch_row(row, glossary_terms, used_terms):
-    symptom = _wrap_terms(_esc(row.get("symptom", "")), glossary_terms, used_terms, True)
-    what_to_do = _wrap_terms(_esc(row.get("what_to_do", "")), glossary_terms, used_terms, True)
-    meaning = _wrap_terms(_esc(row.get("what_it_might_mean", "")), glossary_terms, used_terms, True)
-    related = _wrap_terms(_esc(row.get("related_to", "")), glossary_terms, used_terms, True)
-    urgency = row.get("urgency_label", "")
-    pill = f'<span class="pill">{_esc(urgency)}</span>' if urgency else ""
-
-    parts = ['<div class="row watch-row">']
-    parts.append(f'<div class="row-title">{symptom}{pill}</div>')
-    if what_to_do:
-        parts.append(f'<div class="row-detail">{what_to_do}</div>')
-    extras = []
-    if meaning:
-        extras.append(f"<li>{meaning}</li>")
-    if related:
-        extras.append(f"<li>Related to: {related}</li>")
-    if extras:
-        parts.append('<ul class="watch-extra">' + "".join(extras) + "</ul>")
-    parts.append("</div>")
-    return "\n".join(parts)
+def _render_list(rows, wrap) -> list[str]:
+    out = ["<ul>"]
+    for row in rows:
+        text = wrap(_esc(row["text"]))
+        if row["label"]:
+            label = wrap(_esc(row["label"]))
+            body = f"<strong>{label}:</strong> {text}" if text else f"<strong>{label}</strong>"
+        else:
+            body = text
+        out.append(f"<li>{body}</li>")
+    out.append("</ul>")
+    return out
 
 
 def _render_section(section, glossary_terms, used_terms) -> str:
     kind = section["kind"]
-    wrap_enabled = kind in _WRAPPABLE_KINDS
-    open_attr = "" if kind == "glossary" else " open"
-    out = [f'<details{open_attr}><summary>{_esc(section["heading"])}</summary>']
+    enabled = section["key"] in _WRAPPABLE_KEYS
+
+    def wrap(escaped):
+        return _wrap_terms(escaped, glossary_terms, used_terms, enabled)
+
+    out = [f'<section class="{_esc(section["key"]).replace("_", "-")}">']
+    if section.get("heading"):
+        out.append(f'<h2>{_esc(section["heading"])}</h2>')
 
     if kind == "paragraph":
-        text = _wrap_terms(_esc(section["text"]), glossary_terms, used_terms, wrap_enabled)
-        out.append(f"<p>{text}</p>")
-
-    elif kind == "list":
-        out.append("<ul>")
-        for item in section["items"]:
-            out.append(f'<li>{_esc(item["text"])}</li>')
-        out.append("</ul>")
+        out.append(f'<p class="lead">{wrap(_esc(section["text"]))}</p>')
 
     elif kind == "findings":
-        for item in section["items"]:
-            title = _esc(item.get("title", ""))
-            plain = item.get("plain_name", "")
-            if plain and plain != item.get("title", ""):
-                title = f"{title} ({_esc(plain)})"
-            title = _wrap_terms(title, glossary_terms, used_terms, wrap_enabled)
-            sev = item.get("severity_label", "")
-            pill = f'<span class="pill">{_esc(sev)}</span>' if sev else ""
-            out.append(f'<div class="finding"><div class="finding-title">{title} {pill}</div>')
-            desc = _wrap_terms(_esc(item.get("description", "")), glossary_terms, used_terms, wrap_enabled)
-            if desc:
-                out.append(f'<div class="finding-body">{desc}</div>')
-            meaning = _wrap_terms(_esc(item.get("what_it_means", "")), glossary_terms, used_terms, wrap_enabled)
-            if meaning:
-                out.append(f'<div class="finding-body">{meaning}</div>')
-            out.append("</div>")
-        if "changed" in section:
-            changed = _wrap_terms(_esc(section["changed"]), glossary_terms, used_terms, wrap_enabled)
-            out.append(f'<p class="changed">{changed}</p>')
+        if section["lead"]:
+            out.append(f"<p>{wrap(_esc(section['lead']))}</p>")
+        if section["items"]:
+            out.extend(_render_list(section["items"], wrap))
+        if section["diagnoses"]:
+            out.append(f'<p class="label"><strong>{_esc(section["diagnoses_label"])}</strong></p>')
+            out.extend(_render_list(section["diagnoses"], wrap))
+        if section["disposition"]:
+            out.append(f"<p>{wrap(_esc(section['disposition']))}</p>")
 
-    elif kind == "next_steps":
-        for group_key, group_label in (("todo", "To do"), ("done", "Already done")):
-            rows = section[group_key]
-            if not rows:
-                continue
-            out.append(f"<h3>{_esc(group_label)}</h3>")
-            for row in rows:
-                out.append(_render_row(row, glossary_terms, used_terms))
-
-    elif kind == "watch":
-        for row in section["items"]:
-            out.append(_render_watch_row(row, glossary_terms, used_terms))
-
-    elif kind == "numbered":
-        out.append("<ol>")
-        for item in section["items"]:
-            out.append(f'<li>{_esc(item["text"])}</li>')
-        out.append("</ol>")
+    elif kind == "list":
+        out.extend(_render_list(section["items"], wrap))
 
     elif kind == "glossary":
         out.append("<dl>")
@@ -200,22 +137,20 @@ def _render_section(section, glossary_terms, used_terms) -> str:
             out.append(f'<dt>{_esc(item["term"])}</dt><dd>{_esc(item["definition"])}</dd>')
         out.append("</dl>")
 
-    out.append("</details>")
+    out.append("</section>")
     return "\n".join(out)
 
 
-def render(plan: dict, glossary: dict | None = None, legacy_glossary: bool = False) -> str:
-    view = plan_view.build_view(plan, glossary=glossary, legacy_glossary=legacy_glossary)
+def render(plan: dict, glossary: dict | None = None) -> str:
+    view = plan_view.build_view(plan, glossary=glossary)
 
-    body_parts = []
-
-    body_parts.append(f'<h1>{_esc(view["title"])}</h1>')
+    body_parts = [f'<h1>{_esc(view["title"])}</h1>']
 
     glossary_terms = _glossary_patterns(view)
-    hint = "Tap a checkbox to mark a step done."
     if glossary_terms:
-        hint += " Tap or focus a highlighted word for its definition."
-    body_parts.append(f'<p class="interactive-hint">{hint}</p>')
+        body_parts.append(
+            '<p class="interactive-hint">Tap or focus a highlighted word for its definition.</p>'
+        )
     used_terms: set[str] = set()
 
     for section in view["sections"]:
@@ -227,24 +162,21 @@ def render(plan: dict, glossary: dict | None = None, legacy_glossary: bool = Fal
         "This is a reading aid, not medical advice.</footer>"
     )
 
-    body_html = "\n".join(body_parts)
-    run_id = (plan.get("meta") or {}).get("run_id", "")
-
     template = Template(_read_template())
-    return template.substitute(
-        title=_esc(view["title"]),
-        body=body_html,
-        run_id=json.dumps(run_id),
-    )
+    return template.substitute(title=_esc(view["title"]), body="\n".join(body_parts))
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Render a final care plan to a self-contained HTML report (on request only)."
+        description="Render a final plan to a self-contained HTML report (on request only)."
     )
     parser.add_argument("--run-dir", required=True)
-    parser.add_argument("--plan", default=None, help="Path to the plan JSON (default: <run-dir>/06_plan.final.json)")
-    parser.add_argument("--glossary", default=None, help="Optional glossary JSON (default: <run-dir>/07_glossary.json when present)")
+    parser.add_argument(
+        "--plan", default=None, help=f"Path to the plan JSON (default: <run-dir>/{plan_view.FINAL_PLAN_NAME})"
+    )
+    parser.add_argument(
+        "--glossary", default=None, help=f"Optional glossary JSON (default: <run-dir>/{GLOSSARY_NAME} when present)"
+    )
     parser.add_argument("--out", default=None, help="Output path (default: <run-dir>/report.html)")
     return parser
 
@@ -253,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
 
-    plan_path = args.plan or os.path.join(args.run_dir, "06_plan.final.json")
+    plan_path = args.plan or os.path.join(args.run_dir, plan_view.FINAL_PLAN_NAME)
     if not os.path.isfile(plan_path):
         print(
             f"render_html: cannot find {plan_path} -- run finalize.py first.",
@@ -265,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         with open(plan_path, "r", encoding="utf-8") as f:
             plan = json.load(f)
         plan_view.assert_renderable_plan(plan, args.run_dir, plan_path)
-        glossary_path = args.glossary or os.path.join(args.run_dir, "07_glossary.json")
+        glossary_path = args.glossary or os.path.join(args.run_dir, GLOSSARY_NAME)
         glossary = None
         if os.path.isfile(glossary_path):
             with open(glossary_path, "r", encoding="utf-8") as f:
@@ -273,24 +205,18 @@ def main(argv: list[str] | None = None) -> int:
             glossary_errors = validate.validate(glossary, validate.load_schema("glossary"))
             if glossary_errors:
                 raise ValueError("invalid optional glossary: " + "; ".join(glossary_errors))
-            plan_run_id = (plan.get("meta") or {}).get("run_id")
-            if glossary.get("run_id") != plan_run_id:
+            if glossary.get("run_id") != plan.get("run_id"):
                 raise ValueError("optional glossary does not belong to the finalized plan")
     except (OSError, json.JSONDecodeError, ValueError) as error:
         print(f"render_html: {error}", file=sys.stderr)
         return 1
 
     out_path = args.out or os.path.join(args.run_dir, "report.html")
-    text = render(
-        plan,
-        glossary=glossary,
-        legacy_glossary=plan.get("schema_version") == "1.0" and glossary is None,
-    )
+    text = render(plan, glossary=glossary)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(text)
 
-    run_log_path = os.path.join(args.run_dir, "run.json")
-    if plan.get("schema_version") != "1.0" and os.path.isfile(run_log_path):
+    if os.path.isfile(os.path.join(args.run_dir, "run.json")):
         relative_output = os.path.relpath(out_path, args.run_dir)
         artifacts = [] if relative_output == ".." or relative_output.startswith(".." + os.sep) else [relative_output]
         runlog.record(
@@ -299,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
             "ok",
             checks={"glossary_terms": len((glossary or {}).get("terms", []))},
             artifacts=artifacts,
-            run_id=(plan.get("meta") or {}).get("run_id"),
+            run_id=plan.get("run_id"),
         )
 
     print(f"OK wrote {out_path}")

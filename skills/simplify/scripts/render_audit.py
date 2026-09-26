@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Render an optional source-traceability audit for a finalized run."""
+"""Render an optional source-traceability audit for a finalized run.
+
+For every patient-visible item (`plan_paths.visible_items`, report order)
+the audit prints the item as the patient sees it, then each cited source
+unit with its file, page, line, extraction method, and text from
+`01_units.json`. It ends with the protected-content coverage and a stage
+table from `run.json`. The patient report never contains any of this.
+
+Stdlib only. Runnable as ``python3 render_audit.py --run-dir D [--out <path>]``
+(default output ``report.audit.md``) and importable as `render_audit`.
+"""
 
 from __future__ import annotations
 
@@ -9,15 +19,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import plan_paths  # noqa: E402
 import plan_view  # noqa: E402
-
-_NEXT_STEP_FIELDS = (
-    ("medications", "Medication"),
-    ("tests", "Test"),
-    ("procedures", "Procedure"),
-    ("follow_up", "Appointment"),
-    ("other", "Instruction"),
-)
 
 
 def _read_json(path: str) -> dict:
@@ -28,163 +31,80 @@ def _read_json(path: str) -> dict:
     return document
 
 
-def _fact_index(facts_doc: dict) -> dict:
-    return {fact["id"]: fact for fact in facts_doc.get("facts", [])}
-
-
 def _unit_index(units_doc: dict) -> dict:
-    return {unit["id"]: unit for unit in units_doc.get("units", [])}
+    return {
+        unit["id"]: unit
+        for unit in (units_doc.get("units") or [])
+        if isinstance(unit, dict) and "id" in unit
+    }
 
 
-def _fact_line(fact_id, facts_by_id, units_by_id, indent="  ", details=None) -> str:
-    fact = facts_by_id.get(fact_id)
-    if fact is None:
-        return f"{indent}- fact {fact_id} · (unknown fact)"
-    unit = units_by_id.get(fact.get("unit_id"))
-    if unit:
-        location = f'{unit.get("file", "?")}:{unit.get("page", "?")}:{unit.get("line", "?")}'
-        extraction = f' · extraction={unit.get("extraction_method", "unknown")}'
-    else:
-        location = "?:?:?"
-        extraction = " · extraction=unknown"
-    suffix = ""
-    for key, value in (details or []):
-        suffix += f" · {key}={value}"
-    return f'{indent}- fact {fact_id} · {location}{extraction}{suffix} · "{fact.get("quote", "")}"'
+def _unit_line(unit_id, units_by_id) -> str:
+    unit = units_by_id.get(unit_id)
+    if unit is None:
+        return f"  - unit {unit_id} · (unknown unit)"
+    location = f'{unit.get("file", "?")}:{unit.get("page", "?")}:{unit.get("line", "?")}'
+    details = f' · extraction={unit.get("extraction_method", "unknown")}'
+    if unit.get("skip"):
+        details += f' · skip={unit["skip"]}'
+    return f'  - unit {unit_id} · {location}{details} · "{unit.get("text", "")}"'
 
 
-def _fact_lines(fact_ids, facts_by_id, units_by_id) -> list[str]:
-    return [_fact_line(fact_id, facts_by_id, units_by_id) for fact_id in (fact_ids or [])]
+def _cell(value) -> str:
+    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
 
 
 def _stage_table(run_log: dict) -> list[str]:
     lines = ["| Stage | Status | Attempts | Key checks |", "|---|---|---|---|"]
-    for stage, entry in run_log.get("stages", {}).items():
-        checks = entry.get("checks", {}) or {}
-        checks_text = "; ".join(f"{key}={value}" for key, value in checks.items())
-        lines.append(f"| {stage} | {entry.get('status', '')} | {entry.get('attempts', '')} | {checks_text} |")
+    stages = run_log.get("stages")
+    if not isinstance(stages, dict) or not stages:
+        return ["(no stages recorded)"]
+    for stage, entry in stages.items():
+        entry = entry if isinstance(entry, dict) else {}
+        checks = entry.get("checks")
+        checks_text = "; ".join(f"{key}={value}" for key, value in checks.items()) if isinstance(checks, dict) else ""
+        lines.append(
+            f"| {_cell(stage)} | {_cell(entry.get('status'))} | {_cell(entry.get('attempts'))} | {_cell(checks_text)} |"
+        )
     return lines
 
 
-def _question_text(question):
-    return question.get("question", "") if isinstance(question, dict) else question
+def _coverage_lines(plan: dict) -> list[str]:
+    coverage = plan.get("coverage")
+    if not isinstance(coverage, dict) or not coverage:
+        return ["(none)"]
+    lines = []
+    for category, entry in coverage.items():
+        entry = entry if isinstance(entry, dict) else {}
+        unit_ids = ", ".join(str(uid) for uid in entry.get("unit_ids") or []) or "-"
+        lines.append(f"- {category}: {entry.get('status', '')} · units {unit_ids}")
+    return lines
 
 
-def render(
-    plan: dict,
-    facts_doc: dict,
-    units_doc: dict,
-    run_log: dict,
-    review_doc: dict | None = None,
-    coverage_doc: dict | None = None,
-) -> str:
-    facts_by_id = _fact_index(facts_doc)
+def render(plan: dict, units_doc: dict, run_log: dict) -> str:
     units_by_id = _unit_index(units_doc)
-    review_by_fact = {
-        item.get("fact_id"): item.get("result", "")
-        for item in (review_doc or {}).get("fact_reviews", [])
-    }
-    run_id = (plan.get("meta") or {}).get("run_id") or run_log.get("run_id", "")
+    run_id = plan.get("run_id") or run_log.get("run_id", "")
+    title = plan_view.title_for(plan.get("visit_type"))
 
-    lines = [f"# Audit view — {run_id}", "", "## Stages", ""]
+    lines = [f"# Audit view — {run_id}", "", f"Report: {title}", "", "## Visible items", ""]
+    items = plan_paths.visible_items(plan)
+    if not items:
+        lines.extend(["(none)", ""])
+    for path, item in items:
+        lines.append(f"### {path}")
+        lines.append("")
+        lines.append(plan_view.row_plain_text(plan_view.item_row(path, item)))
+        unit_ids = item.get("unit_ids") or []
+        if unit_ids:
+            lines.extend(_unit_line(unit_id, units_by_id) for unit_id in unit_ids)
+        else:
+            lines.append("  - (no cited units)")
+        lines.append("")
+
+    lines.extend(["## Protected content coverage", ""])
+    lines.extend(_coverage_lines(plan))
+    lines.extend(["", "## Stages", ""])
     lines.extend(_stage_table(run_log))
-    lines.append("")
-
-    if plan.get("summary"):
-        lines.extend(["## What you need to know", "", plan["summary"]])
-        lines.extend(_fact_lines(plan.get("summary_fact_ids"), facts_by_id, units_by_id))
-        lines.append("")
-
-    reasons = plan.get("reason_for_visit", []) or []
-    if reasons:
-        lines.extend(["## Why you were seen", ""])
-        for item in reasons:
-            text = (item.get("reason") or "") + (f": {item['description']}" if item.get("description") else "")
-            lines.append(f"- {text}")
-            lines.extend(_fact_lines(item.get("source_fact_ids"), facts_by_id, units_by_id))
-        lines.append("")
-
-    diagnosis = plan.get("diagnosis", {}) or {}
-    details = diagnosis.get("details", []) or []
-    if details or diagnosis.get("changed_since_last_visit"):
-        lines.extend(["## What the doctor found", ""])
-        for item in details:
-            lines.append(f"- {item.get('title', '')}")
-            lines.extend(_fact_lines(item.get("source_fact_ids"), facts_by_id, units_by_id))
-        if diagnosis.get("changed_since_last_visit"):
-            lines.append(f"- Changed since last time: {diagnosis['changed_since_last_visit']}")
-            lines.extend(_fact_lines(diagnosis.get("changed_since_last_visit_fact_ids"), facts_by_id, units_by_id))
-        lines.append("")
-
-    if any(plan.get(field) for field, _ in _NEXT_STEP_FIELDS):
-        lines.extend(["## Your next steps", ""])
-        for field, label in _NEXT_STEP_FIELDS:
-            for item in plan.get(field, []) or []:
-                title = item.get("title") or item.get("time_frame") or label
-                lines.append(f"- [{label}] {title}")
-                lines.extend(_fact_lines(item.get("source_fact_ids"), facts_by_id, units_by_id))
-        lines.append("")
-
-    warnings = plan.get("warning_signs", []) or []
-    if warnings:
-        lines.extend(["## What to watch for", ""])
-        order = {urgency: index for index, urgency in enumerate(plan_view.URGENCY_ORDER)}
-        for item in sorted(warnings, key=lambda warning: order.get(warning.get("urgency"), len(order))):
-            lines.append(f"- {item.get('symptom', '')}")
-            lines.extend(_fact_lines(item.get("source_fact_ids"), facts_by_id, units_by_id))
-        lines.append("")
-
-    questions = plan.get("questions", []) or []
-    if questions:
-        lines.extend(["## Questions to ask your doctor", ""])
-        for index, question in enumerate(questions, start=1):
-            lines.append(f"{index}. {_question_text(question)}")
-            if isinstance(question, dict):
-                lines.extend(_fact_lines(question.get("source_fact_ids"), facts_by_id, units_by_id))
-        lines.append("")
-
-    if plan.get("schema_version") == "2.0":
-        lines.extend(["## Omitted facts", ""])
-        omissions = plan.get("omitted_facts", []) or []
-        if omissions:
-            for omission in omissions:
-                fact_id = omission.get("fact_id")
-                lines.append(_fact_line(
-                    fact_id,
-                    facts_by_id,
-                    units_by_id,
-                    indent="",
-                    details=(
-                        ("reason", omission.get("reason", "")),
-                        ("review", review_by_fact.get(fact_id, "not_reviewed")),
-                    ),
-                ))
-        else:
-            lines.append("(none)")
-        lines.append("")
-    else:
-        lines.extend(["## Low priority (not shown to the patient)", ""])
-        low_priority = plan.get("low_priority", []) or []
-        lines.extend(f"- {item}" for item in low_priority)
-        if not low_priority:
-            lines.append("(none)")
-        lines.extend(["", "## Facts not present in the plan", ""])
-        missing = (coverage_doc or {}).get("missing", []) or []
-        if missing:
-            for fact_id in missing:
-                lines.append(_fact_line(fact_id, facts_by_id, units_by_id, indent=""))
-        else:
-            lines.append("(none)")
-        lines.append("")
-
-    lines.extend(["## Facts dropped at grounding", ""])
-    dropped = facts_doc.get("dropped", []) or []
-    if dropped:
-        for item in dropped:
-            fact = item.get("fact", {}) or {}
-            lines.append(f'- chunk {item.get("chunk")} · {item.get("reason")} · "{fact.get("quote", "")}"')
-    else:
-        lines.append("(none)")
     lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
@@ -200,29 +120,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _build_arg_parser().parse_args(argv)
     run_dir = args.run_dir
-    plan_path = os.path.join(run_dir, "06_plan.final.json")
+    plan_path = os.path.join(run_dir, plan_view.FINAL_PLAN_NAME)
     try:
         plan = _read_json(plan_path)
         plan_view.assert_renderable_plan(plan, run_dir, plan_path)
-        facts_doc = _read_json(os.path.join(run_dir, "02_facts.json"))
         units_doc = _read_json(os.path.join(run_dir, "01_units.json"))
         run_log = _read_json(os.path.join(run_dir, "run.json"))
-        review_doc = None
-        coverage_doc = None
-        if plan.get("schema_version") == "2.0":
-            review_doc = _read_json(os.path.join(run_dir, "04_review.json"))
-        else:
-            coverage_path = os.path.join(run_dir, "04_coverage.json")
-            if os.path.isfile(coverage_path):
-                coverage_doc = _read_json(coverage_path)
-        text = render(
-            plan,
-            facts_doc,
-            units_doc,
-            run_log,
-            review_doc=review_doc,
-            coverage_doc=coverage_doc,
-        )
+        text = render(plan, units_doc, run_log)
     except (OSError, json.JSONDecodeError, ValueError) as error:
         print(f"render_audit: {error}", file=sys.stderr)
         return 1

@@ -5,7 +5,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
+import plan_view  # noqa: E402
 import readability  # noqa: E402
+from test_plan_view import _fixture_plan, _minimal_plan  # noqa: E402
 
 
 class TestReadability(unittest.TestCase):
@@ -52,6 +54,17 @@ class TestReadability(unittest.TestCase):
         self.assertEqual(readability._syllables_in_word("little"), 2)
         # minimum of 1 even for a word with no vowel groups at all
         self.assertEqual(readability._syllables_in_word("psst"), 1)
+
+    def test_final_plan_visible_text_scores(self):
+        # The after-grade is computed on plan_view.visible_text, never on
+        # headings, metadata, or the source.
+        plan = _fixture_plan()
+        grade = readability.fk_grade(plan_view.visible_text(plan))
+        self.assertEqual(grade, plan["score"]["after_grade"])
+        self.assertLess(grade, 9.0)
+
+    def test_short_final_plan_has_no_grade(self):
+        self.assertIsNone(readability.fk_grade(plan_view.visible_text(_minimal_plan())))
 
     def test_cli_prints_grade(self):
         import subprocess

@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Validate an optional post-finalization glossary against visible report text."""
+"""Validate an optional post-finalization glossary against visible report text.
+
+Reads `07_glossary.raw.json` (model proposal, schema `glossary_raw`), keeps
+only terms whose `matched_term` appears in the finalized plan's
+patient-visible text (`plan_view.visible_text` of `05_plan.final.json`),
+drops duplicates and empty definitions, caps the list at five, and writes
+`07_glossary.json` (schema `glossary`). Never modifies the plan or report.
+"""
 
 from __future__ import annotations
 
@@ -56,16 +63,16 @@ def _write_glossary(run_dir: str, run_id: str, terms: list) -> None:
 
 
 def _load_finalized_plan(run_dir: str) -> tuple[dict, str]:
-    plan_path = os.path.join(run_dir, "06_plan.final.json")
+    plan_path = os.path.join(run_dir, plan_view.FINAL_PLAN_NAME)
     plan = _read_json(plan_path)
     if plan.get("schema_version") != SCHEMA_VERSION:
-        raise ValueError("optional glossary generation requires a completed schema-v2 final report")
-    run_id = (plan.get("meta") or {}).get("run_id")
+        raise ValueError(f"optional glossary generation requires a completed schema-{SCHEMA_VERSION} final report")
+    run_id = plan.get("run_id")
     if not run_id:
-        raise ValueError("06_plan.final.json is missing its run identity")
+        raise ValueError(f"{plan_view.FINAL_PLAN_NAME} is missing its run identity")
     run_log = _read_json(os.path.join(run_dir, "run.json"))
     if run_log.get("run_id") != run_id:
-        raise ValueError("run.json does not belong to 06_plan.final.json")
+        raise ValueError(f"run.json does not belong to {plan_view.FINAL_PLAN_NAME}")
     if ((run_log.get("stages") or {}).get("finalize") or {}).get("status") != "ok":
         raise ValueError("optional glossary generation requires successful finalization")
     return plan, run_id

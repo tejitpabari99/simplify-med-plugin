@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Renderer-neutral view model for a final care plan.
+"""Renderer-neutral view model for a final plan (schema 3.0).
 
-`build_view(plan)` turns a validated final plan dict into an ordered list
-of sections so `render_md.py` and `render_html.py` share one ordering and
-content-selection logic instead of each re-deriving it. `visible_text(plan)`
-gives the flat patient-visible text used for glossary re-detection and the
-after-readability score.
+`build_view(plan)` turns a final plan dict into a title and an ordered list
+of sections so `render_md.py`, `render_html.py`, and `render_audit.py`
+share one ordering, one set of headings, and one content-selection logic.
+`visible_text(plan)` gives the flat patient-visible text (built on
+`plan_paths.visible_strings`) used for the word count, the readability
+score, and glossary re-detection.
 
-Nothing here surfaces omissions, notices, telemetry, source identifiers,
-metadata, or run identifiers. Those belong only in the audit view.
+Section order and headings follow the PRD target report: lead paragraph,
+"What did they find?" (findings lead, findings, diagnoses, disposition),
+"What should you do now?" (next steps, then medicines), return
+precautions, questions. Empty slots are hidden. Nothing here surfaces
+unit ids, coverage, notices, scores, or run identifiers; those belong only
+in the audit view.
 
 Stdlib only. Importable as `plan_view`.
 """
@@ -17,38 +22,48 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import sys
 
-SEVERITY_LABELS = {"high": "Serious", "medium": "Moderate", "low": "Minor", None: ""}
-URGENCY_LABELS = {
-    "emergency": "Emergency",
-    "call_doctor": "Call your doctor",
-    "monitor": "Keep an eye on it",
-    "normal_side_effect": "Normal side effect",
-    None: "",
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import plan_paths  # noqa: E402
+from _version import SCHEMA_VERSION  # noqa: E402
+
+FINAL_PLAN_NAME = "05_plan.final.json"
+
+TITLES = {
+    "er_visit": "Your ER visit, simplified",
+    "hospital_stay": "Your hospital stay, simplified",
+    "clinic_visit": "Your visit, simplified",
+    "test_results": "Your test results, simplified",
+    "procedure": "Your procedure, simplified",
+    "other": "Your documents, simplified",
 }
-URGENCY_ORDER = ["emergency", "call_doctor", "monitor", "normal_side_effect", None]
-TYPE_PRECEDENCE = ["medication", "test", "procedure", "appointment", "instruction"]
-TYPE_LABELS = {
-    "medication": "Medication",
-    "test": "Test",
-    "procedure": "Procedure",
-    "appointment": "Appointment",
-    "instruction": "Instruction",
-}
-# Maps a next-steps row's type to the plan section (and therefore the
-# `key` prefix) it came from, so a row's key stays stable regardless of
-# how todo/done groups sort it.
-_SECTION_FOR_TYPE = {
-    "medication": "medications",
-    "test": "tests",
-    "procedure": "procedures",
-    "appointment": "follow_up",
-    "instruction": "other",
-}
+DEFAULT_TITLE = TITLES["clinic_visit"]
+
+FINDINGS_HEADING = "What did they find?"
+NEXT_STEPS_HEADING = "What should you do now?"
+QUESTIONS_HEADING = "Questions you may want to ask"
+GLOSSARY_HEADING = "Medical terms explained"
+_ER_RETURN_HEADING = "When should you go back to the ER?"
+_OTHER_RETURN_HEADING = "When to get help right away"
+_ER_DIAGNOSES_LABEL = "The ER diagnosed you with:"
+_OTHER_DIAGNOSES_LABEL = "Diagnosed with:"
+
+_WORD_CHAR_RE = re.compile(r"[A-Za-z0-9]")
+_NAME_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
-def _join_nonempty(parts, sep=", "):
-    return sep.join(p for p in parts if p)
+def title_for(visit_type: str | None) -> str:
+    return TITLES.get(visit_type or "", DEFAULT_TITLE)
+
+
+def return_heading(visit_type: str | None) -> str:
+    return _ER_RETURN_HEADING if visit_type in ("er_visit", "hospital_stay") else _OTHER_RETURN_HEADING
+
+
+def diagnoses_label(visit_type: str | None) -> str:
+    return _ER_DIAGNOSES_LABEL if visit_type == "er_visit" else _OTHER_DIAGNOSES_LABEL
 
 
 def score_line(score: dict | None) -> str | None:
@@ -66,257 +81,170 @@ def score_line(score: dict | None) -> str | None:
     return f"Reading level: grade {before} before, grade {after} after."
 
 
+# --- item display -------------------------------------------------------
+
+def _name_tokens(text: str) -> list[str]:
+    return sorted(_NAME_TOKEN_RE.findall((text or "").lower()))
+
+
+def plain_name_adds_meaning(name: str, plain_name: str | None) -> bool:
+    """True when `plain_name` is non-empty and is not just `name` again
+    (ignoring case, punctuation, and word order)."""
+    if not plain_name or not plain_name.strip():
+        return False
+    return _name_tokens(plain_name) != _name_tokens(name)
+
+
+def diagnosis_text(item: dict) -> str:
+    name = (item.get("name") or "").strip()
+    plain = (item.get("plain_name") or "").strip()
+    if plain_name_adds_meaning(name, plain):
+        return f"{name} ({plain})"
+    return name
+
+
+def _text(item: dict | None, field: str = "text") -> str:
+    if not isinstance(item, dict):
+        return ""
+    value = item.get(field)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def item_row(path: str, item: dict) -> dict:
+    """The displayed row for one visible item: `label` (bold lead-in,
+    possibly empty) and `text`. `path` is the plan_paths item path."""
+    kind = path.split("[", 1)[0]
+    if kind == "findings":
+        return {"path": path, "label": _text(item, "name"), "text": _text(item, "result")}
+    if kind == "diagnoses":
+        return {"path": path, "label": "", "text": diagnosis_text(item)}
+    if kind == "medicines.items":
+        return {"path": path, "label": _text(item, "name"), "text": _text(item)}
+    if kind == "questions":
+        return {"path": path, "label": "", "text": _text(item, "question")}
+    return {"path": path, "label": "", "text": _text(item)}
+
+
+def row_plain_text(row: dict) -> str:
+    """"Label: text" (or just text) without markup, for audit and tests."""
+    if row["label"] and row["text"]:
+        return f"{row['label']}: {row['text']}"
+    return row["label"] or row["text"]
+
+
+def _rows(plan: dict, prefix: str) -> list[dict]:
+    rows = []
+    for path, item in plan_paths.visible_items(plan):
+        if path.split("[", 1)[0] != prefix:
+            continue
+        row = item_row(path, item)
+        if row["label"] or row["text"]:
+            rows.append(row)
+    return rows
+
+
 # --- section builders -------------------------------------------------
 
-def _section_summary(plan):
-    text = plan.get("summary", "")
+def _section_why(plan):
+    text = _text(plan.get("why_you_went"))
     if not text:
         return None
-    return {"key": "summary", "heading": "What you need to know", "kind": "paragraph", "text": text}
-
-
-def _section_reason(plan):
-    rows = []
-    for item in plan.get("reason_for_visit", []) or []:
-        reason = item.get("reason", "") or ""
-        desc = item.get("description", "") or ""
-        text = reason + (f": {desc}" if desc else "")
-        if text:
-            rows.append({"text": text})
-    if not rows:
-        return None
-    return {"key": "reason", "heading": "Why you were seen", "kind": "list", "items": rows}
+    return {"key": "why_you_went", "heading": None, "kind": "paragraph", "text": text}
 
 
 def _section_findings(plan):
-    diagnosis = plan.get("diagnosis", {}) or {}
-    details = diagnosis.get("details", []) or []
-    items = []
-    for d in details:
-        items.append({
-            "title": d.get("title", "") or "",
-            "plain_name": d.get("plain_name", "") or "",
-            "description": d.get("description", "") or "",
-            "what_it_means": d.get("what_it_means_for_you", "") or "",
-            "severity_label": SEVERITY_LABELS.get(d.get("severity"), ""),
-        })
-    changed = diagnosis.get("changed_since_last_visit", "") or ""
-    if not items and not changed:
+    lead = _text(plan.get("findings_lead"))
+    items = _rows(plan, "findings")
+    diagnoses = _rows(plan, "diagnoses")
+    disposition = _text(plan.get("disposition"))
+    if not (lead or items or diagnoses or disposition):
         return None
-    section = {"key": "findings", "heading": "What the doctor found", "kind": "findings", "items": items}
-    if changed:
-        section["changed"] = f"What changed since last time: {changed}"
-    return section
-
-
-def _med_row(item):
-    title = item.get("title", "") or ""
-    plain = item.get("plain_name", "") or ""
-    if plain and plain != title:
-        title = f"{title} ({plain})"
-    detail = _join_nonempty([item.get("dosage", ""), item.get("frequency", ""),
-                              item.get("timing", ""), item.get("duration", "")])
-    sub = []
-    if item.get("why"):
-        sub.append(f"Why: {item['why']}")
-    if item.get("instructions"):
-        sub.append(f"Instructions: {item['instructions']}")
-    if item.get("side_effects_to_watch"):
-        sub.append(f"Side effects to watch for: {item['side_effects_to_watch']}")
-    if item.get("change"):
-        sub.append(f"Change: {item['change']}")
-    return title, detail, sub
-
-
-def _test_row(item):
-    title = item.get("title", "") or ""
-    plain = item.get("plain_name", "") or ""
-    if plain and plain != title:
-        title = f"{title} ({plain})"
-    detail = item.get("description", "") or ""
-    sub = []
-    if item.get("why"):
-        sub.append(f"Why: {item['why']}")
-    if item.get("preparation"):
-        sub.append(f"How to prepare: {item['preparation']}")
-    return title, detail, sub
-
-
-def _procedure_row(item):
-    title = item.get("title", "") or ""
-    plain = item.get("plain_name", "") or ""
-    if plain and plain != title:
-        title = f"{title} ({plain})"
-    detail = item.get("what_to_expect", "") or ""
-    sub = []
-    if item.get("why"):
-        sub.append(f"Why: {item['why']}")
-    if item.get("timeframe"):
-        sub.append(f"When: {item['timeframe']}")
-    return title, detail, sub
-
-
-def _follow_up_row(item):
-    title = "Appointment"
-    time_frame = item.get("time_frame", "") or ""
-    desc = item.get("description", "") or ""
-    detail = time_frame + (f" — {desc}" if desc else "")
-    return title, detail, []
-
-
-def _other_row(item):
-    title = item.get("title", "") or ""
-    detail = item.get("description", "") or ""
-    sub = []
-    if item.get("why"):
-        sub.append(f"Why: {item['why']}")
-    for i, step in enumerate(item.get("steps", []) or [], start=1):
-        sub.append(f"Step {i}: {step}")
-    if item.get("frequency"):
-        sub.append(f"How often: {item['frequency']}")
-    if item.get("duration"):
-        sub.append(f"For how long: {item['duration']}")
-    return title, detail, sub
-
-
-_ROW_BUILDERS = {
-    "medication": _med_row,
-    "test": _test_row,
-    "procedure": _procedure_row,
-    "appointment": _follow_up_row,
-    "instruction": _other_row,
-}
-_SOURCE_FIELDS = {
-    "medication": "medications",
-    "test": "tests",
-    "procedure": "procedures",
-    "appointment": "follow_up",
-    "instruction": "other",
-}
-
-
-def _section_next_steps(plan):
-    todo = []
-    done = []
-    order = {t: i for i, t in enumerate(TYPE_PRECEDENCE)}
-
-    for type_key in TYPE_PRECEDENCE:
-        field = _SOURCE_FIELDS[type_key]
-        builder = _ROW_BUILDERS[type_key]
-        for idx, item in enumerate(plan.get(field, []) or []):
-            title, detail, sub = builder(item)
-            row = {
-                "type_label": TYPE_LABELS[type_key],
-                "title": title,
-                "detail": detail,
-                "sub": sub,
-                "checked": item.get("status") == "done",
-                "key": f"{_SECTION_FOR_TYPE[type_key]}-{idx}",
-            }
-            (done if row["checked"] else todo).append((order[type_key], row))
-
-    if not todo and not done:
-        return None
-
-    todo_rows = [row for _, row in sorted(todo, key=lambda pair: pair[0])]
-    done_rows = [row for _, row in sorted(done, key=lambda pair: pair[0])]
     return {
-        "key": "next_steps", "heading": "Your next steps", "kind": "next_steps",
-        "todo": todo_rows, "done": done_rows,
+        "key": "findings",
+        "heading": FINDINGS_HEADING,
+        "kind": "findings",
+        "lead": lead,
+        "items": items,
+        "diagnoses_label": diagnoses_label(plan.get("visit_type")),
+        "diagnoses": diagnoses,
+        "disposition": disposition,
     }
 
 
-def _section_watch(plan):
-    items = plan.get("warning_signs", []) or []
+def _section_next_steps(plan):
+    items = _rows(plan, "next_steps") + _rows(plan, "medicines.items") + _rows(plan, "medicines.none_statement")
     if not items:
         return None
-    order = {u: i for i, u in enumerate(URGENCY_ORDER)}
-    indexed = list(enumerate(items))
-    indexed.sort(key=lambda pair: (order.get(pair[1].get("urgency"), len(URGENCY_ORDER)), pair[0]))
-    rows = []
-    for _, item in indexed:
-        rows.append({
-            "symptom": item.get("symptom", "") or "",
-            "what_to_do": item.get("what_to_do", "") or "",
-            "what_it_might_mean": item.get("what_it_might_mean", "") or "",
-            "related_to": item.get("related_to", "") or "",
-            "urgency_label": URGENCY_LABELS.get(item.get("urgency"), ""),
-        })
-    return {"key": "watch", "heading": "What to watch for", "kind": "watch", "items": rows}
+    return {"key": "next_steps", "heading": NEXT_STEPS_HEADING, "kind": "list", "items": items}
+
+
+def _section_return(plan):
+    items = _rows(plan, "return_precautions")
+    if not items:
+        return None
+    return {
+        "key": "return_precautions",
+        "heading": return_heading(plan.get("visit_type")),
+        "kind": "list",
+        "items": items,
+    }
 
 
 def _section_questions(plan):
-    qs = []
-    for question in plan.get("questions", []) or []:
-        text = question.get("question", "") if isinstance(question, dict) else question
-        if text:
-            qs.append(text)
-    if not qs:
+    items = _rows(plan, "questions")
+    if not items:
         return None
-    items = [{"n": i, "text": q} for i, q in enumerate(qs, start=1)]
-    return {"key": "questions", "heading": "Questions to ask your doctor", "kind": "numbered", "items": items}
+    return {"key": "questions", "heading": QUESTIONS_HEADING, "kind": "list", "items": items}
 
 
 def _section_glossary(glossary):
-    if not glossary:
+    if not isinstance(glossary, dict) or not isinstance(glossary.get("terms"), list):
         return None
-    if isinstance(glossary, dict) and isinstance(glossary.get("terms"), list):
-        items = [
-            {"term": item.get("term", "") or "", "definition": item.get("definition", "") or ""}
-            for item in glossary["terms"]
-            if item.get("term") and item.get("definition")
-        ]
-    else:
-        items = [
-            {"term": term, "definition": (data or {}).get("definition", "") or ""}
-            for term, data in glossary.items()
-            if term and (data or {}).get("definition")
-        ]
+    items = [
+        {"term": item.get("term", "") or "", "definition": item.get("definition", "") or ""}
+        for item in glossary["terms"]
+        if item.get("term") and item.get("definition")
+    ]
     items.sort(key=lambda item: item["term"].lower())
     if not items:
         return None
-    return {"key": "glossary", "heading": "Medical terms explained", "kind": "glossary", "items": items}
+    return {"key": "glossary", "heading": GLOSSARY_HEADING, "kind": "glossary", "items": items}
 
 
 _SECTION_BUILDERS = (
-    _section_summary, _section_reason, _section_findings,
-    _section_next_steps, _section_watch, _section_questions,
+    _section_why, _section_findings, _section_next_steps, _section_return, _section_questions,
 )
 
 
-def build_view(plan: dict, glossary: dict | None = None, legacy_glossary: bool = False) -> dict:
+def build_view(plan: dict, glossary: dict | None = None) -> dict:
+    """Title plus ordered, non-empty sections. The glossary section is added
+    only when a validated glossary document is passed explicitly."""
     sections = []
     for builder in _SECTION_BUILDERS:
         section = builder(plan)
         if section:
             sections.append(section)
-
-    glossary_data = glossary
-    if glossary_data is None and legacy_glossary and plan.get("schema_version") == "1.0":
-        glossary_data = plan.get("terms", {}) or {}
-    glossary_section = _section_glossary(glossary_data)
+    glossary_section = _section_glossary(glossary)
     if glossary_section:
         sections.append(glossary_section)
-
-    return {
-        "title": "Your visit, explained",
-        "sections": sections,
-    }
+    return {"title": title_for(plan.get("visit_type")), "sections": sections}
 
 
 def assert_renderable_plan(plan: dict, run_dir: str, plan_path: str) -> None:
-    schema_version = plan.get("schema_version")
-    label = "completed schema-v1 final report" if schema_version == "1.0" else "completed final report"
-    if os.path.basename(plan_path) != "06_plan.final.json":
+    """Refuse anything but a finalized schema-3.0 plan whose run log records
+    a successful `finalize` for the same run."""
+    label = "completed final report"
+    if os.path.basename(plan_path) != FINAL_PLAN_NAME or plan.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"rendering requires a {label}")
     try:
         with open(os.path.join(run_dir, "run.json"), "r", encoding="utf-8") as handle:
             run_log = json.load(handle)
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"rendering requires a {label}") from error
-    if ((run_log.get("stages") or {}).get("finalize") or {}).get("status") != "ok":
+    stages = run_log.get("stages") if isinstance(run_log, dict) else None
+    if (((stages or {}).get("finalize")) or {}).get("status") != "ok":
         raise ValueError(f"rendering requires a {label}")
-    plan_run_id = (plan.get("meta") or {}).get("run_id")
+    plan_run_id = plan.get("run_id")
     run_log_id = run_log.get("run_id")
     if plan_run_id and run_log_id and plan_run_id != run_log_id:
         raise ValueError("final plan and run log identities do not match")
@@ -324,46 +252,25 @@ def assert_renderable_plan(plan: dict, run_dir: str, plan_path: str) -> None:
 
 # --- visible text -------------------------------------------------------
 
-def _texts_for_section(section):
-    kind = section["kind"]
-    texts = []
-    if kind == "paragraph":
-        texts.append(section["text"])
-    elif kind == "list":
-        texts.extend(item["text"] for item in section["items"])
-    elif kind == "findings":
-        for item in section["items"]:
-            texts.append(item.get("title", ""))
-            texts.append(item.get("plain_name", ""))
-            texts.append(item.get("description", ""))
-            texts.append(item.get("what_it_means", ""))
-        if "changed" in section:
-            texts.append(section["changed"])
-    elif kind == "next_steps":
-        for group in (section["todo"], section["done"]):
-            for row in group:
-                texts.append(row["title"])
-                texts.append(row["detail"])
-                texts.extend(row["sub"])
-    elif kind == "watch":
-        for row in section["items"]:
-            texts.append(row.get("symptom", ""))
-            texts.append(row.get("what_to_do", ""))
-            texts.append(row.get("what_it_might_mean", ""))
-            texts.append(row.get("related_to", ""))
-    elif kind == "numbered":
-        texts.extend(item["text"] for item in section["items"])
-    # kind == "glossary": excluded from visible_text by design.
-    return [t for t in texts if t]
+def _shown(plan: dict, field_path: str, text: str) -> bool:
+    """False for a diagnosis `plain_name` the renderers hide as a duplicate."""
+    if not field_path.endswith(".plain_name"):
+        return True
+    item_path = field_path.rsplit(".", 1)[0]
+    item = dict(plan_paths.visible_items(plan)).get(item_path) or {}
+    return plain_name_adds_meaning(item.get("name") or "", text)
 
 
-def visible_text(plan: dict, glossary: dict | None = None) -> str:
-    """All patient-visible strings of `plan`, in view order, joined by
-    blank lines. Excludes glossary definitions and notices."""
-    view = build_view(plan, glossary=glossary)
-    parts = []
-    for section in view["sections"]:
-        if section["key"] == "glossary":
-            continue
-        parts.extend(_texts_for_section(section))
-    return "\n\n".join(parts)
+def visible_text(plan: dict) -> str:
+    """All patient-visible strings of `plan`, in report order, joined by
+    blank lines. Excludes headings, glossary definitions, and metadata."""
+    return "\n\n".join(
+        text.strip()
+        for field_path, text, _unit_ids in plan_paths.visible_strings(plan)
+        if _shown(plan, field_path, text)
+    )
+
+
+def word_count(plan: dict) -> int:
+    """Words in `visible_text(plan)`: whitespace tokens with a letter or digit."""
+    return sum(1 for token in visible_text(plan).split() if _WORD_CHAR_RE.search(token))
