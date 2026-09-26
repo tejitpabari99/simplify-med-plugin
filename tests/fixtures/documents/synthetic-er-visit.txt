@@ -1,0 +1,54 @@
+# SYNTHETIC DOCUMENT -- fabricated for testing only, not a real patient record.
+Patient Portal - Visit Summary
+https://portal.example-health.test/visits/000000
+Page 1 of 3
+EMERGENCY DEPARTMENT PROVIDER NOTE
+Chief Complaint: Headache; Abnormal ECG
+History of Present Illness:
+Patient was sent from urgent care for abnormal ECG and headache.
+Reports headache and neck pain for 3 days, with left hand tingling since last night.
+Headaches have been waxing and waning over several days.
+Urgent care advised ibuprofen for the headache.
+Urgent care ECG read as right bundle branch block, first degree AV block, possible anterolateral ST elevation.
+Past Medical History: No past medical history on file.
+Problem List: No problem list on file.
+Current Outpatient Medications: No current outpatient medications on file.
+Patient reports taking no daily medications.
+Allergies: No Known Allergies
+Triage Vitals: BP 155/99, Temp 36.1 C (97 F), HR 66, RR 18, SpO2 100%
+Physical Exam:
+General: Well appearing, no acute distress. Skin warm and dry.
+Eyes: Pupils equal and reactive, extraocular movements intact.
+Lungs: Clear to auscultation, normal work of breathing.
+Cardiac: Regular rate and rhythm, 2+ pulses in all four extremities.
+Neuro: Mental status normal, face symmetric, speech normal, no pronator drift.
+Neuro: Slightly altered light touch sensation in left palm; otherwise normal neurologic exam.
+Patient Portal - Visit Summary
+https://portal.example-health.test/visits/000000
+Page 2 of 3
+Results:
+Sodium 142, Potassium 3.7, Chloride 101, Glucose 115 (H), BUN 12, Creatinine 0.8, Anion gap 17 (H)
+WBC 7.06, Hemoglobin 14.5, Hematocrit 43.8, Platelets 271
+ECG 12-lead: sinus rhythm, ventricular rate 65.
+CT ANGIOGRAM HEAD AND NECK WITH AND WITHOUT CONTRAST
+Technique: Iopamidol (Isovue-370) 76% injection 80 mL IV. Multiplanar reconstructions. NASCET criteria used for stenosis measurements.
+Findings: No intracranial hemorrhage, mass, or midline shift. Carotid and vertebral arteries are patent without dissection or stenosis.
+IMPRESSION: Normal CT angiogram of the head and neck. No stenosis, aneurysm, or dissection. Normal noncontrast head CT; CT cannot exclude acute infarct.
+Please discuss imaging findings and recommendations with the ordering provider.
+MRI BRAIN WITHOUT CONTRAST
+Findings: No diffusion restriction. Mild left sphenoid sinus mucosal thickening.
+IMPRESSION: Normal noncontrast brain MRI. No acute infarct.
+Please discuss imaging findings and recommendations with the ordering provider.
+Medical Decision Making:
+Labs unremarkable.
+ECG reviewed; right bundle branch block and first degree AV block, not concerning for STEMI or acute ischemia.
+No emergent cause of symptoms identified on imaging.
+Patient Portal - Visit Summary
+https://portal.example-health.test/visits/000000
+Page 3 of 3
+Clinical Impression: Acute headache. Left upper extremity paresthesias.
+Disposition: Discharged home in stable condition.
+Discharge Vitals: BP 124/78, HR 78, RR 17, SpO2 98%
+No new medications prescribed.
+Follow-up: Schedule an appointment with your primary care provider as soon as possible regarding headache, hand tingling, and abnormal ECG.
+Return to the emergency department for any new or worsening symptoms.

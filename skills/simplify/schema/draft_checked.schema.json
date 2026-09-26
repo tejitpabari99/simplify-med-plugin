@@ -1,0 +1,307 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "draft_checked",
+  "description": "Checked draft (02_draft.json) and settled plan (04_plan.settled.json): the WRITE contract plus run identity.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "visit_type",
+    "why_you_went",
+    "findings_lead",
+    "findings",
+    "diagnoses",
+    "disposition",
+    "next_steps",
+    "medicines",
+    "return_precautions",
+    "questions",
+    "coverage"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "unit_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "statement": {
+      "type": "object",
+      "required": [
+        "text",
+        "unit_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_ids": {
+          "$ref": "#/definitions/unit_ids"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "name",
+        "result",
+        "unit_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_ids": {
+          "$ref": "#/definitions/unit_ids"
+        }
+      }
+    },
+    "diagnosis": {
+      "type": "object",
+      "required": [
+        "name",
+        "unit_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plain_name": {
+          "type": "string"
+        },
+        "unit_ids": {
+          "$ref": "#/definitions/unit_ids"
+        }
+      }
+    },
+    "medicine": {
+      "type": "object",
+      "required": [
+        "name",
+        "change",
+        "text",
+        "unit_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "change": {
+          "type": "string",
+          "enum": [
+            "start",
+            "stop",
+            "change",
+            "continue",
+            "instruction"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_ids": {
+          "$ref": "#/definitions/unit_ids"
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "question",
+        "unit_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_ids": {
+          "$ref": "#/definitions/unit_ids"
+        }
+      }
+    },
+    "coverage_entry": {
+      "type": "object",
+      "required": [
+        "status",
+        "unit_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "shown",
+            "none_in_source"
+          ]
+        },
+        "unit_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "3.0"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "visit_type": {
+      "type": "string",
+      "enum": [
+        "er_visit",
+        "hospital_stay",
+        "clinic_visit",
+        "test_results",
+        "procedure",
+        "other"
+      ]
+    },
+    "why_you_went": {
+      "$ref": "#/definitions/statement"
+    },
+    "findings_lead": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/statement"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/definitions/finding"
+      }
+    },
+    "diagnoses": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/definitions/diagnosis"
+      }
+    },
+    "disposition": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/statement"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "next_steps": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/definitions/statement"
+      }
+    },
+    "medicines": {
+      "type": "object",
+      "required": [
+        "items",
+        "none_statement"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/definitions/medicine"
+          }
+        },
+        "none_statement": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/statement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "return_precautions": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/definitions/statement"
+      }
+    },
+    "questions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/definitions/question"
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "medication_changes",
+        "follow_up",
+        "return_precautions",
+        "diagnoses",
+        "disposition",
+        "abnormal_or_pending_results"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "medication_changes": {
+          "$ref": "#/definitions/coverage_entry"
+        },
+        "follow_up": {
+          "$ref": "#/definitions/coverage_entry"
+        },
+        "return_precautions": {
+          "$ref": "#/definitions/coverage_entry"
+        },
+        "diagnoses": {
+          "$ref": "#/definitions/coverage_entry"
+        },
+        "disposition": {
+          "$ref": "#/definitions/coverage_entry"
+        },
+        "abnormal_or_pending_results": {
+          "$ref": "#/definitions/coverage_entry"
+        }
+      }
+    }
+  }
+}
