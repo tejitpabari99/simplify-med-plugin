@@ -100,6 +100,20 @@ def check_versions(repo_root: str = _REPO_ROOT) -> str:
                 file=sys.stderr,
             )
             raise SystemExit(2)
+
+    openai_compat_manifest = os.path.join(
+        repo_root, "packaging", "openai", ".codex-plugin", "plugin.json"
+    )
+    if os.path.isfile(openai_compat_manifest):
+        compat_version = _read_json(openai_compat_manifest).get("version")
+        if compat_version != meta_version:
+            print(
+                "Version mismatch: plugin.meta.json version="
+                f"{meta_version!r} vs packaging/openai/.codex-plugin/plugin.json "
+                f"version={compat_version!r}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
     return meta_version
 
 
@@ -275,6 +289,10 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release)
         _copy_if_present(os.path.join(overlay, filename), os.path.join(skill_destination, filename))
     _copy_if_present(os.path.join(overlay, "agents"), os.path.join(skill_destination, "agents"))
     _copy_if_present(os.path.join(overlay, "assets"), os.path.join(plugin_stage, "assets"))
+    _copy_if_present(
+        os.path.join(overlay, ".codex-plugin"),
+        os.path.join(plugin_stage, ".codex-plugin"),
+    )
     shutil.copy2(os.path.join(overlay, "plugin.json"), os.path.join(plugin_stage, "plugin.json"))
 
     mcp_document, configured_endpoint = _source_endpoint(repo_root)
@@ -291,6 +309,10 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release)
             f.write("\n")
     else:
         shutil.copy2(os.path.join(repo_root, "mcp", "openai", "mcp.json"), mcp_target)
+    compat_mcp_target = os.path.join(plugin_stage, ".mcp.json")
+    with open(compat_mcp_target, "w", encoding="utf-8") as f:
+        json.dump({"mcpServers": mcp_document["mcpServers"]}, f, indent=2)
+        f.write("\n")
 
     yaml_path = os.path.join(skill_destination, "agents", "openai.yaml")
     with open(yaml_path, "r", encoding="utf-8") as f:

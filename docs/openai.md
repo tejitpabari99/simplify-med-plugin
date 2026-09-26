@@ -26,6 +26,8 @@ ChatGPT account against the deployed endpoint.
 | Platform hooks | staged `custom_start.md`, `custom_end.md` | Add host-specific instructions before Stage 0 and after finalization. Blank defaults are no-ops. |
 | Portable manifest | staged root `plugin.json` | Identifies the plugin and carries OpenAI listing metadata. |
 | MCP declaration | `mcp/openai/mcp.json`, copied to staged root | Points the installed package at the deployed streamable-HTTP endpoint. |
+| Compatibility manifest | staged `.codex-plugin/plugin.json` | Supports OpenAI hosts that still use the Codex compatibility ingestion path. |
+| Compatibility MCP declaration | staged `.mcp.json` | Mirrors the root MCP server map without the portable-only schema field. |
 | Skill dependency | staged `skills/simplify-med/agents/openai.yaml` | Declares the same endpoint as a report-viewer dependency. |
 | MCP server | `mcp/openai/src/` | Registers one read-only render tool and serves the static UI resource. |
 | Report widget | `mcp/openai/ui/` | Loads the final JSON from OpenAI in the iframe and renders inline/fullscreen views. |
@@ -230,6 +232,9 @@ The OpenAI archive contains this logical root:
 simplify-med/
   plugin.json
   mcp.json
+  .mcp.json
+  .codex-plugin/
+    plugin.json
   skills/simplify-med/
     SKILL.md
     custom_start.md
@@ -242,8 +247,11 @@ simplify-med/
     templates/
 ```
 
-Version `0.1.0` does not include the optional `.codex-plugin/` compatibility manifest
-or an `assets/` directory because its portable manifest does not reference either.
+The root portable manifest remains canonical. The compatibility manifest mirrors the
+same identity and OpenAI interface metadata, and points legacy ingestion at `.mcp.json`.
+The build derives `.mcp.json` from the same staged server map as root `mcp.json`, while
+omitting the portable-only `$schema` field, so an endpoint override cannot make the two
+declarations drift.
 
 The endpoint must come from one build configuration source so the staged `mcp.json` and
 `agents/openai.yaml` cannot drift. Developer builds may use an explicit loopback test
@@ -251,9 +259,9 @@ endpoint. A release build rejects the committed example, HTTP, loopback/private 
 reserved/example names, credentials, query strings, fragments, and paths other than
 exactly `/mcp`.
 
-Before distributing a ZIP, inspect its entries and validate root `plugin.json` and
-`mcp.json` against the Agent Plugins 1.0 schemas. Root portable manifests are canonical;
-the `.codex-plugin` manifest is only a fallback. See the official
+Before distributing a ZIP, inspect its entries and validate root `plugin.json`,
+`mcp.json`, and the `.codex-plugin` compatibility manifest. Root portable manifests are
+canonical; the `.codex-plugin` manifest is a fallback for compatibility ingestion. See the official
 [plugin packaging guide](https://developers.openai.com/plugins/build/plugins).
 
 ## Run locally

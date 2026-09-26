@@ -1,3 +1,9 @@
+interface:
+  display_name: Simplify Med
+  short_description: Turn medical paperwork into a fact-checked plain-language report.
+  default_prompt: Simplify this medical document into a plain-language care plan.
+policy:
+  allow_implicit_invocation: true
 dependencies:
   tools:
     - type: mcp

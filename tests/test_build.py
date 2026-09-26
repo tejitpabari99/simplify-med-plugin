@@ -103,7 +103,11 @@ class TestBuildOpenAi(unittest.TestCase):
             with zipfile.ZipFile(zip_path) as zf:
                 names = set(zf.namelist())
                 plugin = json.loads(zf.read("simplify-med/plugin.json"))
+                compat_plugin = json.loads(
+                    zf.read("simplify-med/.codex-plugin/plugin.json")
+                )
                 staged_mcp = zf.read("simplify-med/mcp.json")
+                staged_compat_mcp = zf.read("simplify-med/.mcp.json")
                 yaml = zf.read(
                     "simplify-med/skills/simplify-med/agents/openai.yaml"
                 ).decode()
@@ -117,9 +121,20 @@ class TestBuildOpenAi(unittest.TestCase):
             interface = plugin["extensions"]["com.openai"]["interface"]
             self.assertEqual(interface["displayName"], "Simplify Med")
             self.assertIn("shortDescription", interface)
+            self.assertEqual(interface["category"], "Productivity")
+            self.assertEqual(interface["capabilities"], ["Read", "Write"])
+            self.assertTrue(interface["defaultPrompt"])
             self.assertNotIn("skills", plugin)
+            self.assertEqual(compat_plugin["name"], plugin["name"])
+            self.assertEqual(compat_plugin["version"], plugin["version"])
+            self.assertEqual(compat_plugin["interface"], interface)
+            self.assertEqual(compat_plugin["skills"], "./skills/")
+            self.assertEqual(compat_plugin["mcpServers"], "./.mcp.json")
             with open(os.path.join(_paths.REPO_ROOT, "mcp", "openai", "mcp.json"), "rb") as f:
                 self.assertEqual(staged_mcp, f.read())
+            compat_mcp = json.loads(staged_compat_mcp)
+            self.assertNotIn("$schema", compat_mcp)
+            self.assertEqual(compat_mcp["mcpServers"], json.loads(staged_mcp)["mcpServers"])
             self.assertIn("url: https://PLUGIN_DOMAIN.example/mcp", yaml)
             self.assertIn("render_simplify_med_report", custom_end)
             self.assertIn("06_plan.final.json", custom_end)
@@ -141,11 +156,14 @@ class TestBuildOpenAi(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             with zipfile.ZipFile(os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")) as zf:
                 staged_mcp = json.loads(zf.read("simplify-med/mcp.json"))
+                staged_compat_mcp = json.loads(zf.read("simplify-med/.mcp.json"))
                 yaml = zf.read("simplify-med/skills/simplify-med/agents/openai.yaml").decode()
         self.assertEqual(
             staged_mcp["mcpServers"]["simplify-med-ui"]["url"],
             "https://mcp.simplify-med.dev/mcp",
         )
+        self.assertNotIn("$schema", staged_compat_mcp)
+        self.assertEqual(staged_compat_mcp["mcpServers"], staged_mcp["mcpServers"])
         self.assertIn("url: https://mcp.simplify-med.dev/mcp", yaml)
         with open(source_path, "rb") as f:
             self.assertEqual(source_before, f.read())
