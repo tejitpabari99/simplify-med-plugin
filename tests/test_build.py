@@ -261,18 +261,18 @@ class TestBuildOpenAi(unittest.TestCase):
             result = _run_build(["--platform", "openai", "--out", out_dir, "--no-mcp"])
             self.assertEqual(result.returncode, 0, msg=result.stderr)
 
-            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai-no-mcp.zip")
-            self.assertTrue(zip_path.endswith("-openai-no-mcp.zip"))
+            zip_path = os.path.join(out_dir, "simplify-med-noui-0.1.0-openai.zip")
+            self.assertTrue(zip_path.endswith("-openai.zip"))
             with zipfile.ZipFile(zip_path) as zf:
                 names = set(zf.namelist())
                 compat_plugin = json.loads(
-                    zf.read("simplify-med/.codex-plugin/plugin.json")
+                    zf.read("simplify-med-noui/.codex-plugin/plugin.json")
                 )
                 yaml_text = zf.read(
-                    "simplify-med/skills/simplify/agents/openai.yaml"
+                    "simplify-med-noui/skills/simplify/agents/openai.yaml"
                 ).decode()
                 staged_skill_md = zf.read(
-                    "simplify-med/skills/simplify/SKILL.md"
+                    "simplify-med-noui/skills/simplify/SKILL.md"
                 ).decode()
                 all_text_blobs = []
                 for name in names:
@@ -286,20 +286,25 @@ class TestBuildOpenAi(unittest.TestCase):
             # No root or compatibility MCP declaration is staged at all, and no
             # root (portable-format) plugin.json is shipped for the skills-only
             # build (D2).
-            self.assertNotIn("simplify-med/mcp.json", names)
-            self.assertNotIn("simplify-med/.mcp.json", names)
-            self.assertNotIn("simplify-med/plugin.json", names)
+            self.assertTrue(names)
+            self.assertTrue(all(name.startswith("simplify-med-noui/") for name in names))
+            self.assertNotIn("simplify-med-noui/mcp.json", names)
+            self.assertNotIn("simplify-med-noui/.mcp.json", names)
+            self.assertNotIn("simplify-med-noui/plugin.json", names)
 
             # No custom_start.md/custom_end.md hand-off files are staged either
             # (D1/D3): the overlay SKILL.md is fully self-contained.
-            self.assertNotIn("simplify-med/skills/simplify/custom_start.md", names)
-            self.assertNotIn("simplify-med/skills/simplify/custom_end.md", names)
+            self.assertNotIn("simplify-med-noui/skills/simplify/custom_start.md", names)
+            self.assertNotIn("simplify-med-noui/skills/simplify/custom_end.md", names)
 
             # The compatibility manifest keeps its other keys but drops mcpServers
             # and trims capabilities to the non-interactive set (D2).
             self.assertNotIn("mcpServers", compat_plugin)
             self.assertEqual(compat_plugin["skills"], "./skills/")
-            self.assertEqual(compat_plugin["name"], "simplify-med")
+            self.assertEqual(compat_plugin["name"], "simplify-med-noui")
+            self.assertEqual(
+                compat_plugin["interface"]["displayName"], "simplify-med-noUI"
+            )
             self.assertEqual(
                 compat_plugin["interface"]["capabilities"], ["Read", "Write"]
             )
@@ -501,13 +506,15 @@ class TestBuildOpenAi(unittest.TestCase):
             result = _run_build(["--platform", "openai", "--out", out_dir, "--no-mcp"])
             self.assertEqual(result.returncode, 0, msg=result.stderr)
 
-            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai-no-mcp.zip")
+            zip_path = os.path.join(out_dir, "simplify-med-noui-0.1.0-openai.zip")
             with zipfile.ZipFile(zip_path) as zf:
                 names = set(zf.namelist())
-                self.assertNotIn("simplify-med/plugin.json", names)
-                compat_plugin = json.loads(zf.read("simplify-med/.codex-plugin/plugin.json"))
+                self.assertNotIn("simplify-med-noui/plugin.json", names)
+                compat_plugin = json.loads(
+                    zf.read("simplify-med-noui/.codex-plugin/plugin.json")
+                )
                 yaml_text = zf.read(
-                    "simplify-med/skills/simplify/agents/openai.yaml"
+                    "simplify-med-noui/skills/simplify/agents/openai.yaml"
                 ).decode()
 
             interface = compat_plugin["interface"]
@@ -519,14 +526,14 @@ class TestBuildOpenAi(unittest.TestCase):
                 self.assertIn(field, interface, f"interface.{field} is not set")
                 relative = interface[field].removeprefix("./")
                 self.assertIn(
-                    f"simplify-med/{relative}",
+                    f"simplify-med-noui/{relative}",
                     names,
                     f"interface.{field}={interface[field]!r} has no staged file",
                 )
 
             # `agents/openai.yaml` icon_small/icon_large are resolved relative to
             # the *skill* directory (skills/simplify/).
-            skill_prefix = "simplify-med/skills/simplify/"
+            skill_prefix = "simplify-med-noui/skills/simplify/"
             for key in ("icon_small", "icon_large"):
                 match = re.search(rf"^\s*{key}:\s*(\S+)\s*$", yaml_text, re.MULTILINE)
                 self.assertIsNotNone(match, f"{key} missing from staged openai.yaml")

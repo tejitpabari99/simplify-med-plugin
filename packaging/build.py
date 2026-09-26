@@ -26,6 +26,7 @@ _DEVELOPMENT_PLACEHOLDER = "https://PLUGIN_DOMAIN.example/mcp"
 _DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.IGNORECASE)
 _RESERVED_SUFFIXES = (".localhost", ".local", ".test", ".example", ".invalid", ".onion")
 _EXAMPLE_DOMAINS = ("example.com", "example.net", "example.org")
+_OPENAI_NO_UI_SUFFIX = "-noui"
 
 PLATFORMS = {
     "claude-code": {
@@ -371,7 +372,14 @@ def _assert_no_mcp_traces(plugin_stage: str) -> None:
 
 
 def _stage_openai(
-    repo_root, plugin_stage, patterns, endpoint_override, release, include_mcp=True, app_id=None
+    repo_root,
+    plugin_stage,
+    patterns,
+    endpoint_override,
+    release,
+    include_mcp=True,
+    app_id=None,
+    no_ui_identity=False,
 ):
     skill_source = os.path.join(repo_root, "skills", "simplify")
     skill_destination = os.path.join(plugin_stage, "skills", "simplify")
@@ -413,6 +421,10 @@ def _stage_openai(
         compat_manifest = _read_json(compat_manifest_path)
         compat_manifest["interface"]["capabilities"] = ["Read", "Write"]
         compat_manifest.pop("mcpServers", None)
+        if no_ui_identity:
+            original_name = compat_manifest["name"]
+            compat_manifest["name"] = f"{original_name}{_OPENAI_NO_UI_SUFFIX}"
+            compat_manifest["interface"]["displayName"] = f"{original_name}-noUI"
         if app_id:
             # EXPERIMENTAL: reference an existing ChatGPT dev-mode app by ID
             # instead of shipping an MCP endpoint. Documented mechanism per
@@ -481,11 +493,29 @@ def _stage_openai(
         f.write(template.replace(_URL_TOKEN, endpoint))
 
 
-def _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp=True, app_id=None):
+def _stage_platform(
+    platform,
+    repo_root,
+    plugin_stage,
+    mcp_url,
+    release,
+    include_mcp=True,
+    app_id=None,
+    no_ui_identity=False,
+):
     config = PLATFORMS[platform]
     patterns = parse_ignore_file(os.path.join(repo_root, "packaging", config["ignore_file"]))
     if config["layout"] == "openai":
-        _stage_openai(repo_root, plugin_stage, patterns, mcp_url, release, include_mcp, app_id)
+        _stage_openai(
+            repo_root,
+            plugin_stage,
+            patterns,
+            mcp_url,
+            release,
+            include_mcp,
+            app_id,
+            no_ui_identity,
+        )
         return
     if mcp_url or release:
         raise SystemExit("--mcp-url and --release apply only to the OpenAI build")
@@ -536,22 +566,33 @@ def build(
             raise SystemExit("--app-id cannot be combined with --no-mcp")
         no_mcp = True  # --app-id implies no-mcp staging, same as today
     include_mcp = not no_mcp
+    no_ui_identity = platform == "openai" and no_mcp and app_id is None
     if not include_mcp and mcp_url:
         raise SystemExit("--no-mcp cannot be combined with --mcp-url")
     version = check_versions(repo_root)
     plugin_name = load_meta(repo_root)["name"]
-    root_name = archive_root_name(platform, repo_root)
+    package_name = f"{plugin_name}{_OPENAI_NO_UI_SUFFIX}" if no_ui_identity else plugin_name
+    root_name = package_name if no_ui_identity else archive_root_name(platform, repo_root)
     out_dir_abs = out_dir if os.path.isabs(out_dir) else os.path.join(repo_root, out_dir)
     os.makedirs(out_dir_abs, exist_ok=True)
-    zip_suffix = f"{platform}-no-mcp" if platform == "openai" and not include_mcp else platform
+    zip_suffix = f"{platform}-no-mcp" if app_id else platform
     # The zip's FILENAME always uses the plugin name, regardless of platform;
     # only the archive's internal top-level folder (root_name) varies.
-    zip_path = os.path.join(out_dir_abs, f"{plugin_name}-{version}-{zip_suffix}.zip")
+    zip_path = os.path.join(out_dir_abs, f"{package_name}-{version}-{zip_suffix}.zip")
 
     with tempfile.TemporaryDirectory(prefix="simplify-med-build-") as temp_dir:
         plugin_stage = os.path.join(temp_dir, root_name)
         os.makedirs(plugin_stage)
-        _stage_platform(platform, repo_root, plugin_stage, mcp_url, release, include_mcp, app_id)
+        _stage_platform(
+            platform,
+            repo_root,
+            plugin_stage,
+            mcp_url,
+            release,
+            include_mcp,
+            app_id,
+            no_ui_identity,
+        )
         staged_files = sorted(
             os.path.join(dirpath, filename)
             for dirpath, _, filenames in os.walk(plugin_stage)

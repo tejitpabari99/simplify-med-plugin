@@ -144,13 +144,16 @@ and a dependency on the separately deployed presentation MCP endpoint; an OpenAI
 production build needs that deployed HTTPS endpoint, which the ZIP itself does not
 deploy — follow [`docs/openai.md`](docs/openai.md#deploy).
 
-`python3 build.py openai --no-mcp` instead produces a plain skills-only plugin: no root
+`python3 build.py openai --no-mcp` instead produces a distinct `simplify-med-noui`
+skills-only plugin: no root
 `plugin.json`, no `mcp.json`/`.mcp.json`, no connector wiring, and only
 `.codex-plugin/plugin.json` as the manifest, with an OpenAI-specific self-contained
-`SKILL.md` — there is no server to deploy for this mode. Install it either by unzipping
-its contents under `~/plugins/<name>/` (or adding a repo/team
+`SKILL.md` — there is no server to deploy for this mode. Its archive root and manifest
+name match (`simplify-med-noui`), so it can coexist with the UI-backed `simplify-med`
+plugin without a post-build ZIP rewrite. Install it either by unzipping its contents
+under `~/plugins/simplify-med-noui/` (or adding a repo/team
 `.agents/plugins/marketplace.json` entry pointing at it), or by uploading/importing the
-zip directly in ChatGPT. See
+generated `simplify-med-noui-<version>-openai.zip` directly in ChatGPT. See
 [`docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md`](docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md)
 (D2, D8) for the exact package tree and rationale.
 
