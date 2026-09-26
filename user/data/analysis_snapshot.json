@@ -1,0 +1,720 @@
+{
+  "generated_from": {
+    "patients": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit",
+    "clinicians": "https://docs.google.com/spreadsheets/d/1IYGhg7QleCuXmskUatl28-I-xBD-cMxeVKsjSP4zDxE/edit",
+    "patient_interviews": "https://docs.google.com/spreadsheets/d/1V1wd-FOJdwuaMUajr430MmvDHlbUWPcuhFRKGXaCFh0/edit"
+  },
+  "source_checks": {
+    "patient_duplicate_export_content_equal": true,
+    "clinician_duplicate_export_content_equal": true,
+    "patient_raw_rows": 165,
+    "patient_duplicate_rows": 1,
+    "patient_unique_submissions": 164,
+    "patient_interview_tagged_rows": 22,
+    "patient_interview_duplicate_rows": 1,
+    "patient_interview_unique_units": 21,
+    "separate_patient_interview_rows": 4,
+    "clinician_raw_rows": 21,
+    "clinician_qualitative_units": 19
+  },
+  "score_details": {
+    "patient_forget_3_to_5": {
+      "mean": 2.69,
+      "median": 3.0
+    },
+    "patient_worry_4_to_5": {
+      "mean": 3.09,
+      "median": 3.0
+    },
+    "patient_followup_4_to_5": {
+      "mean": 3.11,
+      "median": 3.0
+    },
+    "patient_app_interest_4_to_5": {
+      "mean": 3.44,
+      "median": 4.0
+    },
+    "patient_smartphone_4_to_5": {
+      "mean": 4.56,
+      "median": 5.0
+    },
+    "patient_search_reliability_1_to_3": {
+      "mean": 3.41,
+      "median": 3.0
+    }
+  },
+  "metrics": [
+    {
+      "metric_id": "patient_question_gap",
+      "audience": "Patient survey",
+      "category": "Current skills",
+      "label": "Missed critical questions or were too overloaded to formulate them",
+      "count": 82,
+      "denominator": 161,
+      "percent": 50.9,
+      "basis": "Explicit structured answer text; multi-label responses counted once.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Were you able to ask follow up questions to the doctor at the appointment?"
+    },
+    {
+      "metric_id": "patient_not_full_understanding",
+      "audience": "Patient survey",
+      "category": "Current skills",
+      "label": "Reported only partial understanding or too little information",
+      "count": 91,
+      "denominator": 159,
+      "percent": 57.2,
+      "basis": "Counts the two standard non-full-understanding response options.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Were you able to fully understand your condition at the end of the appointment?"
+    },
+    {
+      "metric_id": "patient_relied_on_memory",
+      "audience": "Patient survey",
+      "category": "Current skills",
+      "label": "Included memorization in their appointment information method",
+      "count": 78,
+      "denominator": 163,
+      "percent": 47.9,
+      "basis": "Multi-select text; memorization may be combined with another method.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | How did you store the information provided by the doctor during the appointment? Do you think it was effective?"
+    },
+    {
+      "metric_id": "patient_search_before",
+      "audience": "Patient survey",
+      "category": "Current skills",
+      "label": "Searched online before the appointment",
+      "count": 123,
+      "denominator": 158,
+      "percent": 77.8,
+      "basis": "Counts explicit standard search responses; custom search descriptions are excluded.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Did you Google Search / Chat GPT to better understand your condition BEFORE the appointment"
+    },
+    {
+      "metric_id": "patient_chronic_condition",
+      "audience": "Patient survey",
+      "category": "Context",
+      "label": "Reported a current or past chronic condition",
+      "count": 118,
+      "denominator": 145,
+      "percent": 81.4,
+      "basis": "Current and past chronic conditions combined.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Do you have/had any chronic conditions?"
+    },
+    {
+      "metric_id": "patient_symptom_tracking_not_full",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Symptom tracking was only partly effective or ineffective",
+      "count": 85,
+      "denominator": 155,
+      "percent": 54.8,
+      "basis": "Combines 'mostly' and 'cannot' responses; one custom response excluded.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Is the above method effective?"
+    },
+    {
+      "metric_id": "patient_family_verbal_relay",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Relayed visit information verbally from memory to family",
+      "count": 121,
+      "denominator": 160,
+      "percent": 75.6,
+      "basis": "Multi-select response; may also include notes or documents.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Have you every had to share/explain information shared by the doctor to partner/family? How did you do this?"
+    },
+    {
+      "metric_id": "patient_recording_socially_awkward",
+      "audience": "Patient survey",
+      "category": "Trust constraints",
+      "label": "Said asking to record feels socially awkward",
+      "count": 53,
+      "denominator": 143,
+      "percent": 37.1,
+      "basis": "Multi-select/free-text recording barrier.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | [IF NO] What is the primary reason you haven't recorded an appointment?  "
+    },
+    {
+      "metric_id": "patient_recording_not_known_option",
+      "audience": "Patient survey",
+      "category": "Trust constraints",
+      "label": "Did not think recording was an option",
+      "count": 43,
+      "denominator": 143,
+      "percent": 30.1,
+      "basis": "Multi-select/free-text recording barrier.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | [IF NO] What is the primary reason you haven't recorded an appointment?  "
+    },
+    {
+      "metric_id": "patient_recording_long_audio",
+      "audience": "Patient survey",
+      "category": "Trust constraints",
+      "label": "Did not want to search through a long recording",
+      "count": 29,
+      "denominator": 143,
+      "percent": 20.3,
+      "basis": "Multi-select/free-text recording barrier.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | [IF NO] What is the primary reason you haven't recorded an appointment?  "
+    },
+    {
+      "metric_id": "patient_recording_wants_transcript",
+      "audience": "Patient survey",
+      "category": "Trust constraints",
+      "label": "Wanted a transcript, not audio alone",
+      "count": 22,
+      "denominator": 143,
+      "percent": 15.4,
+      "basis": "Multi-select/free-text recording barrier.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | [IF NO] What is the primary reason you haven't recorded an appointment?  "
+    },
+    {
+      "metric_id": "patient_recording_privacy",
+      "audience": "Patient survey",
+      "category": "Trust constraints",
+      "label": "Raised privacy as a recording barrier",
+      "count": 14,
+      "denominator": 143,
+      "percent": 9.8,
+      "basis": "Multi-select/free-text recording barrier.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | [IF NO] What is the primary reason you haven't recorded an appointment?  "
+    },
+    {
+      "metric_id": "patient_search_after",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Searched online after the appointment",
+      "count": 45,
+      "denominator": 56,
+      "percent": 80.4,
+      "basis": "Late survey-version field; denominator is much smaller than the full sample.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Did you Google Search / Chat GPT to better understand your condition AFTER the appointment"
+    },
+    {
+      "metric_id": "patient_english_not_first",
+      "audience": "Patient survey",
+      "category": "Context",
+      "label": "Did not report English as a first language",
+      "count": 13,
+      "denominator": 54,
+      "percent": 24.1,
+      "basis": "Late survey-version field; includes respondents who understand English well.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Is english your first language?"
+    },
+    {
+      "metric_id": "caregiver_information_not_full",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Caregiver information capture was only partial or ineffective",
+      "count": 59,
+      "denominator": 112,
+      "percent": 52.7,
+      "basis": "Late survey-version field; combines 'most' and 'cannot' responses.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Is the above method effective? 2"
+    },
+    {
+      "metric_id": "patient_followup_contacted_clinician",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Reached out to the clinician again after the appointment",
+      "count": 89,
+      "denominator": 154,
+      "percent": 57.8,
+      "basis": "Counts the standard clinician-contact response; custom contact descriptions are excluded.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Did you have any follow ups or questions for the doctor after the appointment? How did you handle that?"
+    },
+    {
+      "metric_id": "patient_followup_saved_for_later",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Saved a post-visit question for the next appointment",
+      "count": 70,
+      "denominator": 154,
+      "percent": 45.5,
+      "basis": "Counts the standard save-for-next-visit response; custom descriptions are excluded.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Did you have any follow ups or questions for the doctor after the appointment? How did you handle that?"
+    },
+    {
+      "metric_id": "patient_followup_searched_online",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Used Google or ChatGPT for a post-visit question",
+      "count": 44,
+      "denominator": 154,
+      "percent": 28.6,
+      "basis": "Counts the standard online-search response; custom descriptions are excluded.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Did you have any follow ups or questions for the doctor after the appointment? How did you handle that?"
+    },
+    {
+      "metric_id": "patient_explicit_tracking_failure",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Explicitly did not keep track or could not keep track",
+      "count": 27,
+      "denominator": 164,
+      "percent": 16.5,
+      "basis": "Conservative corpus count across two conditional symptom-tracking fields; the full-sample denominator is shown only to prevent double counting.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | Between two recurring appointments, how do you record a specific symptom, feeling, or event to share with your provider?   + Is the above method effective?"
+    },
+    {
+      "metric_id": "patient_forget_3_to_5",
+      "audience": "Patient survey",
+      "category": "Current skills",
+      "label": "Rated forgetting critical visit information 3–5 on a 5-point scale",
+      "count": 65,
+      "denominator": 123,
+      "percent": 52.8,
+      "basis": "Threshold applied to numeric 1–5 responses; scale wording was not available in the export.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | How often do you forget critical information from a doctor visit? "
+    },
+    {
+      "metric_id": "patient_worry_4_to_5",
+      "audience": "Patient survey",
+      "category": "Current skills",
+      "label": "Rated worry about missing visit information 4–5",
+      "count": 56,
+      "denominator": 120,
+      "percent": 46.7,
+      "basis": "Threshold applied to numeric 1–5 responses; scale wording was not available in the export.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | How much does missing information from visits worry you?"
+    },
+    {
+      "metric_id": "patient_followup_4_to_5",
+      "audience": "Patient survey",
+      "category": "Unmet needs",
+      "label": "Rated need to follow up 4–5",
+      "count": 43,
+      "denominator": 118,
+      "percent": 36.4,
+      "basis": "Threshold applied to numeric 1–5 responses; scale wording was not available in the export.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | how often do you feel the need to follow up?"
+    },
+    {
+      "metric_id": "patient_app_interest_4_to_5",
+      "audience": "Patient survey",
+      "category": "Concept interest",
+      "label": "Rated the bundled record/transcript/question concept 4–5",
+      "count": 68,
+      "denominator": 119,
+      "percent": 57.1,
+      "basis": "Threshold applied to numeric 1–5 responses; scale wording was not available in the export.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | If an app helped you record, gave an accurate transcript + tailored follow-up questions during the appointment, how likely would you be to use it?  "
+    },
+    {
+      "metric_id": "patient_smartphone_4_to_5",
+      "audience": "Patient survey",
+      "category": "Context",
+      "label": "Rated smartphone comfort 4–5",
+      "count": 115,
+      "denominator": 126,
+      "percent": 91.3,
+      "basis": "Threshold applied to numeric 1–5 responses; scale wording was not available in the export.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | How comfortable are you with a smartphone"
+    },
+    {
+      "metric_id": "patient_search_reliability_1_to_3",
+      "audience": "Patient survey",
+      "category": "Trust constraints",
+      "label": "Rated online search reliability only 1–3",
+      "count": 81,
+      "denominator": 153,
+      "percent": 52.9,
+      "basis": "Threshold applied to numeric 1–5 responses; scale wording was not available in the export.",
+      "source": "https://docs.google.com/spreadsheets/d/1sSSo_FuikAfjAVb6Lc0L8hlxNyFY_Go9_4qVmDGvLBM/edit | Form Responses 1 | How reliable was Google / Chat GPT search"
+    },
+    {
+      "metric_id": "clinician_barrier_1",
+      "audience": "Clinician structured responses",
+      "category": "Appointment barriers",
+      "label": "Missing medical history/documents",
+      "count": 6,
+      "denominator": 8,
+      "percent": 75.0,
+      "basis": "Human-normalized multi-select/free-text coding; percentages do not sum to 100%.",
+      "source": "https://docs.google.com/spreadsheets/d/1IYGhg7QleCuXmskUatl28-I-xBD-cMxeVKsjSP4zDxE/edit | Form Responses 1 | barrier question"
+    },
+    {
+      "metric_id": "clinician_barrier_2",
+      "audience": "Clinician structured responses",
+      "category": "Appointment barriers",
+      "label": "Limited or insufficient visit time",
+      "count": 4,
+      "denominator": 8,
+      "percent": 50.0,
+      "basis": "Human-normalized multi-select/free-text coding; percentages do not sum to 100%.",
+      "source": "https://docs.google.com/spreadsheets/d/1IYGhg7QleCuXmskUatl28-I-xBD-cMxeVKsjSP4zDxE/edit | Form Responses 1 | barrier question"
+    },
+    {
+      "metric_id": "clinician_barrier_3",
+      "audience": "Clinician structured responses",
+      "category": "Appointment barriers",
+      "label": "Patient too overwhelmed to ask questions",
+      "count": 3,
+      "denominator": 8,
+      "percent": 37.5,
+      "basis": "Human-normalized multi-select/free-text coding; percentages do not sum to 100%.",
+      "source": "https://docs.google.com/spreadsheets/d/1IYGhg7QleCuXmskUatl28-I-xBD-cMxeVKsjSP4zDxE/edit | Form Responses 1 | barrier question"
+    },
+    {
+      "metric_id": "clinician_barrier_4",
+      "audience": "Clinician structured responses",
+      "category": "Appointment barriers",
+      "label": "Language or communication barriers",
+      "count": 3,
+      "denominator": 8,
+      "percent": 37.5,
+      "basis": "Human-normalized multi-select/free-text coding; percentages do not sum to 100%.",
+      "source": "https://docs.google.com/spreadsheets/d/1IYGhg7QleCuXmskUatl28-I-xBD-cMxeVKsjSP4zDxE/edit | Form Responses 1 | barrier question"
+    },
+    {
+      "metric_id": "clinician_barrier_5",
+      "audience": "Clinician structured responses",
+      "category": "Appointment barriers",
+      "label": "Patient lateness",
+      "count": 1,
+      "denominator": 8,
+      "percent": 12.5,
+      "basis": "Human-normalized multi-select/free-text coding; percentages do not sum to 100%.",
+      "source": "https://docs.google.com/spreadsheets/d/1IYGhg7QleCuXmskUatl28-I-xBD-cMxeVKsjSP4zDxE/edit | Form Responses 1 | barrier question"
+    },
+    {
+      "metric_id": "clinician_barrier_6",
+      "audience": "Clinician structured responses",
+      "category": "Appointment barriers",
+      "label": "Need for translation in the summary",
+      "count": 1,
+      "denominator": 8,
+      "percent": 12.5,
+      "basis": "Human-normalized multi-select/free-text coding; percentages do not sum to 100%.",
+      "source": "https://docs.google.com/spreadsheets/d/1IYGhg7QleCuXmskUatl28-I-xBD-cMxeVKsjSP4zDxE/edit | Form Responses 1 | barrier question"
+    }
+  ],
+  "current_skill_support": [
+    {
+      "skill": "Simplify",
+      "patient_count": 15,
+      "patient_denominator": 21,
+      "patient_basis": "Interviewees explicitly describing overload or recall failure.",
+      "clinician_count": 18,
+      "clinician_denominator": 19,
+      "clinician_basis": "Clinicians explicitly describing need for concise visit information.",
+      "patient_percent": 71.4,
+      "clinician_percent": 94.7
+    },
+    {
+      "skill": "Prep",
+      "patient_count": 16,
+      "patient_denominator": 21,
+      "patient_basis": "Interviewees mentioning preparation across questions, research, history, symptoms, or support.",
+      "clinician_count": 14,
+      "clinician_denominator": 19,
+      "clinician_basis": "Clinicians explicitly describing pre-visit preparation needs.",
+      "patient_percent": 76.2,
+      "clinician_percent": 73.7
+    },
+    {
+      "skill": "Question generation / prioritization",
+      "patient_count": 15,
+      "patient_denominator": 21,
+      "patient_basis": "Interviewees whose questions were missed or emerged after reflection.",
+      "clinician_count": 6,
+      "clinician_denominator": 19,
+      "clinician_basis": "Clinicians explicitly asking for question support or prioritization.",
+      "patient_percent": 71.4,
+      "clinician_percent": 31.6
+    },
+    {
+      "skill": "Medical-literacy identifier",
+      "patient_count": 13,
+      "patient_denominator": 21,
+      "patient_basis": "Interviewees describing difficulty with terminology, results, or instructions.",
+      "clinician_count": 15,
+      "clinician_denominator": 19,
+      "clinician_basis": "Clinicians describing differences in literacy, cognition, language, stress, or desired depth.",
+      "patient_percent": 61.9,
+      "clinician_percent": 78.9
+    }
+  ],
+  "unmet_needs": [
+    {
+      "opportunity": "Permissioned care circle",
+      "patient_count": 16,
+      "patient_denominator": 21,
+      "clinician_count": 12,
+      "clinician_denominator": 19,
+      "ask": "Granular, revocable sharing and caregiver participation before and after visits.",
+      "patient_percent": 76.2,
+      "clinician_percent": 63.2
+    },
+    {
+      "opportunity": "Medication and action adherence",
+      "patient_count": 8,
+      "patient_denominator": 21,
+      "clinician_count": 13,
+      "clinician_denominator": 19,
+      "ask": "Confirmed tasks, medication reconciliation, reminders, and between-visit check-ins.",
+      "patient_percent": 38.1,
+      "clinician_percent": 68.4
+    },
+    {
+      "opportunity": "Portal and record aggregation",
+      "patient_count": 12,
+      "patient_denominator": 21,
+      "clinician_count": 11,
+      "clinician_denominator": 19,
+      "ask": "Unify relevant notes, labs, images, device data, and follow-up questions.",
+      "patient_percent": 57.1,
+      "clinician_percent": 57.9
+    },
+    {
+      "opportunity": "Privacy, consent, and recording governance",
+      "patient_count": 12,
+      "patient_denominator": 21,
+      "clinician_count": 11,
+      "clinician_denominator": 19,
+      "ask": "Consent workflow, policy checks, audit trail, and control over downstream use.",
+      "patient_percent": 57.1,
+      "clinician_percent": 57.9
+    },
+    {
+      "opportunity": "Accuracy and evidence provenance",
+      "patient_count": 13,
+      "patient_denominator": 21,
+      "clinician_count": 9,
+      "clinician_denominator": 19,
+      "ask": "Citations, uncertainty cues, concise output, and clinician review where needed.",
+      "patient_percent": 61.9,
+      "clinician_percent": 47.4
+    },
+    {
+      "opportunity": "Longitudinal symptom and decision timeline",
+      "patient_count": 12,
+      "patient_denominator": 21,
+      "clinician_count": 11,
+      "clinician_denominator": 19,
+      "ask": "A single timeline for symptoms, photos, decisions, tasks, and unresolved questions.",
+      "patient_percent": 57.1,
+      "clinician_percent": 57.9
+    }
+  ],
+  "evidence_ledger": [
+    {
+      "audience": "Patient interview",
+      "theme": "Simplify",
+      "source_ref": "Patients index 153 / sheet row 155",
+      "excerpt": "I kind of go dumb when they start talking.",
+      "supports": "Stress and overload reduce in-visit comprehension and recall."
+    },
+    {
+      "audience": "Patient interview",
+      "theme": "Simplify",
+      "source_ref": "Patients index 164 / sheet row 166",
+      "excerpt": "It is hard to search things.",
+      "supports": "Users need searchable key points rather than another long record."
+    },
+    {
+      "audience": "Patient interview",
+      "theme": "Question prioritization",
+      "source_ref": "Patients index 41 / sheet row 43",
+      "excerpt": "Sometimes I can't think of the questions at the time.",
+      "supports": "Questions often emerge after the appointment."
+    },
+    {
+      "audience": "Patient interview",
+      "theme": "Prep",
+      "source_ref": "Patients index 155 / sheet row 157",
+      "excerpt": "What to expect beforehand, what to ask.",
+      "supports": "Patients already seek preparation and question prompts."
+    },
+    {
+      "audience": "Patient interview",
+      "theme": "Medical literacy",
+      "source_ref": "Patients index 148 / sheet row 150",
+      "excerpt": "Understanding results, what they mean.",
+      "supports": "Test results and borderline values create interpretation needs."
+    },
+    {
+      "audience": "Patient interview",
+      "theme": "Evidence provenance",
+      "source_ref": "Patients index 61 / sheet row 63",
+      "excerpt": "Show me the citations from research.",
+      "supports": "Some users need transparent sources, not unsupported AI answers."
+    },
+    {
+      "audience": "Patient interview",
+      "theme": "Longitudinal continuity",
+      "source_ref": "Patients index 159 / sheet row 161",
+      "excerpt": "Documentation between visits.",
+      "supports": "Users want continuity across appointments, not isolated summaries."
+    },
+    {
+      "audience": "Patient interview",
+      "theme": "Care circle",
+      "source_ref": "Patients index 148 / sheet row 150",
+      "excerpt": "My family will have follow-up questions.",
+      "supports": "Visit information must often be relayed to absent family."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Question prioritization",
+      "source_ref": "Clinicians sheet row 5",
+      "excerpt": "What are your top three questions?",
+      "supports": "Question support should prioritize a short agenda."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Prep",
+      "source_ref": "Clinicians sheet row 2",
+      "excerpt": "Written medication list, questions and concerns, recent vital signs.",
+      "supports": "Preparation needs concrete documents and data."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Medical literacy",
+      "source_ref": "Clinicians sheet row 2",
+      "excerpt": "Depends on education level, medical literacy, anxiety, cognitive status.",
+      "supports": "Communication needs are multi-dimensional and encounter-specific."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Clinician control",
+      "source_ref": "Clinicians sheet row 5",
+      "excerpt": "It would have to be a must that we see the summary.",
+      "supports": "Some settings require review before patient release."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Accuracy and workload",
+      "source_ref": "Clinicians sheet row 4",
+      "excerpt": "For me to write three lines is faster than reviewing four lines for errors.",
+      "supports": "Review burden can erase the product's workflow value."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Care circle",
+      "source_ref": "Clinicians sheet row 6",
+      "excerpt": "Presence or engagement of a care partner is instrumental.",
+      "supports": "Care partners are a core communication support for high-need patients."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Interoperability",
+      "source_ref": "Clinicians sheet row 4",
+      "excerpt": "A thousand pages, but only two usable ones.",
+      "supports": "The problem is relevant-record selection, not merely record collection."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Action and adherence",
+      "source_ref": "Clinicians sheet rows 15–16",
+      "excerpt": "Maybe they remember but do not execute the plan.",
+      "supports": "Understanding alone does not ensure follow-through."
+    },
+    {
+      "audience": "Patient survey/interview",
+      "theme": "Prep",
+      "source_ref": "Patients sheet row 54",
+      "excerpt": "I write everything down ahead of time to remember it.",
+      "supports": "Patients already create their own preparation scaffolding."
+    },
+    {
+      "audience": "Patient survey/interview",
+      "theme": "Medical literacy",
+      "source_ref": "Patients sheet row 91",
+      "excerpt": "I forgot all the technical terms.",
+      "supports": "Terminology is a comprehension and recall barrier."
+    },
+    {
+      "audience": "Patient survey/interview",
+      "theme": "Question prioritization",
+      "source_ref": "Patients sheet row 150",
+      "excerpt": "I go in with a list of questions, but often forget while listening.",
+      "supports": "A prepared list still needs in-visit prioritization support."
+    },
+    {
+      "audience": "Patient survey/interview",
+      "theme": "Cognitive load",
+      "source_ref": "Patients sheet row 166",
+      "excerpt": "I often feel overwhelmed with the amount of information shared.",
+      "supports": "Explanation needs change with encounter load."
+    },
+    {
+      "audience": "Long-form patient/caregiver interview",
+      "theme": "Care circle",
+      "source_ref": "Long-form interview sheet row 2",
+      "excerpt": "I feel better knowing someone else is there to absorb information.",
+      "supports": "A care partner provides both recall support and reassurance."
+    },
+    {
+      "audience": "Long-form patient/caregiver interview",
+      "theme": "Record fragmentation",
+      "source_ref": "Long-form interview sheet row 3",
+      "excerpt": "Multiple apps and portals have my medical data.",
+      "supports": "Records are fragmented across systems and formats."
+    },
+    {
+      "audience": "Patient survey/interview",
+      "theme": "Symptom tracking",
+      "source_ref": "Patients sheet row 162",
+      "excerpt": "It would be better to keep a more detailed list of symptoms.",
+      "supports": "Users want dated, event-level symptom history."
+    },
+    {
+      "audience": "Patient survey/interview",
+      "theme": "Accessibility",
+      "source_ref": "Patients sheet row 163",
+      "excerpt": "Cannot keep track of it due to executive dysfunction.",
+      "supports": "Tracking must reduce executive-function demands."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Medication reconciliation",
+      "source_ref": "Clinicians sheet rows 19 and 21 duplicate pair",
+      "excerpt": "What are you taking, and why are you taking it?",
+      "supports": "Medication lists need purpose and reconciliation, not names alone."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Interoperability",
+      "source_ref": "Clinicians sheet row 6",
+      "excerpt": "The report is only a statement; we need to see the image.",
+      "supports": "Some decisions require original clinical artifacts."
+    },
+    {
+      "audience": "Clinician interview",
+      "theme": "Grounded research",
+      "source_ref": "Clinicians sheet rows 2 and 10",
+      "excerpt": "AI can be over-inclusive and has to be succinct.",
+      "supports": "Research support must filter for relevance and currency."
+    }
+  ],
+  "data_quality": [
+    {
+      "issue": "Accessible sample differs from recalled fieldwork totals",
+      "evidence": "165 patient rows (164 unique submissions), 4 separate patient interview rows, and 21 clinician rows were accessible.",
+      "impact": "The report describes the connected corpus, not the larger recalled total of 200–300 surveys, 50 user interviews, and 30–50 clinicians."
+    },
+    {
+      "issue": "Survey instrument changed over time",
+      "evidence": "Several later columns have only 53–59 responses; early fields have 119–165.",
+      "impact": "Every percentage uses its own non-null denominator."
+    },
+    {
+      "issue": "Clinician structured fields are sparse",
+      "evidence": "Most structured clinician questions have only 1–8 answers.",
+      "impact": "Clinician percentages are descriptive of field respondents only."
+    },
+    {
+      "issue": "Qualitative sampling is purposive",
+      "evidence": "Most patient records came through Reddit; interviewees have high chronic-care exposure.",
+      "impact": "Theme counts show frequency in this corpus, not population prevalence."
+    },
+    {
+      "issue": "Bundled concept question",
+      "evidence": "The interest question combines recording, transcript, and tailored questions.",
+      "impact": "It cannot isolate demand for one feature."
+    },
+    {
+      "issue": "PII and credentials present in source files",
+      "evidence": "Contact fields and a separate operational tracker contain sensitive information.",
+      "impact": "Raw exports are excluded; only de-identified aggregates and excerpts are written."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+issue,evidence,impact
+Accessible sample differs from recalled fieldwork totals,"165 patient rows (164 unique submissions), 4 separate patient interview rows, and 21 clinician rows were accessible.","The report describes the connected corpus, not the larger recalled total of 200–300 surveys, 50 user interviews, and 30–50 clinicians."
+Survey instrument changed over time,Several later columns have only 53–59 responses; early fields have 119–165.,Every percentage uses its own non-null denominator.
+Clinician structured fields are sparse,Most structured clinician questions have only 1–8 answers.,Clinician percentages are descriptive of field respondents only.
+Qualitative sampling is purposive,Most patient records came through Reddit; interviewees have high chronic-care exposure.,"Theme counts show frequency in this corpus, not population prevalence."
+Bundled concept question,"The interest question combines recording, transcript, and tailored questions.",It cannot isolate demand for one feature.
+PII and credentials present in source files,Contact fields and a separate operational tracker contain sensitive information.,Raw exports are excluded; only de-identified aggregates and excerpts are written.

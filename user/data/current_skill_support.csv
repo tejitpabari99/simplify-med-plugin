@@ -1,0 +1,5 @@
+skill,patient_count,patient_denominator,patient_basis,clinician_count,clinician_denominator,clinician_basis,patient_percent,clinician_percent
+Simplify,15,21,Interviewees explicitly describing overload or recall failure.,18,19,Clinicians explicitly describing need for concise visit information.,71.4,94.7
+Prep,16,21,"Interviewees mentioning preparation across questions, research, history, symptoms, or support.",14,19,Clinicians explicitly describing pre-visit preparation needs.,76.2,73.7
+Question generation / prioritization,15,21,Interviewees whose questions were missed or emerged after reflection.,6,19,Clinicians explicitly asking for question support or prioritization.,71.4,31.6
+Medical-literacy identifier,13,21,"Interviewees describing difficulty with terminology, results, or instructions.",15,19,"Clinicians describing differences in literacy, cognition, language, stress, or desired depth.",61.9,78.9
