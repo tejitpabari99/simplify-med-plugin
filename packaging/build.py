@@ -290,6 +290,10 @@ def _stage_openai(repo_root, plugin_stage, patterns, endpoint_override, release)
     _copy_if_present(os.path.join(overlay, "agents"), os.path.join(skill_destination, "agents"))
     _copy_if_present(os.path.join(overlay, "assets"), os.path.join(plugin_stage, "assets"))
     _copy_if_present(
+        os.path.join(overlay, "skill-assets"),
+        os.path.join(skill_destination, "assets"),
+    )
+    _copy_if_present(
         os.path.join(overlay, ".codex-plugin"),
         os.path.join(plugin_stage, ".codex-plugin"),
     )

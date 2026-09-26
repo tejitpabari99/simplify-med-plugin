@@ -1,6 +1,7 @@
 import json
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -122,7 +123,7 @@ class TestBuildOpenAi(unittest.TestCase):
             self.assertEqual(interface["displayName"], "Simplify Med")
             self.assertIn("shortDescription", interface)
             self.assertEqual(interface["category"], "Productivity")
-            self.assertEqual(interface["capabilities"], ["Read", "Write"])
+            self.assertEqual(interface["capabilities"], ["Interactive", "Write"])
             self.assertTrue(interface["defaultPrompt"])
             self.assertNotIn("skills", plugin)
             self.assertEqual(compat_plugin["name"], plugin["name"])
@@ -218,6 +219,54 @@ class TestBuildOpenAi(unittest.TestCase):
                 ])
                 self.assertNotEqual(result.returncode, 0, msg=endpoint)
                 self.assertIn("Release OpenAI MCP endpoint", result.stderr)
+
+
+    def test_icons_exist_at_referenced_paths_and_interfaces_match(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build(["--platform", "openai", "--out", out_dir])
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")
+            with zipfile.ZipFile(zip_path) as zf:
+                names = set(zf.namelist())
+                plugin = json.loads(zf.read("simplify-med/plugin.json"))
+                compat_plugin = json.loads(zf.read("simplify-med/.codex-plugin/plugin.json"))
+                yaml_text = zf.read(
+                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                ).decode()
+
+            interface = plugin["extensions"]["com.openai"]["interface"]
+
+            # Root plugin.json and the .codex-plugin compatibility manifest must expose
+            # byte-for-byte identical `interface` objects, including the icon fields, so
+            # the two ingestion paths never present different metadata/artwork.
+            self.assertEqual(compat_plugin["interface"], interface)
+
+            # `interface.logo` / `interface.composerIcon` are resolved relative to the
+            # plugin root by the Codex ingestion validator; the referenced files must
+            # exist at that exact staged path inside the zip.
+            for field in ("logo", "composerIcon"):
+                self.assertIn(field, interface, f"interface.{field} is not set")
+                relative = interface[field].removeprefix("./")
+                self.assertIn(
+                    f"simplify-med/{relative}",
+                    names,
+                    f"interface.{field}={interface[field]!r} has no staged file",
+                )
+
+            # `agents/openai.yaml` icon_small/icon_large are resolved relative to the
+            # *skill* directory (skills/simplify-med/), not the plugin root -- extract
+            # the declared paths and confirm each resolves to a real staged entry there.
+            skill_prefix = "simplify-med/skills/simplify-med/"
+            for key in ("icon_small", "icon_large"):
+                match = re.search(rf"^\s*{key}:\s*(\S+)\s*$", yaml_text, re.MULTILINE)
+                self.assertIsNotNone(match, f"{key} missing from staged openai.yaml")
+                relative = match.group(1).strip().removeprefix("./")
+                self.assertIn(
+                    f"{skill_prefix}{relative}",
+                    names,
+                    f"agents/openai.yaml {key}={match.group(1)!r} has no staged file",
+                )
 
 
 class TestBuildDispatcherAndOverlays(unittest.TestCase):
