@@ -235,6 +235,9 @@ class TestBuildOpenAi(unittest.TestCase):
                 yaml_text = zf.read(
                     "simplify-med/skills/simplify-med/agents/openai.yaml"
                 ).decode()
+                staged_skill_md = zf.read(
+                    "simplify-med/skills/simplify-med/SKILL.md"
+                ).decode()
                 all_text_blobs = []
                 for name in names:
                     if name.endswith((".png", ".ico", ".gif", ".jpg", ".jpeg")):
@@ -244,14 +247,26 @@ class TestBuildOpenAi(unittest.TestCase):
                     except UnicodeDecodeError:
                         continue
 
-            # No root or compatibility MCP declaration is staged at all.
+            # No root or compatibility MCP declaration is staged at all, and no
+            # root (portable-format) plugin.json is shipped for the skills-only
+            # build (D2).
             self.assertNotIn("simplify-med/mcp.json", names)
             self.assertNotIn("simplify-med/.mcp.json", names)
+            self.assertNotIn("simplify-med/plugin.json", names)
 
-            # The compatibility manifest keeps its other keys but drops mcpServers.
+            # No custom_start.md/custom_end.md hand-off files are staged either
+            # (D1/D3): the overlay SKILL.md is fully self-contained.
+            self.assertNotIn("simplify-med/skills/simplify-med/custom_start.md", names)
+            self.assertNotIn("simplify-med/skills/simplify-med/custom_end.md", names)
+
+            # The compatibility manifest keeps its other keys but drops mcpServers
+            # and trims capabilities to the non-interactive set (D2).
             self.assertNotIn("mcpServers", compat_plugin)
             self.assertEqual(compat_plugin["skills"], "./skills/")
             self.assertEqual(compat_plugin["name"], "simplify-med")
+            self.assertEqual(
+                compat_plugin["interface"]["capabilities"], ["Read", "Write"]
+            )
 
             # The skill's agent file keeps interface/policy but drops the MCP tool
             # dependency entirely.
@@ -260,6 +275,23 @@ class TestBuildOpenAi(unittest.TestCase):
             self.assertNotIn("dependencies:", yaml_text)
             self.assertNotIn("type: mcp", yaml_text)
             self.assertNotIn("transport: streamable_http", yaml_text)
+
+            # The staged SKILL.md is the OpenAI-specific overlay, not the
+            # canonical file staged verbatim, and contains none of the
+            # hand-off/dispatch/render-tool references the canonical file uses.
+            canonical_skill_md_path = os.path.join(
+                _paths.REPO_ROOT, "skills", "simplify-med", "SKILL.md"
+            )
+            with open(canonical_skill_md_path, "r", encoding="utf-8") as f:
+                canonical_skill_md = f.read()
+            self.assertNotEqual(staged_skill_md, canonical_skill_md)
+            for forbidden in (
+                "agents/",
+                "custom_start.md",
+                "custom_end.md",
+                "render_simplify_med_report",
+            ):
+                self.assertNotIn(forbidden, staged_skill_md)
 
             # No stray endpoint token, mcpServers key, or example/ngrok URL survives
             # anywhere in the archive.
@@ -362,14 +394,16 @@ class TestBuildOpenAi(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--app-id applies only to the OpenAI build", result.stderr)
 
-    def test_app_id_with_no_mcp_is_redundant_but_allowed(self):
+    def test_app_id_rejects_no_mcp_combination(self):
         app_id = "plugin_asdk_app_6ab74031b9608191b6aa67d0ac5c1e55"
         with tempfile.TemporaryDirectory() as out_dir:
             result = _run_build([
                 "--platform", "openai", "--out", out_dir,
                 "--app-id", app_id, "--no-mcp",
             ])
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--app-id", result.stderr)
+        self.assertIn("--no-mcp", result.stderr)
 
     def test_icons_exist_at_referenced_paths_and_interfaces_match(self):
         with tempfile.TemporaryDirectory() as out_dir:
@@ -407,6 +441,51 @@ class TestBuildOpenAi(unittest.TestCase):
             # `agents/openai.yaml` icon_small/icon_large are resolved relative to the
             # *skill* directory (skills/simplify-med/), not the plugin root -- extract
             # the declared paths and confirm each resolves to a real staged entry there.
+            skill_prefix = "simplify-med/skills/simplify-med/"
+            for key in ("icon_small", "icon_large"):
+                match = re.search(rf"^\s*{key}:\s*(\S+)\s*$", yaml_text, re.MULTILINE)
+                self.assertIsNotNone(match, f"{key} missing from staged openai.yaml")
+                relative = match.group(1).strip().removeprefix("./")
+                self.assertIn(
+                    f"{skill_prefix}{relative}",
+                    names,
+                    f"agents/openai.yaml {key}={match.group(1)!r} has no staged file",
+                )
+
+    def test_icons_exist_at_referenced_paths_no_mcp(self):
+        # No root plugin.json exists in the skills-only build (D2), so icon
+        # paths must resolve purely from `.codex-plugin/plugin.json` (plugin
+        # root icons) and the skill's `agents/openai.yaml` (skill-relative
+        # icons) -- there is no cross-manifest interface comparison to make.
+        with tempfile.TemporaryDirectory() as out_dir:
+            result = _run_build(["--platform", "openai", "--out", out_dir, "--no-mcp"])
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            zip_path = os.path.join(out_dir, "simplify-med-0.1.0-openai.zip")
+            with zipfile.ZipFile(zip_path) as zf:
+                names = set(zf.namelist())
+                self.assertNotIn("simplify-med/plugin.json", names)
+                compat_plugin = json.loads(zf.read("simplify-med/.codex-plugin/plugin.json"))
+                yaml_text = zf.read(
+                    "simplify-med/skills/simplify-med/agents/openai.yaml"
+                ).decode()
+
+            interface = compat_plugin["interface"]
+
+            # `interface.logo` / `interface.composerIcon` are resolved relative to
+            # the plugin root; the referenced files must exist at that exact
+            # staged path inside the zip.
+            for field in ("logo", "composerIcon"):
+                self.assertIn(field, interface, f"interface.{field} is not set")
+                relative = interface[field].removeprefix("./")
+                self.assertIn(
+                    f"simplify-med/{relative}",
+                    names,
+                    f"interface.{field}={interface[field]!r} has no staged file",
+                )
+
+            # `agents/openai.yaml` icon_small/icon_large are resolved relative to
+            # the *skill* directory (skills/simplify-med/).
             skill_prefix = "simplify-med/skills/simplify-med/"
             for key in ("icon_small", "icon_large"):
                 match = re.search(rf"^\s*{key}:\s*(\S+)\s*$", yaml_text, re.MULTILINE)
