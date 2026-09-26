@@ -39,7 +39,7 @@ ChatGPT account against the deployed endpoint.
 | Skill dependency | staged `skills/simplify/agents/openai.yaml` | Declares the same endpoint as a report-viewer dependency. |
 | MCP server | `mcp/openai/src/` | Registers one read-only render tool and serves the static UI resource. |
 | Report widget | `mcp/openai/ui/` | Loads the final JSON from OpenAI in the iframe and renders inline/fullscreen views. |
-| Portable reports | run folder `report.md`, `report.html` | Remain the complete downloadable fallback; `report.html` works offline. |
+| Portable reports | run folder `report.md`, and, on request, `report.html` | Remain the complete downloadable fallback; `report.html` works offline. |
 | OpenAI package profile | `packaging/openai/` | Supplies the manifest, hooks, dependency overlay, plugin-root and skill-level icon assets, and exclusions used while staging the OpenAI archive. |
 
 The MCP server source is deployed separately. It is not included in the plugin ZIP.
@@ -62,13 +62,14 @@ Stages 0-5: unitize -> ground/glossary -> assemble -> review -> correct/fill -> 
         |
         +-----------------> 06_plan.final.json
         +-----------------> report.md
-        +-----------------> report.html
         |
         v
 custom_end.md
   - present the native concise summary
-  - attach/link JSON, Markdown, and HTML
+  - attach/link JSON and Markdown
   - call render_simplify_med_report with the final JSON file only
+  - offer report.html (render_html.py) and the audit trail (render_audit.py)
+    as on-request follow-ups
         |
         v
 static ChatGPT widget (inline, then user-requested fullscreen)
@@ -83,8 +84,8 @@ the viewer; the core finalizer and renderers remain unaware of MCP.
 
 There is intentionally no second upload or file picker.
 
-1. ChatGPT runs the skill and creates `06_plan.final.json`, `report.md`, and
-   `report.html` in the run folder.
+1. ChatGPT runs the skill and creates `06_plan.final.json` and `report.md` in
+   the run folder (`report.html` is rendered later, only if requested).
 2. ChatGPT invokes `render_simplify_med_report` with the final JSON artifact in the
    top-level `report` file parameter.
 3. OpenAI sends the MCP endpoint a file object containing `file_id` and a temporary,

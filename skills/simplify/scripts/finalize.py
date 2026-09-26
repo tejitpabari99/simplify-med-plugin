@@ -8,6 +8,9 @@ Preconditions: `run.json` must record `unitize`, `ground`, and `assemble`
 with status other than `failed`; otherwise this exits 1 with a plain
 explanation and writes nothing.
 
+Writes `report.md` only. `report.html` is a separate, on-request step --
+run `render_html.py --run-dir D` after this to produce it.
+
 Stdlib only. Importable as `finalize`.
 """
 
@@ -24,7 +27,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cite_check  # noqa: E402
 import plan_view  # noqa: E402
 import readability  # noqa: E402
-import render_html  # noqa: E402
 import render_md  # noqa: E402
 import runlog  # noqa: E402
 import textnorm  # noqa: E402
@@ -320,10 +322,6 @@ def _run(run_dir: str) -> int:
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(render_md.render(plan))
 
-    html_path = os.path.join(run_dir, "report.html")
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(render_html.render(plan))
-
     checks = {
         "plan_source": source,
         "additions_merged": additions_merged,
@@ -338,7 +336,6 @@ def _run(run_dir: str) -> int:
     status = "degraded" if notice_added else "ok"
     runlog.record(run_dir, "finalize", status, checks=checks)
 
-    print(html_path)
     print(md_path)
     line = plan_view.score_line(score)
     print(line if line else "Reading level: not enough text to estimate.")

@@ -78,8 +78,9 @@ check script after each one, with one retry on a validation failure.
    `cite_check --additions` verify their output stays inside its bounds.
 6. **Finalize** (script) merges everything, re-checks citations, re-detects
    the glossary against the final text, sweeps for leaked names, scores
-   readability, and renders `report.md` / `report.html`. `render_audit.py`
-   builds `report.audit.md` on request, never automatically.
+   readability, and renders `report.md`. `render_html.py` builds
+   `report.html` and `render_audit.py` builds `report.audit.md`, both on
+   request, offered as follow-up next steps, never automatically.
 
 Every stage's outcome (`ok` / `degraded` / `skipped` / `failed`) is recorded
 in `run.json`; ground and assemble failing stops the run, everything else
@@ -103,7 +104,8 @@ Then ask Claude to simplify a clinical document, e.g. "simplify this visit
 note for me" with a `.txt` file attached or pasted. Each run is written to
 `simplify-runs/<run-id>/` in the current working directory (gitignored) --
 that folder is the full audit trail, from the numbered source units through
-`report.html`. Ask "how was this verified?" or "show your sources" to get
+the final report. Ask for a printable/shareable report to get `report.html`.
+Ask "how was this verified?" or "show your sources" to get
 `report.audit.md`, which pairs every statement in the plan with the exact
 line of the original document it came from.
 
@@ -124,7 +126,8 @@ Each run lives in `simplify-runs/<run-id>/` (gitignored) and contains:
 - `run.json` — the run's audit trail, written and updated by every stage through
   `runlog.py`: per-stage status, attempts, timestamps, checks, and run-level
   notices.
-- `report.md` and `report.html` — the final rendered care plan.
+- `report.md` — the final rendered care plan. `report.html` (printable/shareable)
+  and `report.audit.md` (audit trail) are rendered on request, not by default.
 
 ## Packaging
 

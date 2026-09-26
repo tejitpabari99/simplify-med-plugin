@@ -9,8 +9,8 @@ pipeline.
    follow-up timing, and important uncertainty that is explicitly present in the
    report. Do not infer a source-document type or date. State that this is a reading
    aid based on the supplied documents, not a new diagnosis or treatment instruction.
-2. Attach or link these three completed outputs: `<run>/06_plan.final.json`,
-   `<run>/report.md`, and `<run>/report.html`.
+2. Attach or link these two completed outputs: `<run>/06_plan.final.json` and
+   `<run>/report.md`.
 3. Immediately call `render_simplify_med_report` once with
    `<run>/06_plan.final.json` as the `report` file parameter. Do not ask the user to
    select or upload it again.
@@ -18,6 +18,13 @@ pipeline.
    review or coverage files, additions, flags, `run.json`, or an audit report to that
    tool. Never put report JSON in ordinary tool arguments, `structuredContent`,
    `content`, or `_meta`; use the declared OpenAI file parameter only.
-5. If the viewer tool or a required host capability is unavailable, keep the native
-   summary and the JSON, Markdown, and self-contained HTML downloads as the complete
-   fallback. Do not introduce a second file picker.
+5. Then, briefly and naturally, offer relevant next steps -- not a menu. A
+   printable/shareable HTML report is available on request: run
+   `python3 <skill>/scripts/render_html.py --run-dir <run>` and point to
+   `<run>/report.html`. The audit trail is likewise available on request (how a
+   statement was verified, or "show your sources"): run
+   `python3 <skill>/scripts/render_audit.py --run-dir <run>` and point to
+   `<run>/report.audit.md`.
+6. If the viewer tool or a required host capability is unavailable, keep the native
+   summary and the JSON and Markdown downloads as the complete fallback (HTML remains
+   available on request, per point 5). Do not introduce a second file picker.

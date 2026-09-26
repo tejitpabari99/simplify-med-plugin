@@ -70,8 +70,9 @@ each is checked against (schemas live in `skills/simplify/schema/`):
 | `05_plan.corrected.json` | `diff_guard.py` | `care_plan` |
 | `05_additions.json` | `cite_check.py --additions` | `additions` |
 | `06_plan.final.json` | `finalize.py` | `care_plan` |
-| `report.md` / `report.html` | `finalize.py` (via `render_md.py` / `render_html.py`) | — |
+| `report.md` | `finalize.py` (via `render_md.py`) | — |
 | `run.json` | every script, via `runlog.py` | `run` |
+| `report.html` | `render_html.py`, on request only | — |
 | `report.audit.md` | `render_audit.py`, on request only | — |
 
 ## The stage graph
@@ -95,7 +96,8 @@ SANITIZE_REVIEW --only review  +  SANITIZE_REVIEW --only coverage
    -> 05_plan.corrected.raw.json              05_additions.raw.json
 DIFF_GUARD  +  CITE_CHECK --additions
    -> 05_plan.corrected.json              05_additions.json
-FINALIZE -> 06_plan.final.json, report.md, report.html, run.json
+FINALIZE -> 06_plan.final.json, report.md, run.json
+RENDER_HTML (on request only) -> report.html
 RENDER_AUDIT (on request only) -> report.audit.md
 ```
 
@@ -273,13 +275,23 @@ nothing written. In order:
    `ground`/`assemble`/`correct` degraded, or step 3 dropped anything.
    Deduplicated.
 8. Validate against `care_plan.schema.json`, write `06_plan.final.json`,
-   `report.md`, `report.html`.
+   `report.md`. `report.html` is not written here — see `render_html`
+   below.
 
 **Failure:** exit 1, nothing written, on failed preconditions or a final
-document that doesn't validate (internal-bug case). **Stdout order:** HTML
-path, Markdown path, the reading-level line (or "Reading level: not enough
+document that doesn't validate (internal-bug case). **Stdout order:**
+Markdown path, the reading-level line (or "Reading level: not enough
 text to estimate."), each notice verbatim, then the `finalize: ...` status
 line last.
+
+### render_html (script, on request only)
+
+`render_html.py --run-dir <run> [--plan PATH] [--out PATH]` (defaults:
+read `<run>/06_plan.final.json`, write `<run>/report.html`). Never runs
+inside `finalize.py` — it is offered as a follow-up next step after the
+report is presented. Prints `OK wrote <path>` then the
+`render_html: ok | path=<path>` status line last; exits 1 with a plain
+stderr message (never writing `report.html`) if the plan file is missing.
 
 ### render_audit (script, on request only)
 

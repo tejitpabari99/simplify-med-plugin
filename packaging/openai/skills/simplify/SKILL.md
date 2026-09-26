@@ -1,6 +1,6 @@
 ---
 name: simplify
-description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces report.html and report.md in a run folder.
+description: Turn a clinical document (visit note, discharge summary, lab or imaging report) into a plain-language, fact-checked care plan with an audit trail. Use when a user shares medical paperwork and wants to understand it. Takes plain text you have already extracted; produces a plain-language report (Markdown) in a run folder, with a printable HTML version and an audit trail available on request.
 ---
 
 Resolve `<skill>` once, to the absolute path of the directory containing
@@ -43,15 +43,24 @@ one exception; see Stage 0).
 
 ## Performing an LLM stage
 
-Read `<skill>/stages/<stage>.md` yourself and follow it exactly: it names
-its own input files (its `reference/` and `schema/` files live under
-`<skill>`; everything else lives under `<run>`) and its one output file.
-Write only that output file, in your current context -- there is no
-sub-agent to dispatch to. Do every stage below in order, one at a time;
-never skip one because it feels redundant.
+If you can run sub-agents, run each LLM stage in its own sub-agent:
+instructions = `<skill>/stages/<stage>.md`, plus its inputs, its one
+output path, `<skill>/reference`, and `<skill>/schema` (its `reference/`
+and `schema/` files live under `<skill>`; everything else lives under
+`<run>`); run a parallel group's stages concurrently. If you cannot, read
+the stage file yourself and perform it in this chat, one at a time, in
+order -- never skip one because it feels redundant. Either way, write
+only that stage's one output file, then validate it and apply the
+one-retry rule below before moving on.
+
+Parallel groups (mirroring the canonical skill): group A is ground[1..K]
++ glossary (Stage 1); group B is review_fidelity + review_coverage (Stage
+3); group C is correct + assemble_missing (Stage 4, each independently
+skippable).
 
 **Validation and one retry.** After each stage, run its check script. On
-exit 1 with validator errors, redo the stage once yourself, appending:
+exit 1 with validator errors, redo the stage once -- the same sub-agent if
+you dispatched one, or yourself otherwise -- appending:
 
 ```
 Retry: the previous output failed validation. Fix exactly these errors and rewrite the output file:
@@ -147,9 +156,9 @@ skipped).
 python3 <skill>/scripts/finalize.py --run-dir <run>
 ```
 
-Stdout gives, one per line: the HTML report path, the Markdown report
-path, the reading-level line, any notices, then the `finalize: ...`
-status line last (not a notice). Exit 1 is fatal -- show its stderr text.
+Stdout gives, one per line: the Markdown report path, the reading-level
+line, any notices, then the `finalize: ...` status line last (not a
+notice). Exit 1 is fatal -- show its stderr text.
 
 ## Present results
 
@@ -158,16 +167,21 @@ status line last (not a notice). Exit 1 is fatal -- show its stderr text.
   timing, and any uncertainty explicitly present in the report. State
   this is a reading aid based on the supplied documents, not a new
   diagnosis or treatment instruction.
-- Attach or link `<run>/06_plan.final.json`, `<run>/report.md`, and
-  `<run>/report.html`. Never paste the plan into chat, and never mention
-  fact ids, line numbers, chunk counts, or other run internals.
-- If asked how a statement was verified, or for sources, run:
+- Attach or link `<run>/06_plan.final.json` and `<run>/report.md`. Never
+  paste the plan into chat, and never mention fact ids, line numbers,
+  chunk counts, or other run internals.
+- Then, briefly and naturally, offer relevant next steps -- not a menu:
+  - A printable/shareable HTML report: run
+    `python3 <skill>/scripts/render_html.py --run-dir <run>` and point to
+    `<run>/report.html`.
+  - The audit trail, if asked how a statement was verified or for
+    sources: run
 
-  ```
-  python3 <skill>/scripts/render_audit.py --run-dir <run>
-  ```
+    ```
+    python3 <skill>/scripts/render_audit.py --run-dir <run>
+    ```
 
-  and point to `<run>/report.audit.md`.
+    and point to `<run>/report.audit.md`.
 
 ## Failure table
 
@@ -186,7 +200,6 @@ status line last (not a notice). Exit 1 is fatal -- show its stderr text.
 
 Each run lives in `<cwd>/simplify-runs/<run-id>/` and contains numbered
 stage files (`01_units.json` ... `06_plan.final.json`), `run.json` (the
-audit trail: per-stage status, attempts, checks), and the three reports:
-`report.md`, `report.html`, and, on request, `report.audit.md`.
-Everything stays on the user's machine; deleting the folder removes all
-traces of the run.
+audit trail: per-stage status, attempts, checks), and `report.md`, plus,
+on request, `report.html` and `report.audit.md`. Everything stays on the
+user's machine; deleting the folder removes all traces of the run.

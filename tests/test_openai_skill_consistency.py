@@ -146,6 +146,24 @@ class TestOpenAiSkillIsSelfContained(unittest.TestCase):
         self.assertNotIn("MCP", self.text, "OpenAI SKILL.md unexpectedly contains 'MCP'")
 
 
+class TestOpenAiSkillDescribesSubAgentUsage(unittest.TestCase):
+    """The orchestrator must tell the model to use sub-agents for LLM
+    stages when the host supports them, with an in-chat fallback when it
+    does not (simple substring checks, per the drift guard's own style)."""
+
+    def setUp(self):
+        self.text = _read(OPENAI_SKILL_MD)
+
+    def test_mentions_sub_agent(self):
+        self.assertIn("sub-agent", self.text)
+
+    def test_mentions_in_chat_fallback(self):
+        self.assertIn("in this chat", self.text)
+
+    def test_mentions_running_sub_agents_conditionally(self):
+        self.assertIn("If you can run sub-agents", self.text)
+
+
 class TestOpenAiSkillReferencesExist(unittest.TestCase):
     """Every script and stage file the OpenAI orchestrator names must
     actually exist under the canonical skills/simplify/ tree (it has

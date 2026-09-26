@@ -65,8 +65,13 @@ class TestFinalizeEndToEnd(unittest.TestCase):
         self.assertEqual(self.rc, 0)
 
     def test_final_and_report_files_written(self):
-        for name in ("06_plan.final.json", "report.md", "report.html"):
+        for name in ("06_plan.final.json", "report.md"):
             self.assertTrue(os.path.isfile(os.path.join(self.run_dir, name)), name)
+
+    def test_html_report_not_written(self):
+        # report.html is an on-request follow-up (render_html.py), not part
+        # of the default finalize output.
+        self.assertFalse(os.path.isfile(os.path.join(self.run_dir, "report.html")))
 
     def _final_plan(self):
         with open(os.path.join(self.run_dir, "06_plan.final.json"), encoding="utf-8") as f:
@@ -129,13 +134,7 @@ class TestFinalizeEndToEnd(unittest.TestCase):
     def test_low_priority_marker_absent_from_reports(self):
         with open(os.path.join(self.run_dir, "report.md"), encoding="utf-8") as f:
             md = f.read()
-        with open(os.path.join(self.run_dir, "report.html"), encoding="utf-8") as f:
-            html_text = f.read()
-        start = html_text.index('<script type="application/json"')
-        end = html_text.index("</script>", start)
-        body_only = html_text[:start] + html_text[end:]
         self.assertNotIn(_runfix.LOW_PRIORITY_MARKER, md)
-        self.assertNotIn(_runfix.LOW_PRIORITY_MARKER, body_only)
 
     def test_readability_scores_computed(self):
         plan = self._final_plan()
@@ -180,8 +179,8 @@ class TestFinalizeCLI(unittest.TestCase):
                 capture_output=True, text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("report.html", result.stdout)
             self.assertIn("report.md", result.stdout)
+            self.assertNotIn("report.html", result.stdout)
             self.assertIn("Reading level", result.stdout)
             self.assertTrue(os.path.isfile(os.path.join(run_dir, "06_plan.final.json")))
 

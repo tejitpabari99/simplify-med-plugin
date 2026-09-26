@@ -125,6 +125,39 @@ class TestRenderHtml(unittest.TestCase):
                 content = f.read()
             self.assertTrue(content.startswith("<!DOCTYPE html>"))
 
+    def test_cli_default_run_dir_paths_and_status_line(self):
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            plan_path = os.path.join(d, "06_plan.final.json")
+            with open(plan_path, "w", encoding="utf-8") as f:
+                json.dump(self.plan, f)
+            script = os.path.join(_paths.SCRIPTS_DIR, "render_html.py")
+            result = subprocess.run(
+                [sys.executable, script, "--run-dir", d],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            out_path = os.path.join(d, "report.html")
+            self.assertTrue(os.path.isfile(out_path))
+            self.assertIn(f"render_html: ok | path={out_path}", result.stdout)
+            self.assertEqual(result.stdout.strip().splitlines()[-1], f"render_html: ok | path={out_path}")
+
+    def test_cli_exit_1_when_plan_missing(self):
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            script = os.path.join(_paths.SCRIPTS_DIR, "render_html.py")
+            result = subprocess.run(
+                [sys.executable, script, "--run-dir", d],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("06_plan.final.json", result.stderr)
+            self.assertFalse(os.path.isfile(os.path.join(d, "report.html")))
+
 
 if __name__ == "__main__":
     unittest.main()
