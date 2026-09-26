@@ -335,15 +335,22 @@ ev.forEach((e,i)=>{const x=160+i*200;const up=i%2===0;th+=`<g id="te${i}" opacit
 $('tl').innerHTML=th;
 
 /* ================= RENDER ================= */
-function render(t){
+const HOLDS=[[3.25,.5],[5.75,.8],[10.55,.8],[16.85,.8],[20.95,.8],[27.15,.9],[30.35,.6],[38.15,.9],[45.35,.9],[51.35,.9],[56.15,.8]];
+const END_HOLD=2.5,ANIM_END=60;
+const TOTAL=ANIM_END+HOLDS.reduce((a,h)=>a+h[1],0)+END_HOLD;
+// output time -> animation time (holds freeze the animation just before each transition)
+function animTime(o){let sh=0;for(const [at,d] of HOLDS){if(o<=at+sh)return o-sh;if(o<=at+sh+d)return at;sh+=d;}return Math.min(o-sh,ANIM_END);}
+window.TOTAL=TOTAL;
+function renderOut(o){render(animTime(o),o);}
+window.renderOut=renderOut;
+function render(t,rt=t){
  // background tint crossfade: coral during pain, teal during solution
  const sol=eio(P(t,27.2,29.5));
- const drift=t*9;
- $('bgA').style.background=`radial-gradient(900px 700px at ${30+Math.sin(t*.25)*8}% ${25+Math.cos(t*.2)*6}%, rgba(255,107,87,.16), transparent 70%), radial-gradient(800px 700px at ${78+Math.cos(t*.22)*6}% ${80+Math.sin(t*.18)*6}%, rgba(255,192,97,.08), transparent 70%)`;
+  $('bgA').style.background=`radial-gradient(900px 700px at ${30+Math.sin(rt*.25)*8}% ${25+Math.cos(rt*.2)*6}%, rgba(255,107,87,.16), transparent 70%), radial-gradient(800px 700px at ${78+Math.cos(rt*.22)*6}% ${80+Math.sin(rt*.18)*6}%, rgba(255,192,97,.08), transparent 70%)`;
  $('bgA').style.opacity=1-sol;
- $('bgB').style.background=`radial-gradient(1000px 800px at ${70+Math.sin(t*.2)*8}% ${25+Math.cos(t*.23)*6}%, rgba(61,219,180,.15), transparent 70%), radial-gradient(900px 700px at ${22+Math.cos(t*.17)*7}% ${82+Math.sin(t*.21)*6}%, rgba(90,120,255,.10), transparent 70%)`;
+ $('bgB').style.background=`radial-gradient(1000px 800px at ${70+Math.sin(rt*.2)*8}% ${25+Math.cos(rt*.23)*6}%, rgba(61,219,180,.15), transparent 70%), radial-gradient(900px 700px at ${22+Math.cos(rt*.17)*7}% ${82+Math.sin(rt*.21)*6}%, rgba(90,120,255,.10), transparent 70%)`;
  $('bgB').style.opacity=sol;
- $('prog').style.width=(t/60*1920)+'px';
+ $('prog').style.width=(rt/TOTAL*1920)+'px';
 
  for(const k in T){if(k==='END')continue;const [a,b]=T[k];$(k).style.opacity=win(t,a,b);$(k).style.display=(t>=a-.05&&t<=b+.05)?'block':'none';}
 
@@ -352,7 +359,7 @@ function render(t){
   const full='“I kind of go dumb when they start talking.”';
   const n=Math.floor(clamp((t-.35)/2.1)*full.length);
   $('q1t').textContent=full.slice(0,n);
-  $('caret').style.opacity=(n<full.length||Math.floor(t*2.2)%2===0)?1:0;
+  $('caret').style.opacity=(n<full.length||Math.floor(rt*2.2)%2===0)?1:0;
   const out=eo(P(t,3.3,3.9));
   S('q1',{o:1-out,y:-out*60,blur:out*10});
   rise($('q1a'),t,2.55,.5,16);$('q1a').style.opacity=Math.min(+$('q1a').style.opacity,1-out);
@@ -422,11 +429,11 @@ function render(t){
   rise($('s9h'),t,52.0,.6,24);rise($('s9s'),t,52.5,.6,16);rise($('s9stat'),t,53.6,.6,20);
   $('s9n').textContent=Math.round(eo(P(t,53.6,54.8))*80)+'%';
   const hk=P(t,52.2,52.9);const h=$('hub');h.setAttribute('opacity',clamp(hk*2));h.setAttribute('transform',`translate(${C[0]},${C[1]}) scale(${lerp(.6,1,back(hk))})`);
-  $('hubr').setAttribute('r',150+Math.sin(t*3)*10);
+  $('hubr').setAttribute('r',150+Math.sin(rt*3)*10);
   peers.forEach((p,i)=>{const at=52.7+i*.22;const k=eo(P(t,at,at+.5));const a=(p[1]-90)*Math.PI/180,R=340;const x=C[0]+R*Math.cos(a),y=C[1]+R*Math.sin(a);
-   $('nl'+i).setAttribute('opacity',k*.7);$('nl'+i).setAttribute('stroke-dashoffset',-t*40);
+   $('nl'+i).setAttribute('opacity',k*.7);$('nl'+i).setAttribute('stroke-dashoffset',-rt*40);
    $('nn'+i).setAttribute('opacity',k);$('nn'+i).setAttribute('transform',`translate(${x},${y}) scale(${lerp(.5,1,back(P(t,at,at+.5)))})`);
-   const ph=((t*.7+i*.37)%1);const dp=$('np'+i);dp.setAttribute('opacity',k*(ph<.9?1:0));dp.setAttribute('cx',lerp(x,C[0],ph));dp.setAttribute('cy',lerp(y,C[1],ph));});
+   const ph=((rt*.7+i*.37)%1);const dp=$('np'+i);dp.setAttribute('opacity',k*(ph<.9?1:0));dp.setAttribute('cx',lerp(x,C[0],ph));dp.setAttribute('cy',lerp(y,C[1],ph));});
  }
  /* S10 + END */
  if(t>56.2){
@@ -441,6 +448,6 @@ function render(t){
  } else {$('END').style.display='none';}
 }
 window.render=render;
-render(+(new URLSearchParams(location.search).get('t')||0));
+renderOut(+(new URLSearchParams(location.search).get('t')||0));
 </script>
 </body></html>

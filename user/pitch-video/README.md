@@ -1,8 +1,12 @@
 # 60-second pitch video
 
-`simplify-med-pitch.mp4` (1920×1080, 30 fps, 60 s, with soundtrack) is a
+`simplify-med-pitch.mp4` (1920×1080, 30 fps, ~71 s, with soundtrack) is a
 kinetic-typography pitch built from `user/research-report.md`, the `simplify`
 skill and the `prep` / `med-lit` direction on `users/tejitpabari/add-med-skills`.
+
+Scene times below are animation times. The render adds a short reading hold
+(0.5–0.9 s) before each transition and 2.5 s on the end card; see `HOLDS` in
+`pitch.html` and `audio.py`.
 
 | Time | Scene |
 |---|---|
