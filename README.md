@@ -10,10 +10,14 @@ fidelity and coverage, and renders it to Markdown and a single self-contained HT
 page. Every interim file the pipeline writes is schema-validated and logged, so a full
 run leaves an auditable trail from source text to final output.
 
-The OpenAI package adds a presentation-only MCP viewer after finalization. Medical
-processing still runs in the host; the developer-operated endpoint is designed not to
-download or process document or report bytes. See [`docs/openai.md`](docs/openai.md) for
-the exact data flow, privacy boundary, deployment requirements, and PHI limitations.
+The OpenAI package can be built two ways. The default build (`python3 build.py openai`)
+adds a presentation-only MCP viewer after finalization; medical processing still runs in
+the host, and the developer-operated endpoint is designed not to download or process
+document or report bytes — see [`docs/openai.md`](docs/openai.md) for the exact data
+flow, privacy boundary, deployment requirements, and PHI limitations. `python3 build.py
+openai --no-mcp` instead produces a plain skills-only plugin with no MCP server,
+connector, or viewer at all — see the [Packaging](#packaging) section below and
+[`docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md`](docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md).
 
 ## Documentation
 
@@ -43,8 +47,11 @@ skills/simplify-med/
                                 ahrq_plain_language.json
   templates/                   report.html
 agents/                        thin Claude Code agent definitions, one per LLM stage
-packaging/                     shared staging plus claude-code, claude-ai, openai profiles
-mcp/openai/                    presentation-only MCP server and report widget
+packaging/                     shared staging plus claude-code, claude-ai, openai profiles;
+                                packaging/openai/skills/simplify-med/SKILL.md overlays a
+                                self-contained orchestrator used only by `openai --no-mcp`
+mcp/openai/                    presentation-only MCP server and report widget, used only by
+                                the default OpenAI build (absent from `openai --no-mcp`)
 tests/                         unittest modules and fixtures
 docs/agent_files/...           design brief and futures list (excluded from packages)
 ```
@@ -124,17 +131,28 @@ Each run lives in `simplify-runs/<run-id>/` (gitignored) and contains:
 ```
 python3 build.py claude-code
 python3 build.py claude-ai
-python3 build.py openai
+python3 build.py openai            # default: includes the presentation MCP viewer
+python3 build.py openai --no-mcp   # skills-only plugin, no MCP server/connector
 ```
 
-Claude Code and claude.ai packages preserve the existing host behavior. The OpenAI
-package adds portable root manifests, OpenAI-specific final handoff instructions, and a
-dependency on the separately deployed presentation MCP endpoint. All write a zip to
-`dist/` (gitignored). The existing `python3 packaging/build.py --platform <platform>
---out dist` form remains available for compatibility.
+Claude Code and claude.ai packages preserve the existing host behavior. The default
+OpenAI build adds portable root manifests, OpenAI-specific final handoff instructions,
+and a dependency on the separately deployed presentation MCP endpoint; an OpenAI
+production build needs that deployed HTTPS endpoint, which the ZIP itself does not
+deploy — follow [`docs/openai.md`](docs/openai.md#deploy).
 
-An OpenAI production build needs the deployed HTTPS MCP endpoint. Building the ZIP does
-not deploy the server; follow [`docs/openai.md`](docs/openai.md#deploy).
+`python3 build.py openai --no-mcp` instead produces a plain skills-only plugin: no root
+`plugin.json`, no `mcp.json`/`.mcp.json`, no connector wiring, and only
+`.codex-plugin/plugin.json` as the manifest, with an OpenAI-specific self-contained
+`SKILL.md` — there is no server to deploy for this mode. Install it either by unzipping
+its contents under `~/plugins/<name>/` (or adding a repo/team
+`.agents/plugins/marketplace.json` entry pointing at it), or by uploading/importing the
+zip directly in ChatGPT. See
+[`docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md`](docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md)
+(D2, D8) for the exact package tree and rationale.
+
+All modes write a zip to `dist/` (gitignored). The existing `python3 packaging/build.py
+--platform <platform> --out dist` form remains available for compatibility.
 
 ## Versioning
 

@@ -5,6 +5,14 @@ what must be hosted, how the report reaches the ChatGPT widget, and where the pr
 boundary sits. For the medical pipeline itself, read [architecture.md](architecture.md).
 The OpenAI layer does not replace or reorder that pipeline.
 
+> **Note:** everything below describes the default build (`python3 build.py openai`),
+> which includes the MCP viewer. `python3 build.py openai --no-mcp` instead produces a
+> skills-only plugin with no MCP server, connector wiring, or widget — none of that mode
+> is covered in this file. See the README's [Packaging](../README.md#packaging) section
+> and
+> [`docs/agent_files/2026-09-26-openai-skills-only/DESIGN.md`](agent_files/2026-09-26-openai-skills-only/DESIGN.md)
+> for what it omits and how to install it.
+
 ## Scope and status
 
 The `0.1.0` OpenAI package combines the portable `simplify-med` skill with a minimal,
