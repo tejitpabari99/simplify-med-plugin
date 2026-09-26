@@ -17,25 +17,25 @@ another workstream; request contract changes through the orchestrator.
 - [x] Research synthesis, PRD, tasks.
 - [x] Model and shared schemas, `plan_paths.py`, synthetic ER fixture.
 
-## T1 — Source preparation (agent: unitize)
+## T1 — Source preparation (agent: unitize) — done
 
 Owns: `scripts/unitize.py`, `scripts/protected.py` (new), `schema/units.schema.json`,
 `tests/test_unitize.py`, `tests/test_protected.py` (new), `tests/test_fixtures.py`,
 `tests/fixtures/README.md`.
 
-- [ ] Boilerplate suppression (URL-only lines, page counters, exact repeats ≥ 8
+- [x] Boilerplate suppression (URL-only lines, page counters, exact repeats ≥ 8
       chars) → `skip` reason on the unit; skipped units excluded from
       `01_source.txt`.
-- [ ] `01_source.txt` with `=== <file> page <n> ===` headers.
-- [ ] Remove chunking (`chunks`, `01_units.<k>.txt`, `--chunk-size`).
-- [ ] `protected.py` scan + `01_protected.json` (schema `protected`).
-- [ ] New stdout line `unitize: ok | files= units= skipped= protected=`.
-- [ ] `SCHEMA_VERSION`-tagged outputs ("3.0"; `_version.py` owned by T2).
-- [ ] Tests incl. the synthetic ER fixture: portal headers/URLs/page counters
+- [x] `01_source.txt` with `=== <file> page <n> ===` headers.
+- [x] Remove chunking (`chunks`, `01_units.<k>.txt`, `--chunk-size`).
+- [x] `protected.py` scan + `01_protected.json` (schema `protected`).
+- [x] New stdout line `unitize: ok | files= units= skipped= protected=`.
+- [x] `SCHEMA_VERSION`-tagged outputs ("3.0"; `_version.py` owned by T2).
+- [x] Tests incl. the synthetic ER fixture: portal headers/URLs/page counters
       skipped; follow-up, return precaution, disposition, discharge diagnosis,
       "(H)" lab lines appear as protected candidates.
 
-## T2 — Check, settle, finalize, run log (agent: pipeline)
+## T2 — Check, settle, finalize, run log (agent: pipeline) — done
 
 Owns: `scripts/check_draft.py` (new), `scripts/numtokens.py` (new, tokenizer moved
 from `numeric_parity.py`), `scripts/settle.py` (new), `scripts/finalize.py`,
@@ -50,20 +50,20 @@ from `numeric_parity.py`), `scripts/settle.py` (new), `scripts/finalize.py`,
 `test_runlog.py`, `test_schemas.py`, `test_validate.py`, `test_status_lines.py`,
 `test_pipeline_e2e.py`, `tests/_runfix.py`, `test_textnorm.py`.
 
-- [ ] `numtokens.py` tokenizer (behavior-preserving move) + tests.
-- [ ] `check_draft.py` per PRD §4.4 (+ `--round 2`, attempt archiving).
-- [ ] `settle.py` per PRD §4.6 (exit 0 / 1 / 3; `04_repair.json`).
-- [ ] `finalize.py` per PRD §4.7 (uses `render_md.render`, `readability`).
-- [ ] `runlog.py` core stages `unitize, write, check, verify, settle, finalize`;
+- [x] `numtokens.py` tokenizer (behavior-preserving move) + tests.
+- [x] `check_draft.py` per PRD §4.4 (+ `--round 2`, attempt archiving).
+- [x] `settle.py` per PRD §4.6 (exit 0 / 1 / 3; `04_repair.json`).
+- [x] `finalize.py` per PRD §4.7 (uses `render_md.render`, `readability`).
+- [x] `runlog.py` core stages `unitize, write, check, verify, settle, finalize`;
       `repair_requested` status for `settle`; `run.schema.json` updated.
-- [ ] `_version.py` `SCHEMA_VERSION = "3.0"`.
-- [ ] E2E test on the synthetic ER fixture: unitize → hand-written draft →
+- [x] `_version.py` `SCHEMA_VERSION = "3.0"`.
+- [x] E2E test on the synthetic ER fixture: unitize → hand-written draft →
       check → hand-written verify → settle → finalize; asserts report ≤ 300
       words, contains the target sections, and excludes noise (contrast agent,
       lab inventory, vitals, "no current outpatient medications", "ordering
       provider"). Plus repair-round and failure-path tests.
 
-## T3 — Renderers (agent: render)
+## T3 — Renderers (agent: render) — done
 
 Owns: `scripts/plan_view.py`, `scripts/render_md.py`, `scripts/render_html.py`,
 `templates/report.html`, `scripts/render_audit.py`, `scripts/glossary_check.py`,
@@ -72,17 +72,17 @@ Owns: `scripts/plan_view.py`, `scripts/render_md.py`, `scripts/render_html.py`,
 `test_render_audit.py`, `test_glossary_check.py`, `test_readability.py`, and a
 new plan fixture `tests/fixtures/plans/er_visit.final.json`.
 
-- [ ] `plan_view.build_view` for the §3 sections and headings by `visit_type`;
+- [x] `plan_view.build_view` for the §3 sections and headings by `visit_type`;
       `visible_text` built on `plan_paths.visible_strings`.
-- [ ] `render_md` output matches PRD §3 for the ER fixture plan (golden test).
-- [ ] `render_html` + template for the new sections.
-- [ ] `render_audit`: each visible item then its cited unit lines
+- [x] `render_md` output matches PRD §3 for the ER fixture plan (golden test).
+- [x] `render_html` + template for the new sections.
+- [x] `render_audit`: each visible item then its cited unit lines
       (file/page/line/text) from `01_units.json`; stage table from `run.json`.
-- [ ] `glossary_check` on new visible text.
-- [ ] Fix: no stray type labels, no duplicated `(plain_name)`, no empty dashes,
+- [x] `glossary_check` on new visible text.
+- [x] Fix: no stray type labels, no duplicated `(plain_name)`, no empty dashes,
       no "Already done".
 
-## T4 — Prompts, skill, and docs (agent: prompts)
+## T4 — Prompts, skill, and docs (agent: prompts) — done
 
 Owns: `SKILL.md`, `stages/write.md` (new), `stages/verify.md` (new),
 `stages/glossary.md`, deletes `stages/ground.md`, `assemble.md`, `review.md`,
@@ -91,25 +91,31 @@ Owns: `SKILL.md`, `stages/write.md` (new), `stages/verify.md` (new),
 `docs/openai-plugin.md`, `docs/openai.md`, tests `test_skill_consistency.py`,
 `test_stage_docs.py`.
 
-- [ ] `SKILL.md`: short execution contract for the PRD §4 graph, retries,
+- [x] `SKILL.md`: short execution contract for the PRD §4 graph, retries,
       repair round, fail-closed rules, presentation rules. Never tells the host
       to read `01_units.json`.
-- [ ] `stages/write.md`: selection rules (§4.2), slot rules (§3), coverage,
+- [x] `stages/write.md`: selection rules (§4.2), slot rules (§3), coverage,
       unit-id citation, repair mode, retry mode. Includes the ER target as the
       worked example of shape (not content to copy).
-- [ ] `stages/verify.md`: claims, operations, numeric flags, protected units,
+- [x] `stages/verify.md`: claims, operations, numeric flags, protected units,
       budget trimming (§4.5).
-- [ ] `reference/style_rules.md` rewrite (PII, NUMERACY, LANGUAGE, SHOW/SKIP).
-- [ ] Docs updated to the new pipeline.
-- [ ] Consistency tests: every script/stage/schema/reference named in SKILL.md
+- [x] `reference/style_rules.md` rewrite (PII, NUMERACY, LANGUAGE, SHOW/SKIP).
+- [x] Docs updated to the new pipeline.
+- [x] Consistency tests: every script/stage/schema/reference named in SKILL.md
       and stages exists; obsolete names are absent.
 
 ## T5 — Integration (orchestrator)
 
-- [ ] Full test suite green; `python3 build.py` produces a ZIP containing only
+- [x] Full test suite green; `python3 build.py` produces a ZIP containing only
       the new files (`test_build.py`).
-- [ ] Walk the synthetic ER case end to end; compare `report.md` to PRD §3.
+- [x] Walk the synthetic ER case end to end; compare `report.md` to PRD §3.
 - [ ] Adversarial review of the diff; commit and push.
+
+Integration notes: `numbers.py` renamed `numtokens.py` (it shadowed the
+standard library); one word-count definition (`plan_view.word_count`);
+SKILL.md retries only on `retry=allowed`; plain diagnosis wording leads.
+The synthetic ER run (2 model calls, 13 artifacts, 175 words) renders the
+PRD §3 target exactly.
 
 ## Follow-ups (not in this change)
 
