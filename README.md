@@ -27,14 +27,14 @@ skills/simplify/
 
 1. Splits extracted document text into numbered source units.
 2. Extracts atomic facts anchored to exact source lines.
-3. Builds a structured plain-language care plan from checked facts only.
-4. Reviews fidelity, critical coverage, and numeric preservation.
-5. Applies bounded corrections and fills verified critical omissions.
-6. Produces Markdown, with HTML and a source audit available on request.
+3. Builds a concise, critical-first care plan from checked facts only.
+4. Accounts for every fact as visible content or an audited omission.
+5. Independently reviews fidelity, omissions, and numeric preservation.
+6. Applies exact bounded corrections and finalizes only after every core gate passes.
 
-The fact ledger remains comprehensive for verification. The default patient view is selective: it emphasizes the main conclusion, medication changes, next actions, follow-up, and explicit warning instructions while hiding technical and non-actionable detail in the audit layer.
+The fact ledger remains comprehensive for verification. The default patient view is selective: it emphasizes the main conclusion, medication changes, next actions, follow-up, and explicit warning instructions. Generic education, technical mechanics, duplicate details, and routine non-actionable information stay out of the patient report but remain traceable through audited omission records.
 
-The language work lives in `skills/simplify/stages/`. Python is reserved for deterministic work such as source anchoring, schema validation, citations, numeric checks, bounded diffs, audit logging, and rendering. See `docs/openai-plugin.md` for the governing authoring rules and the per-script rationale.
+The model has three core responsibilities: grounding each source chunk, assembling the concise draft, and independently reviewing the draft. Python is reserved for deterministic work such as source anchoring, schema validation, citation and omission checks, numeric parity, exact settlement, audit logging, rendering, and fail-closed finalization. See `docs/openai-plugin.md` for the governing authoring rules and the per-script rationale.
 
 ## Build the Plugin ZIP
 
@@ -82,15 +82,19 @@ The builder uses an allowlist. The ZIP contains only:
 - `.codex-plugin/plugin.json`
 - `skills/`
 
-It excludes `build-versions.json`, `mcp/`, `docs/`, `tests/`, `agent_files/`, repository metadata, caches, and the builder itself.
+It excludes `build-versions.json`, `mcp/`, `docs/`, `tests/`, repository metadata, caches, and the builder itself.
 
 ## Use in OpenAI
 
 Install or import the generated ZIP as an OpenAI plugin. The plugin exposes the `simplify` skill and requires no MCP server, connector, endpoint, API key, or separate deployment.
 
-Ask it to simplify a visit note, discharge summary, lab report, imaging report, or similar clinical document. Input text should be extracted to UTF-8 `.txt`; page boundaries may be represented with form-feed characters (`\f`).
+Explicitly invoke the `simplify` skill for a visit note, discharge summary, lab report, imaging report, or similar clinical document. Implicit invocation is disabled so this relatively expensive medical workflow does not activate accidentally. Input text should be extracted to UTF-8 `.txt`; page boundaries may be represented with form-feed characters (`\f`).
 
-Each run writes `simplify-runs/<run-id>/` in the working directory. The folder contains the stage artifacts, `run.json`, the final JSON plan, and `report.md`. `report.html` and `report.audit.md` are created only when requested.
+Explicit invocation requires the complete workflow. The skill must not return a direct, ad hoc simplification or expose clinical content before fail-closed finalization succeeds. The only default clinical output is the validated `report.md`; the host must not rewrite it into a second summary.
+
+Each run writes `simplify-runs/<run-id>/` in the working directory. A clean one-chunk schema-v2 run has approximately 13 core artifacts, including `run.json`, the fact ledger, draft, independent review, settled plan, final JSON plan, and `report.md`. Glossary JSON, `report.html`, and `report.audit.md` are post-finalization outputs created only when requested.
+
+Completed schema-v1 final reports remain renderable. Partial schema-v1 runs cannot be resumed or finalized by the schema-v2 pipeline.
 
 ## Safety Boundary
 
@@ -98,6 +102,7 @@ Each run writes `simplify-runs/<run-id>/` in the working directory. The folder c
 - Every medical statement must be supported by the source documents.
 - Missing information stays missing rather than being guessed.
 - Numeric details are checked independently.
+- Missing, failed, degraded, stale, or invalid core stages prevent publication.
 - The result is a reading aid, not a replacement for clinical or emergency care.
 
 ## Validation

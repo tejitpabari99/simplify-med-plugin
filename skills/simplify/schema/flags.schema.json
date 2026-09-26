@@ -7,9 +7,10 @@
   "definitions": {
     "numeric_parity_item": {
       "type": "object",
-      "required": ["path", "tokens_in_field", "tokens_in_facts"],
+      "required": ["flag_id", "path", "tokens_in_field", "tokens_in_facts"],
       "additionalProperties": false,
       "properties": {
+        "flag_id": {"type": "integer", "minimum": 1},
         "path": {"type": "string"},
         "tokens_in_field": {"type": "array", "items": {"type": "string"}},
         "tokens_in_facts": {"type": "array", "items": {"type": "string"}}
@@ -26,9 +27,9 @@
     }
   },
   "properties": {
-    "schema_version": {"type": "string"},
-    "plugin_version": {"type": "string"},
-    "run_id": {"type": "string"},
+    "schema_version": {"type": "string", "enum": ["2.0"]},
+    "plugin_version": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
     "numeric_parity": {"type": "array", "items": {"$ref": "#/definitions/numeric_parity_item"}},
     "thin_fields": {"type": "array", "items": {"$ref": "#/definitions/thin_field_item"}}
   }

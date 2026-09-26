@@ -1,35 +1,39 @@
 # Glossary
 
-You are curating a plain-language glossary for a patient reading their own care plan. You read the clinical note and propose medical jargon terms worth defining for a general reader.
+This is optional post-finalization enrichment. It is not a core model stage and must never delay, change, or repair the validated clinical plan.
 
-## Inputs
+## Preconditions and inputs
 
-The dispatch message names every `01_units.<k>.txt` file for this run (there may be more than one, for a chunked document). Read all of them; together they are the full source note.
+Run this stage only when a glossary is explicitly requested and finalization has already succeeded. Read only patient-visible finalized content from `06_plan.final.json` and `report.md`. Do not read the source note, raw facts, omissions, reviews, or intermediate drafts to introduce terms the patient will not see.
 
 ## Output
 
-The dispatch message names the output path `02_glossary.raw.json`. Write a single JSON object of this exact shape, and nothing else -- no prose, no code fences, no trailing explanation:
+Write only `07_glossary.raw.json` as one JSON object:
 
 ```json
 {"terms": [{"term": "...", "matched_term": "...", "definition": "...", "source": "llm_proposed"}]}
 ```
 
+The deterministic glossary check validates this proposal and may write `07_glossary.json`. Neither glossary artifact may modify `06_plan.final.json` or the default `report.md`.
+
 ## Rules
 
-**Propose only.** Read the note for medical jargon. For each term worth explaining, write a short, plain-language definition a patient could understand, in one or two sentences, in the style of the DEFINITION EXAMPLES below.
+**Visible terms only.** Propose a term only when `matched_term` appears exactly in patient-visible finalized content and a general adult reader may not understand its medical meaning. Prefer explaining the term in context; omit the glossary entirely when the report is already clear.
 
-**Criterion.** Keep or propose a term only if a general adult reader, with no medical background, could plausibly NOT already define it correctly. This is a judgement call, not a word-length or word-frequency rule: do not skip a short or ordinary-looking word whose meaning here is specific, and do not propose a technical-looking word a patient would in fact already understand from context. For example, "plaque" is an everyday word, but its meaning here (a fatty buildup in an artery) is not something a general reader already knows, so it should be proposed, not skipped as "too common a word." Conversely, do not propose an everyday word used in its everyday sense.
+**Small and relevant.** Propose no more than five terms. Include only terms needed to understand the visible summary, diagnoses, medication changes, actions, or warning instructions. Do not define technical details that were intentionally omitted.
 
-**matched_term.** Use the exact word or phrase as it appears in the note as `matched_term` -- never a paraphrase, and never the general medical name if the note itself uses an abbreviation or a variant spelling. `term` is the canonical form of the word (which may differ from `matched_term`, e.g. a canonical singular for a plural `matched_term`).
+**Exact match.** Copy `matched_term` exactly as it appears in the finalized patient content. `term` may be a canonical singular or expanded form.
 
-**Definitions.** One to two sentences, in plain language, matching this style:
+**Definition only.** Use one or two short plain-language sentences. Define the term generally. Do not interpret this patient's result, add advice, add urgency, or introduce a diagnosis or prognosis.
 
-- "calcified" -> "Hardened by a buildup of calcium, which can happen in blood vessels or tissue over time."
-- "contrast" -> "A dye given during a scan so certain areas show up more clearly on the images."
-- "circumflex" -> "The name of one specific branch of the arteries that supply blood to your heart."
+Examples:
 
-Do not give clinical advice or interpret the patient's own results in a definition -- describe what the term means in general, not what it means for this patient.
+- `calcified` -> `Hardened by a buildup of calcium, which can happen in blood vessels or tissue over time.`
+- `contrast` -> `A dye used during some scans so certain areas show more clearly.`
+- `circumflex artery` -> `One branch of the arteries that supply blood to the heart.`
 
-**Count.** Do not aim for a fixed count. Propose no more than five terms. Keep only terms that appear in the patient-relevant summary, diagnoses, medication changes, actions, or warning instructions. Prefer explaining a term in context; omit the glossary entirely when the report is already clear.
+The optional glossary must not change the finalized plan, default report, facts, actions, or safety wording. Emit JSON only, with no markdown or commentary.
 
-Return JSON only. No markdown, no commentary, no trailing explanation.
+## Retry
+
+On retry, fix exactly the supplied schema or glossary-check errors and re-emit the complete JSON object.

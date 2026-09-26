@@ -16,37 +16,100 @@
   "definitions": {
     "input": {
       "type": "object",
-      "required": ["file", "extraction_method", "pages"],
+      "required": ["file", "extraction_method", "pages", "sha256"],
       "additionalProperties": false,
       "properties": {
-        "file": {"type": "string"},
+        "file": {"type": "string", "minLength": 1},
         "extraction_method": {"type": "string", "enum": ["native", "ocr", "pasted"]},
-        "pages": {"type": "integer", "minimum": 1}
+        "pages": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "minLength": 1}
       }
     },
-    "stage_entry": {
+    "artifact": {
       "type": "object",
-      "required": ["status", "attempts", "started_at", "finished_at", "checks"],
+      "required": ["path"],
       "additionalProperties": false,
       "properties": {
-        "status": {"type": "string", "enum": ["ok", "degraded", "failed", "skipped"]},
+        "path": {"type": "string", "minLength": 1}
+      }
+    },
+    "core_stage": {
+      "type": "object",
+      "required": ["status", "attempts", "started_at", "finished_at", "checks", "artifacts"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"type": "string", "enum": ["ok", "failed"]},
         "attempts": {"type": "integer", "minimum": 0},
         "started_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "finished_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-        "checks": {"type": "object"}
+        "checks": {"type": "object"},
+        "artifacts": {"type": "array", "items": {"$ref": "#/definitions/artifact"}}
       }
+    },
+    "optional_stage": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "attempts",
+            "started_at",
+            "finished_at",
+            "checks",
+            "artifacts",
+            "skip_reason"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["skipped"]},
+            "attempts": {"type": "integer", "minimum": 0},
+            "started_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "finished_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "checks": {"type": "object"},
+            "artifacts": {"type": "array", "items": {"$ref": "#/definitions/artifact"}},
+            "skip_reason": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["status", "attempts", "started_at", "finished_at", "checks", "artifacts"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["ok", "degraded", "failed"]},
+            "attempts": {"type": "integer", "minimum": 0},
+            "started_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "finished_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "checks": {"type": "object"},
+            "artifacts": {"type": "array", "items": {"$ref": "#/definitions/artifact"}}
+          }
+        }
+      ]
     }
   },
   "properties": {
-    "schema_version": {"type": "string"},
-    "plugin_version": {"type": "string"},
-    "run_id": {"type": "string"},
-    "created_at": {"type": "string"},
+    "schema_version": {"type": "string", "enum": ["2.0"]},
+    "plugin_version": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "minLength": 1},
     "level": {"type": "string", "enum": ["standard"]},
     "inputs": {"type": "array", "items": {"$ref": "#/definitions/input"}},
     "stages": {
       "type": "object",
-      "additionalProperties": {"$ref": "#/definitions/stage_entry"}
+      "additionalProperties": false,
+      "properties": {
+        "unitize": {"$ref": "#/definitions/core_stage"},
+        "ground": {"$ref": "#/definitions/core_stage"},
+        "assemble": {"$ref": "#/definitions/core_stage"},
+        "plan_check": {"$ref": "#/definitions/core_stage"},
+        "numeric_parity": {"$ref": "#/definitions/core_stage"},
+        "review": {"$ref": "#/definitions/core_stage"},
+        "settle_review": {"$ref": "#/definitions/core_stage"},
+        "finalize": {"$ref": "#/definitions/core_stage"},
+        "glossary": {"$ref": "#/definitions/optional_stage"},
+        "render_md": {"$ref": "#/definitions/optional_stage"},
+        "render_html": {"$ref": "#/definitions/optional_stage"},
+        "render_audit": {"$ref": "#/definitions/optional_stage"}
+      }
     },
     "notices": {"type": "array", "items": {"type": "string"}}
   }

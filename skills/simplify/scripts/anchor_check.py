@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +34,24 @@ _CATEGORIES = frozenset({
     "follow_up",
     "warning_signs",
 })
+_CLAUSE_BOUNDARY = re.compile(r"(?<=[.!?;])\s+")
+_LEADING_MARKER = re.compile(r"^(?:[-*•>]+|\d+[.)])\s+")
+
+
+def _clause_key(text: str) -> str:
+    stripped = _LEADING_MARKER.sub("", text.strip())
+    return textnorm.normalize_text(stripped.rstrip(".!?;"))
+
+
+def _containing_clause(unit_text: str, start: int, end: int) -> str:
+    offset = 0
+    for clause in _CLAUSE_BOUNDARY.split(unit_text):
+        clause_start = unit_text.find(clause, offset)
+        clause_end = clause_start + len(clause)
+        if start >= clause_start and end <= clause_end:
+            return clause
+        offset = clause_end
+    return unit_text
 
 
 def check_fact(raw_fact: dict, units_by_id: dict) -> tuple:
@@ -41,7 +60,8 @@ def check_fact(raw_fact: dict, units_by_id: dict) -> tuple:
     Returns (ok, reason, char_start, char_end). `reason` is None when
     ok is True. When ok is False, char_start/char_end are None.
     Reasons, checked in order: "unknown_unit", "empty_quote",
-    "quote_not_in_unit", "uninformative_quote", "bad_category".
+    "quote_not_in_unit", "uninformative_quote", "incomplete_clause",
+    "bad_category".
     """
     unit_id = raw_fact.get("unit_id")
     unit = units_by_id.get(unit_id)
@@ -60,11 +80,15 @@ def check_fact(raw_fact: dict, units_by_id: dict) -> tuple:
     if not textnorm.is_informative(quote):
         return False, "uninformative_quote", None, None
 
+    char_start, char_end = located
+    clause = _containing_clause(unit_text, char_start, char_end)
+    if _clause_key(quote) != _clause_key(clause):
+        return False, "incomplete_clause", None, None
+
     category = raw_fact.get("category")
     if category not in _CATEGORIES:
         return False, "bad_category", None, None
 
-    char_start, char_end = located
     return True, None, char_start, char_end
 
 
@@ -101,7 +125,15 @@ def main(argv: list[str] | None = None) -> int:
     units_path = os.path.join(args.run_dir, "01_units.json")
     with open(units_path, "r", encoding="utf-8") as f:
         units_doc = json.load(f)
-    units_by_id = {u["id"]: u for u in units_doc.get("units", [])}
+    chunk_meta = next((chunk for chunk in units_doc.get("chunks", []) if chunk.get("k") == args.chunk), None)
+    if chunk_meta is None:
+        print(f"chunk {args.chunk} is not declared by 01_units.json", file=sys.stderr)
+        return 1
+    units_by_id = {
+        unit["id"]: unit
+        for unit in units_doc.get("units", [])
+        if chunk_meta["first_id"] <= unit["id"] <= chunk_meta["last_id"]
+    }
 
     facts = raw_doc.get("facts", [])
     ok_count = 0
@@ -114,13 +146,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{i}] {status}: {text!r}")
 
     dropped = len(facts) - ok_count
-    overall = "ok" if dropped == 0 else "degraded"
+    overall = "ok" if dropped == 0 else "failed"
     print(
         f"anchor_check: {overall} | chunk={args.chunk} facts={len(facts)} "
         f"ok={ok_count} dropped={dropped}"
     )
 
-    return 0
+    return 0 if dropped == 0 else 1
 
 
 if __name__ == "__main__":

@@ -2,24 +2,97 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "review_raw",
   "type": "object",
-  "required": ["verdict", "corrections"],
+  "required": [
+    "reviewed_fact_ids",
+    "fact_reviews",
+    "corrections",
+    "numeric_resolutions",
+    "reassemble_fact_ids"
+  ],
   "additionalProperties": false,
   "definitions": {
-    "correction": {
+    "fact_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "fact_review": {
       "type": "object",
-      "required": ["op", "path"],
+      "required": ["fact_id", "result"],
       "additionalProperties": false,
       "properties": {
-        "op": {"type": "string", "enum": ["correct", "not_stated", "remove"]},
-        "path": {"type": "string"},
-        "value": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+        "fact_id": {"type": "integer", "minimum": 1},
+        "result": {
+          "type": "string",
+          "enum": [
+            "visible_accurate",
+            "visible_needs_correction",
+            "omission_acceptable",
+            "must_include"
+          ]
+        }
       }
+    },
+    "correction": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["op", "path", "value", "source_fact_ids"],
+          "additionalProperties": false,
+          "properties": {
+            "op": {"type": "string", "enum": ["replace"]},
+            "path": {"type": "string", "minLength": 1},
+            "value": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "integer", "minimum": 1}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "path"],
+          "additionalProperties": false,
+          "properties": {
+            "op": {"type": "string", "enum": ["clear", "remove"]},
+            "path": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "numeric_resolution": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["flag_id", "resolution"],
+          "additionalProperties": false,
+          "properties": {
+            "flag_id": {"type": "integer", "minimum": 1},
+            "resolution": {"type": "string", "enum": ["equivalent"]}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["flag_id", "resolution", "correction_path"],
+          "additionalProperties": false,
+          "properties": {
+            "flag_id": {"type": "integer", "minimum": 1},
+            "resolution": {"type": "string", "enum": ["corrected", "removed"]},
+            "correction_path": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
     }
   },
   "properties": {
-    "schema_version": {"type": "string"},
-    "plugin_version": {"type": "string"},
-    "verdict": {"type": "string", "enum": ["pass", "needs_correction"]},
-    "corrections": {"type": "array", "items": {"$ref": "#/definitions/correction"}}
+    "schema_version": {"type": "string", "enum": ["2.0"]},
+    "plugin_version": {"type": "string", "minLength": 1},
+    "reviewed_fact_ids": {"$ref": "#/definitions/fact_ids"},
+    "fact_reviews": {"type": "array", "items": {"$ref": "#/definitions/fact_review"}},
+    "corrections": {"type": "array", "items": {"$ref": "#/definitions/correction"}},
+    "numeric_resolutions": {"type": "array", "items": {"$ref": "#/definitions/numeric_resolution"}},
+    "reassemble_fact_ids": {"$ref": "#/definitions/fact_ids"}
   }
 }

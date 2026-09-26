@@ -18,8 +18,8 @@
     }
   },
   "properties": {
-    "schema_version": {"type": "string"},
-    "plugin_version": {"type": "string"},
-    "terms": {"type": "array", "items": {"$ref": "#/definitions/term"}}
+    "schema_version": {"type": "string", "enum": ["2.0"]},
+    "plugin_version": {"type": "string", "minLength": 1},
+    "terms": {"type": "array", "maxItems": 5, "items": {"$ref": "#/definitions/term"}}
   }
 }

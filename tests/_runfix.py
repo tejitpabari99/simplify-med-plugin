@@ -1,213 +1,303 @@
-"""Shared fixture builder for finalize/render tests.
-
-`make_run_dir(run_dir)` populates an already-created temp directory with a
-consistent, internally-linked run: input text, units, a verified fact
-ledger, a glossary, a draft care plan, coverage, and additions, plus a
-run.json with unitize/ground/assemble already recorded ok. Every test
-module that needs a realistic run directory for finalize/render should
-build one with this instead of hand-rolling its own.
-"""
+"""Shared schema-v2 run fixtures for integration and renderer tests."""
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 
+import numeric_parity
 import runlog
+import settle_review
+from _version import SCHEMA_VERSION
 
-NOTE_TEXT = (
-    "Patient presents with chest pain for two weeks and shortness of breath during exertion.\n"
-    "Vital signs stable; blood pressure elevated at one hundred fifty over ninety five today.\n"
-    "Diagnosis: hypertension stage two, discussed treatment options with the patient at length.\n"
-    "Start metoprolol twenty five milligrams by mouth twice daily for blood pressure control.\n"
-    "Continue lisinopril ten milligrams once daily as previously prescribed by cardiology team.\n"
-    "Order complete blood count and basic metabolic panel prior to the next visit.\n"
-    "Schedule an echocardiogram to evaluate cardiac function within the next thirty days.\n"
-    "Reduce sodium intake to less than two thousand milligrams per day starting immediately.\n"
-    "Follow up with primary care in three months to reassess blood pressure control.\n"
-    "Call 911 immediately if chest pain worsens or becomes severe at any time.\n"
-    "Seek care if you notice swelling in your legs that does not go away.\n"
-    "This visit note was reviewed and signed by Dr. Alok Singh before discharge today.\n"
+NOTE_LINES = (
+    "You came in for chest pain.",
+    "Start metoprolol 25 mg twice daily.",
+    "Follow up with Dr. Alok Singh in 3 months.",
+    "Call 911 for severe chest pain.",
+    "All adults should exercise regularly.",
+)
+NOTE_TEXT = "\n".join(NOTE_LINES) + "\n"
+PII_NAME = "Dr. Alok Singh"
+OMITTED_MARKER = "All adults should exercise regularly."
+
+CORE_ARTIFACTS_ONE_CHUNK = (
+    "run.json",
+    "01_units.json",
+    "01_units.1.txt",
+    "02_facts.1.raw.json",
+    "02_facts.json",
+    "03_plan.raw.json",
+    "03_plan.draft.json",
+    "03_flags.json",
+    "04_review.raw.json",
+    "04_review.json",
+    "05_plan.settled.json",
+    "06_plan.final.json",
+    "report.md",
 )
 
-UNIT_LINES = [line for line in NOTE_TEXT.split("\n") if line]
-
-# A distinctive marker used to assert low_priority items never reach any
-# patient-facing renderer.
-LOW_PRIORITY_MARKER = "ROUTINE-LOW-PRIORITY-MARKER"
-
-# A glossary term deliberately absent from the plan text, to exercise the
-# finalize-time re-detection drop.
-ABSENT_GLOSSARY_TERM = "nephrology"
-
-PII_NAME = "Dr. Alok Singh"
+REQUIRED_CORE_STAGES = (
+    "unitize",
+    "ground",
+    "assemble",
+    "plan_check",
+    "numeric_parity",
+    "review",
+    "settle_review",
+)
 
 
-def _write(path: str, data) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
+def write_json(path: str, document: dict) -> None:
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(document, handle, indent=2)
+        handle.write("\n")
 
 
-def make_run_dir(run_dir: str) -> str:
-    """Populate `run_dir` (must already exist) with the fixture run.
-    Returns the run id used (the directory's basename)."""
-    run_id = os.path.basename(os.path.normpath(run_dir))
+def read_json(path: str) -> dict:
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
 
-    input_dir = os.path.join(run_dir, "00_input")
-    os.makedirs(input_dir, exist_ok=True)
-    with open(os.path.join(input_dir, "note.txt"), "w", encoding="utf-8") as f:
-        f.write(NOTE_TEXT)
 
-    units = [
-        {"id": i + 1, "file": "note.txt", "page": 1, "line": i + 1,
-         "text": text, "extraction_method": "native"}
-        for i, text in enumerate(UNIT_LINES)
-    ]
-    _write(os.path.join(run_dir, "01_units.json"), {
-        "schema_version": "1.0", "plugin_version": "0.1.0", "run_id": run_id,
-        "units": units,
-        "chunks": [{"k": 1, "first_id": 1, "last_id": len(units)}],
-    })
-
-    facts = [
-        {"id": 1, "category": "reason_for_visit", "unit_id": 1,
-         "quote": "chest pain for two weeks", "char_start": 0, "char_end": 25,
-         "text": UNIT_LINES[0]},
-        {"id": 2, "category": "diagnosis", "unit_id": 3,
-         "quote": "hypertension stage two", "char_start": 0, "char_end": 23,
-         "text": UNIT_LINES[2]},
-        {"id": 3, "category": "medications", "unit_id": 4,
-         "quote": "metoprolol twenty five milligrams", "char_start": 0, "char_end": 34,
-         "text": UNIT_LINES[3]},
-        {"id": 4, "category": "medications", "unit_id": 5,
-         "quote": "lisinopril ten milligrams", "char_start": 0, "char_end": 26,
-         "text": UNIT_LINES[4]},
-        {"id": 5, "category": "tests", "unit_id": 6,
-         "quote": "complete blood count and basic metabolic panel", "char_start": 0, "char_end": 48,
-         "text": UNIT_LINES[5]},
-        {"id": 6, "category": "procedures", "unit_id": 7,
-         "quote": "echocardiogram to evaluate cardiac function", "char_start": 0, "char_end": 45,
-         "text": UNIT_LINES[6]},
-        {"id": 7, "category": "follow_up", "unit_id": 9,
-         "quote": "follow up with primary care in three months", "char_start": 0, "char_end": 45,
-         "text": UNIT_LINES[8]},
-        {"id": 8, "category": "warning_signs", "unit_id": 10,
-         "quote": "call 911 immediately if chest pain worsens", "char_start": 0, "char_end": 44,
-         "text": UNIT_LINES[9]},
-    ]
-    _write(os.path.join(run_dir, "02_facts.json"), {
-        "schema_version": "1.0", "plugin_version": "0.1.0", "run_id": run_id,
-        "facts": facts, "dropped": [],
-    })
-
-    _write(os.path.join(run_dir, "02_glossary.json"), {
-        "schema_version": "1.0", "plugin_version": "0.1.0", "run_id": run_id,
-        "terms": [
-            {"term": "Hypertension", "matched_term": "Hypertension",
-             "definition": "High blood pressure.", "source": "llm_proposed"},
-            {"term": "Echocardiogram", "matched_term": "Echocardiogram",
-             "definition": "An ultrasound test of the heart.", "source": "llm_proposed"},
-            {"term": "Nephrology", "matched_term": ABSENT_GLOSSARY_TERM,
-             "definition": "The medical specialty focused on kidney care.",
-             "source": "llm_proposed"},
+def facts_raw_for_units(units: list[dict]) -> dict:
+    categories = (
+        "reason_for_visit",
+        "medications",
+        "follow_up",
+        "warning_signs",
+        "other",
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "plugin_version": runlog.plugin_version(),
+        "facts": [
+            {
+                "category": categories[(unit["id"] - 1) % len(categories)],
+                "unit_id": unit["id"],
+                "quote": unit["text"],
+                "text": unit["text"],
+            }
+            for unit in units
         ],
-    })
+    }
 
-    plan = {
-        "schema_version": "1.0",
-        "plugin_version": "0.1.0",
-        "meta": {"run_id": run_id, "plugin_version": "0.1.0", "schema_version": "1.0",
-                  "level": "standard", "created_at": "2026-09-22T00:00:00+00:00"},
-        "notices": [],
-        "score": {"before_grade": None, "after_grade": None},
-        "summary": "You have chest pain and high blood pressure that need treatment.",
-        "summary_fact_ids": [1, 2],
-        "reason_for_visit": [
-            {"reason": "Chest pain",
-             "description": "Chest pain for two weeks with exertional shortness of breath.",
-             "source_fact_ids": [1]},
-        ],
+
+def plan_raw(
+    facts: list[dict],
+    *,
+    include_supporting: bool = False,
+    omission_reason: str = "generic_not_patient_specific",
+) -> dict:
+    ids = {fact["category"]: fact["id"] for fact in facts}
+    omitted = [] if include_supporting else [
+        {"fact_id": ids["other"], "reason": omission_reason},
+    ]
+    other = [] if omitted else [{
+        "title": "Additional information",
+        "why": None,
+        "steps": [],
+        "description": next(fact["text"] for fact in facts if fact["id"] == ids["other"]),
+        "frequency": "",
+        "duration": "",
+        "status": "to_do",
+        "source_fact_ids": [ids["other"]],
+    }]
+    return {
+        "summary": "You came in for chest pain and will start metoprolol.",
+        "summary_fact_ids": [ids["reason_for_visit"], ids["medications"]],
+        "reason_for_visit": [{
+            "reason": "Chest pain",
+            "description": "You came in for chest pain.",
+            "source_fact_ids": [ids["reason_for_visit"]],
+        }],
         "diagnosis": {
             "changed_since_last_visit": "",
             "changed_since_last_visit_fact_ids": [],
-            "details": [
-                {"title": "Hypertension", "plain_name": "high blood pressure",
-                 "description": f"Diagnosed by {PII_NAME} during today's visit. "
-                                 "Hypertension stage two requires treatment.",
-                 "what_it_means_for_you": "You will need ongoing treatment.",
-                 "severity": "medium", "source_fact_ids": [2]},
-            ],
+            "details": [],
         },
-        "medications": [
-            {"title": "Metoprolol", "plain_name": "metoprolol", "why": None,
-             "dosage": "25 mg", "frequency": "twice daily", "timing": "", "duration": "",
-             "instructions": "Take with food.", "side_effects_to_watch": "Dizziness.",
-             "change": "", "status": "to_do", "source_fact_ids": [3]},
-            {"title": "Lisinopril", "plain_name": "lisinopril",
-             "why": "Prevents further blood pressure complications.",
-             "dosage": "10 mg", "frequency": "once daily", "timing": "", "duration": "",
-             "instructions": "", "side_effects_to_watch": "", "change": "",
-             "status": "to_do", "source_fact_ids": [4]},
-        ],
-        "tests": [
-            {"title": "Blood tests", "plain_name": "", "why": "Confirms overall blood counts.",
-             "description": "Complete blood count and basic metabolic panel.",
-             "preparation": "", "status": "to_do", "source_fact_ids": [5]},
-        ],
-        "procedures": [
-            {"title": "Echocardiogram", "plain_name": "heart ultrasound",
-             "why": "Evaluates heart function.",
-             "what_to_expect": "An ultrasound of the heart to check its function.",
-             "timeframe": "within 30 days", "status": "done", "source_fact_ids": [6]},
-        ],
-        "other": [
-            {"title": "Diet changes", "why": None,
-             "steps": ["Reduce sodium intake to less than 2000 mg per day.",
-                       "Monitor blood pressure at home weekly."],
-             "description": "Follow the DASH diet guidelines.",
-             "frequency": "Daily", "duration": "Ongoing", "status": "to_do",
-             "source_fact_ids": [1]},
-        ],
-        "follow_up": [
-            {"time_frame": "3 months", "description": "Reassess blood pressure control.",
-             "status": "to_do", "source_fact_ids": [7]},
-        ],
-        "warning_signs": [
-            {"symptom": "Severe chest pain", "what_it_might_mean": "Possible heart attack.",
-             "what_to_do": "Call 911 right away.", "urgency": "emergency",
-             "related_to": "", "source_fact_ids": [1]},
-            {"symptom": "Leg swelling", "what_it_might_mean": "Fluid buildup.",
-             "what_to_do": "Mention it at your next visit.", "urgency": "monitor",
-             "related_to": "", "source_fact_ids": [2]},
-        ],
-        "questions": ["Will I need surgery?", "Should I change my diet?"],
-        "low_priority": [f"{LOW_PRIORITY_MARKER}: billing code 99213 noted for insurance purposes."],
-        "terms": {},
+        "medications": [{
+            "title": "Metoprolol",
+            "plain_name": "metoprolol",
+            "why": "For chest pain.",
+            "dosage": "25 mg",
+            "frequency": "twice daily",
+            "timing": "",
+            "duration": "",
+            "instructions": "Start this medicine.",
+            "side_effects_to_watch": "",
+            "change": "Start",
+            "status": "to_do",
+            "source_fact_ids": [ids["medications"]],
+        }],
+        "tests": [],
+        "procedures": [],
+        "other": other,
+        "follow_up": [{
+            "time_frame": "3 months",
+            "description": f"Follow up with {PII_NAME} in 3 months.",
+            "status": "to_do",
+            "source_fact_ids": [ids["follow_up"]],
+        }],
+        "warning_signs": [{
+            "symptom": "Severe chest pain",
+            "what_it_might_mean": "",
+            "what_to_do": "Call 911.",
+            "urgency": "emergency",
+            "related_to": "Chest pain",
+            "source_fact_ids": [ids["warning_signs"]],
+        }],
+        "questions": [{
+            "question": "When should I return for follow-up?",
+            "source_fact_ids": [ids["follow_up"]],
+        }],
+        "omitted_facts": omitted,
     }
-    _write(os.path.join(run_dir, "03_plan.draft.json"), plan)
 
-    _write(os.path.join(run_dir, "04_coverage.json"), {
-        "schema_version": "1.0", "plugin_version": "0.1.0", "run_id": run_id,
-        "coverage": [{"fact_id": i, "present": i != 8} for i in range(1, 9)],
-        "missing": [8],
-    })
 
-    _write(os.path.join(run_dir, "05_additions.json"), {
-        "schema_version": "1.0", "plugin_version": "0.1.0", "run_id": run_id,
-        "reason_for_visit": [], "diagnosis_details": [],
-        "medications": [
-            {"title": "Aspirin", "plain_name": "", "why": "Reduces risk of blood clots.",
-             "dosage": "81 mg", "frequency": "once daily", "timing": "", "duration": "",
-             "instructions": "Take with food.", "side_effects_to_watch": "",
-             "change": "", "status": "to_do", "source_fact_ids": [8]},
+def review_raw(draft: dict, facts: list[dict], flags: dict, *, reassemble_ids=()) -> dict:
+    visible_ids = set(draft.get("summary_fact_ids", []))
+    for key in ("reason_for_visit", "medications", "tests", "procedures", "other", "follow_up", "warning_signs", "questions"):
+        for item in draft.get(key, []):
+            visible_ids.update(item.get("source_fact_ids", []))
+    for detail in draft.get("diagnosis", {}).get("details", []):
+        visible_ids.update(detail.get("source_fact_ids", []))
+    visible_ids.update(draft.get("diagnosis", {}).get("changed_since_last_visit_fact_ids", []))
+    reassemble_ids = set(reassemble_ids)
+    fact_reviews = []
+    for fact in facts:
+        fact_id = fact["id"]
+        if fact_id in reassemble_ids:
+            result = "must_include"
+        elif fact_id in visible_ids:
+            result = "visible_accurate"
+        else:
+            result = "omission_acceptable"
+        fact_reviews.append({"fact_id": fact_id, "result": result})
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "plugin_version": runlog.plugin_version(),
+        "reviewed_fact_ids": [fact["id"] for fact in facts],
+        "fact_reviews": fact_reviews,
+        "corrections": [],
+        "numeric_resolutions": [
+            {"flag_id": flag["flag_id"], "resolution": "equivalent"}
+            for flag in flags["numeric_parity"]
         ],
-        "tests": [], "procedures": [], "other": [], "follow_up": [], "warning_signs": [],
-        "low_priority": [], "dropped": [],
+        "reassemble_fact_ids": sorted(reassemble_ids),
+    }
+
+
+def make_run_dir(run_dir: str) -> str:
+    """Create a complete, valid schema-v2 run through settlement."""
+    run_id = os.path.basename(os.path.normpath(run_dir))
+    plugin_version = runlog.plugin_version()
+    os.makedirs(run_dir, exist_ok=True)
+    input_dir = os.path.join(run_dir, "00_input")
+    os.makedirs(input_dir, exist_ok=True)
+    with open(os.path.join(input_dir, "note.txt"), "w", encoding="utf-8") as handle:
+        handle.write(NOTE_TEXT)
+
+    units = [
+        {
+            "id": index,
+            "file": "note.txt",
+            "page": 1,
+            "line": index,
+            "text": text,
+            "extraction_method": "native",
+        }
+        for index, text in enumerate(NOTE_LINES, start=1)
+    ]
+    units_document = {
+        "schema_version": SCHEMA_VERSION,
+        "plugin_version": plugin_version,
+        "run_id": run_id,
+        "units": units,
+        "chunks": [{"k": 1, "first_id": 1, "last_id": len(units)}],
+    }
+    write_json(os.path.join(run_dir, "01_units.json"), units_document)
+    with open(os.path.join(run_dir, "01_units.1.txt"), "w", encoding="utf-8") as handle:
+        for unit in units:
+            handle.write(f"[{unit['id']}] {unit['text']}\n")
+
+    raw_facts = facts_raw_for_units(units)
+    write_json(os.path.join(run_dir, "02_facts.1.raw.json"), raw_facts)
+    facts = [
+        {
+            "id": index,
+            "category": raw["category"],
+            "unit_id": raw["unit_id"],
+            "quote": raw["quote"],
+            "char_start": 0,
+            "char_end": len(raw["quote"]),
+            "text": raw["text"],
+        }
+        for index, raw in enumerate(raw_facts["facts"], start=1)
+    ]
+    facts_document = {
+        "schema_version": SCHEMA_VERSION,
+        "plugin_version": plugin_version,
+        "run_id": run_id,
+        "facts": facts,
+        "dropped": [],
+    }
+    write_json(os.path.join(run_dir, "02_facts.json"), facts_document)
+
+    raw_plan = plan_raw(facts)
+    write_json(os.path.join(run_dir, "03_plan.raw.json"), raw_plan)
+    draft = copy.deepcopy(raw_plan)
+    draft.update({
+        "schema_version": SCHEMA_VERSION,
+        "plugin_version": plugin_version,
+        "meta": {
+            "run_id": run_id,
+            "plugin_version": plugin_version,
+            "schema_version": SCHEMA_VERSION,
+            "level": "standard",
+            "created_at": "2026-09-26T00:00:00+00:00",
+        },
     })
+    write_json(os.path.join(run_dir, "03_plan.draft.json"), draft)
+    flags = numeric_parity.build_numeric_flags(
+        draft, facts_document, run_id=run_id, plugin_version=plugin_version,
+    )
+    write_json(os.path.join(run_dir, "03_flags.json"), flags)
+    raw_review = review_raw(draft, facts, flags)
+    write_json(os.path.join(run_dir, "04_review.raw.json"), raw_review)
 
-    runlog.record(run_dir, "unitize", "ok")
-    runlog.record(run_dir, "ground", "ok")
-    runlog.record(run_dir, "assemble", "ok")
-
+    runlog.initialize(run_dir, run_id, [{
+        "file": "note.txt",
+        "extraction_method": "native",
+        "pages": 1,
+        "sha256": "fixture",
+    }])
+    runlog.record(
+        run_dir, "unitize", "ok", attempts=1,
+        artifacts=["00_input/note.txt", "01_units.json", "01_units.1.txt"],
+        run_id=run_id,
+    )
+    runlog.record(
+        run_dir, "ground", "ok", attempts=1,
+        checks={"chunks_expected": 1, "chunks_found": 1, "facts_kept": len(facts), "missing_chunks": []},
+        artifacts=["02_facts.1.raw.json", "02_facts.json"], run_id=run_id,
+    )
+    runlog.record(
+        run_dir, "assemble", "ok", attempts=1,
+        artifacts=["03_plan.raw.json"], run_id=run_id,
+    )
+    runlog.record(
+        run_dir, "plan_check", "ok", attempts=1,
+        artifacts=["03_plan.draft.json"], run_id=run_id,
+    )
+    runlog.record(
+        run_dir, "numeric_parity", "ok", attempts=1,
+        artifacts=["03_flags.json"], run_id=run_id,
+    )
+    runlog.record(
+        run_dir, "review", "ok", attempts=1, started=True, finished=False,
+        artifacts=["04_review.raw.json"], run_id=run_id,
+    )
+    if settle_review.main(["--run-dir", run_dir]) != 0:
+        raise AssertionError("shared schema-v2 fixture failed settlement")
     return run_id

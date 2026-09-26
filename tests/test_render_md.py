@@ -1,83 +1,80 @@
+import json
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
 import render_md  # noqa: E402
-from test_plan_view import _base_plan  # noqa: E402
+from test_plan_view import NOTICE_MARKER, OMITTED_MARKER, _base_plan  # noqa: E402
+
+
+def _write_json(path, document):
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(document, handle)
+
+
+def _write_completed_run(run_dir, run_id="run-1"):
+    _write_json(os.path.join(run_dir, "run.json"), {"run_id": run_id, "stages": {"finalize": {"status": "ok"}}})
 
 
 class TestRenderMd(unittest.TestCase):
-    def setUp(self):
-        self.plan = _base_plan()
-        self.text = render_md.render(self.plan)
+    def test_v2_report_is_concise_and_patient_safe(self):
+        text = render_md.render(_base_plan())
+        self.assertTrue(text.startswith("# Your visit, explained"))
+        self.assertIn("1. Do I need another heart tracing?", text)
+        self.assertNotIn("Medical terms explained", text)
+        for hidden in (NOTICE_MARKER, OMITTED_MARKER, "Reading level:", "omitted_facts", "source_fact_ids"):
+            self.assertNotIn(hidden, text)
 
-    def test_title_heading(self):
-        self.assertTrue(self.text.startswith("# Your visit, explained"))
+    def test_v1_final_report_remains_renderable(self):
+        text = render_md.render(_base_plan("1.0"))
+        self.assertIn("1. Do I need another heart tracing?", text)
+        self.assertNotIn(OMITTED_MARKER, text)
+        self.assertNotIn("Medical terms explained", text)
 
-    def test_notice_blockquote(self):
-        self.assertIn("> A notice.", self.text)
-
-    def test_readability_score_not_patient_visible(self):
-        self.assertNotIn("Reading level:", self.text)
-
-    def test_section_headings(self):
-        for heading in (
-            "## What you need to know",
-            "## Why you were seen",
-            "## What the doctor found",
-            "## Your next steps",
-            "## What to watch for",
-            "## Questions to ask your doctor",
-            "## Medical terms explained",
-        ):
-            self.assertIn(heading, self.text)
-
-    def test_todo_done_headings_and_checkboxes(self):
-        self.assertIn("### To do", self.text)
-        self.assertIn("### Already done", self.text)
-        self.assertIn("- [ ] **Med A**", self.text)
-        self.assertIn("- [x] **Med B (medb)**", self.text)
-
-    def test_no_html_tags(self):
-        self.assertNotIn("<", self.text)
-        self.assertNotIn(">", self.text.replace("> A notice.", ""))
-
-    def test_low_priority_absent(self):
-        self.assertNotIn("Billing code noted.", self.text)
-
-    def test_fact_ids_absent(self):
-        self.assertNotIn("source_fact_ids", self.text)
-
-    def test_glossary_list_format(self):
-        self.assertIn("- **cbc** — A blood test.", self.text)
-        self.assertIn("- **hypertension** — High blood pressure.", self.text)
-
-    def test_questions_numbered(self):
-        self.assertIn("1. Will I need surgery?", self.text)
-
-    def test_cli_writes_file(self):
-        import json
-        import subprocess
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as d:
-            plan_path = os.path.join(d, "plan.json")
-            with open(plan_path, "w", encoding="utf-8") as f:
-                json.dump(self.plan, f)
-            out_path = os.path.join(d, "out.md")
+    def test_cli_writes_only_default_markdown_for_v2(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            _write_json(os.path.join(run_dir, "06_plan.final.json"), _base_plan())
+            _write_completed_run(run_dir)
             script = os.path.join(_paths.SCRIPTS_DIR, "render_md.py")
             result = subprocess.run(
-                [sys.executable, script, "--run-dir", d, "--plan", plan_path, "--out", out_path],
-                capture_output=True, text=True,
+                [sys.executable, script, "--run-dir", run_dir],
+                capture_output=True,
+                text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(os.path.isfile(out_path))
-            with open(out_path, encoding="utf-8") as f:
-                content = f.read()
-            self.assertTrue(content.startswith("# Your visit, explained"))
+            self.assertEqual(sorted(os.listdir(run_dir)), ["06_plan.final.json", "report.md", "run.json"])
+
+    def test_cli_allows_completed_v1_final_report(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            _write_json(os.path.join(run_dir, "06_plan.final.json"), _base_plan("1.0"))
+            _write_completed_run(run_dir)
+            script = os.path.join(_paths.SCRIPTS_DIR, "render_md.py")
+            result = subprocess.run(
+                [sys.executable, script, "--run-dir", run_dir],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(os.path.isfile(os.path.join(run_dir, "report.md")))
+
+    def test_cli_rejects_partial_v1_plan(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            plan_path = os.path.join(run_dir, "03_plan.draft.json")
+            _write_json(plan_path, _base_plan("1.0"))
+            script = os.path.join(_paths.SCRIPTS_DIR, "render_md.py")
+            result = subprocess.run(
+                [sys.executable, script, "--run-dir", run_dir, "--plan", plan_path],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("completed schema-v1 final report", result.stderr)
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "report.md")))
 
 
 if __name__ == "__main__":

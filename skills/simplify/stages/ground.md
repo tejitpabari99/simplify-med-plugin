@@ -1,44 +1,48 @@
 # Ground
 
-You are extracting atomic clinical facts from a numbered clinical note for a patient-facing care plan tool. Every fact you emit must be traceable to exactly one numbered line of the source.
+You extract atomic clinical facts from one numbered source chunk for a patient-facing care-plan workflow. Grounding is exhaustive within the eight clinical categories, but it is not a patient summary. Do not summarize the document, prioritize facts, or decide what the final report should display.
 
 ## Inputs
 
-The dispatch message names three files. Read all three before you write anything:
+Read all files named by the dispatch message:
 
-1. A units file `01_units.<k>.txt` -- one `[<id>] <text>` line per unit. Each numbered line is one unit of source text. Cite a unit ONLY by its integer id, exactly as printed in brackets. Do not invent an id that is not printed in the file. If a clause spans two units, cite whichever unit contains the exact words you use as your quote.
-2. `reference/categories.md` -- the eight-category checklist and its boundary rules.
-3. `reference/abbreviations.json` -- abbreviations that may appear in this note, with their expansions.
+1. `01_units.<k>.txt` -- one `[<id>] <text>` source unit per line.
+2. `reference/categories.md` -- the category checklist and boundary rules.
+3. `reference/abbreviations.json` -- allowed abbreviation expansions.
 
 ## Output
 
-The dispatch message names the output path `02_facts.<k>.raw.json`. Write a single JSON object of this exact shape, and nothing else -- no prose, no code fences, no trailing explanation:
+Write only the named `02_facts.<k>.raw.json` file as one JSON object:
 
 ```json
-{"facts": [{"category": "...", "unit_id": 0, "quote": "...", "text": "..."}]}
+{"facts": [{"category": "...", "unit_id": 1, "quote": "...", "text": "..."}]}
 ```
 
-## Grounding rules
+Do not emit prose, markdown, code fences, or trailing commentary.
 
-**Fact granularity.** Return one array element per atomic clinical fact -- roughly one note clause. "Continue metoprolol 25 mg twice daily" is ONE fact, not four. Do not split a single clause into separate facts for dose, frequency, and instruction. Do not merge two different units' content into one fact.
+## Extraction contract
 
-**Fields.** Each fact has exactly these fields:
+**Extract every fact.** Extract every source statement that fits one category in `reference/categories.md`. Do not suppress normal findings, supporting details, repeated-looking clinical content with materially different details, or generic education at this stage. Relevance decisions belong to assembly and review. Exclude billing, insurance, scheduling metadata, and other non-clinical administration.
 
-- `category`: exactly one of the eight categories in `reference/categories.md`.
-- `unit_id`: the integer id (from the brackets in the units file) of the ONE unit your quote comes from.
-- `quote`: a short, VERBATIM excerpt copied exactly from that unit's text -- not paraphrased, not retyped, not corrected, not translated out of an abbreviation. It must be a literal, contiguous span of characters exactly as they appear on that numbered line.
-- `text`: the fact's content in plain clinical shorthand, at clause granularity, keeping every clinical detail (dose, frequency, timing, condition, quantity, site) named in the source. Unlike `quote`, `text` MAY expand an abbreviation using `reference/abbreviations.json`.
+**One atomic fact, one source unit.** Use roughly one clinical clause per fact. Keep a dose, unit, route, frequency, timing, condition, body site, status, and instruction together when they belong to the same clause. Do not split "Continue metoprolol 25 mg twice daily" into separate facts. Do not merge content from different numbered units.
 
-**Categories.** Follow the checklist and boundary rules in `reference/categories.md`. Every fact gets exactly one category; where two could plausibly apply, the boundary rule decides. Extract every fact that fits one of the eight categories. There is no "other clinical content" catch-all and no priority judgement to make -- if a statement genuinely fits none of the eight, do not extract it as a fact.
+**Quote the complete clinical clause.** `quote` must be a literal, contiguous span copied exactly from the cited unit. Include enough of the complete clinical clause to preserve every qualifier needed to support `text`, especially negation, uncertainty, condition, dose, unit, frequency, timing, body site, and status. A tiny matching fragment is not adequate when nearby words change or limit the meaning. For example, quoting only "stroke" cannot support `text: "stroke diagnosed"` when the complete clause says "no evidence of stroke."
 
-**Administrative text is not a fact.** Billing codes, insurance details, appointment scheduling metadata, and other administrative text are not facts. Do not extract them, even if they otherwise resemble one of the eight categories.
+When a source unit contains a long sentence, quote the smallest complete clause that still preserves all clinical meaning. If unitization splits a sentence, extract only what one unit fully supports; never join two units into one quote or enrich `text` from an uncited unit.
 
-**Abbreviations.** The source text may use abbreviations from `reference/abbreviations.json`. Read them expanded, and use the expansion in `text` -- never in `quote`, which must stay verbatim as printed.
+**Keep `text` within the quote's meaning.** `text` may expand an abbreviation listed in `reference/abbreviations.json`, but it must not add an interpretation, diagnosis, urgency, causal claim, or detail that the quoted clause does not state. Preserve uncertainty, negation, declined or conditional treatment, completion status, and all numeric content.
 
-**No fabrication.** Do not fabricate a fact with no unit backing it. Do not invent a quote that only approximately matches its unit's text. If the same clinical fact is stated in more than one place, extract it once, citing whichever unit states it most completely.
+**Use exact fields.** Each fact contains only:
 
-Return JSON only. No markdown, no commentary, no trailing explanation.
+- `category`: one category from `reference/categories.md`;
+- `unit_id`: the integer printed for the source unit;
+- `quote`: the exact source span described above;
+- `text`: concise clinical shorthand faithful to the complete quote.
 
-## If you are retried
+**Deduplicate only exact clinical repeats.** If the same fact appears more than once, cite the unit that states it most completely. Do not collapse facts that differ in site, value, timing, status, uncertainty, action, or urgency.
 
-The dispatch message will include the validator's error messages from your previous output. Fix exactly those errors and re-emit the full JSON object; do not otherwise change facts that were not flagged.
+**No fabrication.** Never invent a unit id, approximate a quote, correct source wording inside `quote`, or infer a fact from general medical knowledge.
+
+## Retry
+
+On retry, fix exactly the validator or anchor errors supplied by the dispatcher and re-emit the complete JSON object. Do not change unflagged facts.

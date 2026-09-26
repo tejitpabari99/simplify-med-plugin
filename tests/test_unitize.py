@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -117,7 +118,7 @@ class TestUnitizeFunction(unittest.TestCase):
                     covered.add(i)
             self.assertEqual(covered, {u["id"] for u in units_doc["units"]})
 
-    def test_manifest_and_units_validate_against_schemas(self):
+    def test_run_json_is_the_only_input_manifest(self):
         with tempfile.TemporaryDirectory() as d:
             a = os.path.join(d, "a.txt")
             _write(a, "hello\nworld\n")
@@ -129,10 +130,31 @@ class TestUnitizeFunction(unittest.TestCase):
             errors = validate.validate(units_doc, validate.load_schema("units"))
             self.assertEqual(errors, [])
 
-            with open(os.path.join(run_dir, "00_input", "manifest.json"), "r", encoding="utf-8") as f:
-                manifest_doc = json.load(f)
-            errors = validate.validate(manifest_doc, validate.load_schema("manifest"))
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "00_input", "manifest.json")))
+            run_doc = runlog.read(run_dir)
+            errors = validate.validate(run_doc, validate.load_schema("run"))
             self.assertEqual(errors, [])
+            self.assertEqual(run_doc["inputs"][0]["sha256"], hashlib.sha256(b"hello\nworld\n").hexdigest())
+
+    def test_reusing_explicit_directory_creates_fresh_identity_and_clears_generated_artifacts(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = os.path.join(d, "a.txt")
+            _write(source, "same clinical input\n")
+            run_dir = os.path.join(d, "run")
+
+            self.assertEqual(unitize.main(["--run-dir", run_dir, "--input", source]), 0)
+            first = runlog.read(run_dir)
+            first_digest = first["stages"]["unitize"]["checks"]["input_digest"]
+            _write(os.path.join(run_dir, "03_stale.json"), "stale")
+
+            self.assertEqual(unitize.main(["--run-dir", run_dir, "--input", source]), 0)
+            second = runlog.read(run_dir)
+
+            self.assertNotEqual(first["run_id"], second["run_id"])
+            self.assertEqual(first_digest, second["stages"]["unitize"]["checks"]["input_digest"])
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "03_stale.json")))
+            with open(os.path.join(run_dir, "01_units.json"), "r", encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["run_id"], second["run_id"])
 
     def test_duplicate_basenames_are_suffixed(self):
         with tempfile.TemporaryDirectory() as d:
@@ -191,6 +213,11 @@ class TestUnitizeFunction(unittest.TestCase):
             checks = data["stages"]["unitize"]["checks"]
             self.assertEqual(checks["units"], 2)
             self.assertEqual(checks["files"], 1)
+            self.assertEqual(data["stages"]["unitize"]["attempts"], 1)
+            self.assertEqual(
+                [artifact["path"] for artifact in data["stages"]["unitize"]["artifacts"]],
+                ["00_input/a.txt", "01_units.json", "01_units.1.txt"],
+            )
 
 
 if __name__ == "__main__":

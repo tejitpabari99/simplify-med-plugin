@@ -1,9 +1,4 @@
-"""Kill test 1, fixes #3, #4, #5: text-content regression guards for the
-LLM-facing instruction documents that changed. These stages have no
-deterministic code to exercise, so (mirroring test_skill_consistency.py's
-approach of parsing text rather than running it) these tests assert the
-required language actually landed in the file and stays there.
-"""
+"""Regression guards for the model-facing Simplify stage contracts."""
 
 from __future__ import annotations
 
@@ -15,107 +10,192 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
 REPO_ROOT = _paths.REPO_ROOT
-SKILL_MD_PATH = os.path.join(REPO_ROOT, "skills", "simplify", "SKILL.md")
+REFERENCE_DIR = os.path.join(REPO_ROOT, "skills", "simplify", "reference")
 STAGES_DIR = os.path.join(REPO_ROOT, "skills", "simplify", "stages")
 
 
 def _read(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    with open(path, "r", encoding="utf-8") as file_handle:
+        return file_handle.read()
 
 
-class TestReviewFidelityNumeracyCarveout(unittest.TestCase):
-    """Fix #3: a dropped unit / mismatched number is a FIDELITY error, not
-    style, and a numeric_parity hint must be resolved, not waved off."""
+class TestThreeStageContract(unittest.TestCase):
+    def test_only_new_core_stage_documents_remain(self):
+        for filename in ("ground.md", "assemble.md", "review.md"):
+            self.assertTrue(os.path.isfile(os.path.join(STAGES_DIR, filename)))
 
+        for filename in (
+            "review_fidelity.md",
+            "review_coverage.md",
+            "correct.md",
+            "assemble_missing.md",
+        ):
+            self.assertFalse(os.path.exists(os.path.join(STAGES_DIR, filename)))
+
+    def test_active_documents_do_not_reference_deleted_stages(self):
+        active_paths = [
+            os.path.join(REFERENCE_DIR, "style_rules.md"),
+            os.path.join(STAGES_DIR, "ground.md"),
+            os.path.join(STAGES_DIR, "assemble.md"),
+            os.path.join(STAGES_DIR, "review.md"),
+            os.path.join(STAGES_DIR, "glossary.md"),
+        ]
+        deleted_names = (
+            "review_fidelity",
+            "review_coverage",
+            "assemble_missing",
+            "04_coverage",
+            "05_additions",
+            "05_plan.corrected",
+        )
+        combined = "\n".join(_read(path) for path in active_paths)
+        for deleted_name in deleted_names:
+            self.assertNotIn(deleted_name, combined)
+
+
+class TestCanonicalPatientRelevance(unittest.TestCase):
     def setUp(self):
-        self.text = _read(os.path.join(STAGES_DIR, "review_fidelity.md"))
+        self.style = _read(os.path.join(REFERENCE_DIR, "style_rules.md"))
+        self.assemble = _read(os.path.join(STAGES_DIR, "assemble.md"))
+        self.review = _read(os.path.join(STAGES_DIR, "review.md"))
 
-    def test_scope_paragraph_carves_out_numeracy(self):
-        self.assertIn("FIDELITY error", self.text)
-        self.assertIn("NUMERACY rule", self.text)
-        # The concrete dropped-unit example from the kill test.
-        self.assertIn("148/92", self.text)
+    def test_style_rules_make_critical_vs_supporting_canonical(self):
+        self.assertIn("CRITICAL VS SUPPORTING", self.style)
+        self.assertIn("The goal is not to display every extracted fact", self.style)
+        self.assertIn("generic education", self.style)
+        self.assertIn("not patient-specific", self.style)
+        self.assertIn("contrast names or doses", self.style)
+        self.assertIn("medication starts, stops, changes", self.style)
+        self.assertIn("explicit warning signs", self.style)
 
-    def test_correction_value_is_the_facts_own_wording(self):
-        self.assertIn("value is the fact's own wording", self.text)
-
-    def test_numeric_parity_hint_guidance_requires_resolution(self):
-        hints_section = self.text.split("## Hints from deterministic checks", 1)[1]
-        self.assertIn("usually", hints_section)
-        self.assertIn("NUMERACY", hints_section)
-        self.assertIn("25mg", hints_section)
-        self.assertIn("25 mg", hints_section)
+    def test_assemble_and_review_apply_the_same_relevance_policy(self):
+        for text in (self.assemble, self.review):
+            self.assertIn("CRITICAL VS SUPPORTING", text)
+            self.assertIn("Concision is a requirement", text)
+            self.assertIn("generic_not_patient_specific", text)
+            self.assertIn("patient-specific", text)
 
 
-class TestAssembleNoNestedPhrasing(unittest.TestCase):
-    """Fix #4: title/plain_name must never nest or duplicate the same
-    phrase; say a thing once per item."""
+class TestGroundCompleteClauses(unittest.TestCase):
+    def setUp(self):
+        self.text = _read(os.path.join(STAGES_DIR, "ground.md"))
 
+    def test_quotes_must_preserve_the_complete_clinical_clause(self):
+        self.assertIn("complete clinical clause", self.text)
+        for detail in (
+            "negation",
+            "uncertainty",
+            "condition",
+            "dose",
+            "unit",
+            "frequency",
+            "timing",
+            "body site",
+            "status",
+        ):
+            self.assertIn(detail, self.text)
+        self.assertIn("tiny matching fragment", self.text)
+
+    def test_grounding_stays_exhaustive_and_source_anchored(self):
+        self.assertIn("Extract every fact", self.text)
+        self.assertIn("literal, contiguous span", self.text)
+        self.assertIn("Do not summarize the document", self.text)
+
+
+class TestAssembleContract(unittest.TestCase):
     def setUp(self):
         self.text = _read(os.path.join(STAGES_DIR, "assemble.md"))
 
-    def test_title_plain_name_rule_present(self):
-        self.assertIn("plain_name", self.text)
-        self.assertIn(
-            "the everyday name ONLY when it differs from `title`",
-            self.text,
-        )
+    def test_uses_structured_fact_ledger_and_forbids_direct_summary(self):
+        self.assertIn("02_facts.json", self.text)
+        self.assertNotIn("02_facts.txt", self.text)
+        self.assertIn("Do not directly summarize", self.text)
+        self.assertIn("03_plan.raw.json", self.text)
 
-    def test_bad_and_good_examples_present(self):
-        self.assertIn("high blood pressure (high blood pressure (hypertension))", self.text)
-        self.assertIn("hypertension", self.text)
+    def test_every_fact_is_visible_or_has_one_structured_disposition(self):
+        self.assertIn("Every verified fact", self.text)
+        self.assertIn("exactly one", self.text)
+        self.assertIn("omitted_facts", self.text)
+        for reason in (
+            "duplicate_or_already_represented",
+            "technical_detail",
+            "routine_non_actionable",
+            "rejected_non_actionable_differential",
+            "generic_not_patient_specific",
+            "stable_unchanged_background",
+        ):
+            self.assertIn(reason, self.text)
+        self.assertIn("must not also appear in `omitted_facts`", self.text)
 
-    def test_say_once_rule_present(self):
+    def test_questions_are_optional_cited_objects(self):
+        self.assertIn("source_fact_ids", self.text)
+        self.assertIn('"question": "Do I need another heart tracing?"', self.text)
+        self.assertIn("Write none when", self.text)
+
+    def test_existing_plain_language_safeguards_remain(self):
+        self.assertIn("the everyday name ONLY when it differs from `title`", self.text)
         self.assertIn("Say a thing once per item", self.text)
+        self.assertIn("ondansetron", self.text.lower())
+        self.assertIn("two or three short sentences", self.text)
 
 
-class TestNotStatedIsAStatedReason(unittest.TestCase):
-    """Kill test 2 fix: `why` must be the clinician's stated reason for this
-    patient, never the item's usual purpose/class or a timing instruction,
-    and never mined from a fact that says the reason isn't documented."""
+class TestCombinedReviewContract(unittest.TestCase):
+    def setUp(self):
+        self.text = _read(os.path.join(STAGES_DIR, "review.md"))
 
-    def test_assemble_md_has_stated_reason_and_ondansetron(self):
-        text = _read(os.path.join(STAGES_DIR, "assemble.md"))
-        self.assertIn("stated reason", text)
-        self.assertIn("ondansetron", text.lower())
+    def test_review_is_independent_and_exhaustive(self):
+        self.assertIn("independent", self.text.lower())
+        self.assertIn("02_facts.json", self.text)
+        self.assertIn("03_plan.draft.json", self.text)
+        self.assertIn("03_flags.json", self.text)
+        self.assertIn("one `fact_reviews` entry for every verified fact", self.text)
+        self.assertIn("reviewed_fact_ids", self.text)
+        self.assertIn("reassemble_fact_ids", self.text)
 
-    def test_assemble_missing_md_has_stated_reason_and_ondansetron(self):
-        text = _read(os.path.join(STAGES_DIR, "assemble_missing.md"))
-        self.assertIn("stated reason", text)
-        self.assertIn("ondansetron", text.lower())
+    def test_review_combines_fidelity_coverage_and_numeric_resolution(self):
+        for field in (
+            "fact_reviews",
+            "corrections",
+            "numeric_resolutions",
+            "reassemble_fact_ids",
+        ):
+            self.assertIn(field, self.text)
+        self.assertIn("negation", self.text)
+        self.assertIn("uncertainty", self.text)
+        self.assertIn("urgency", self.text)
+        self.assertIn("general indication", self.text)
+        self.assertIn("148/92", self.text)
+        self.assertIn("25mg", self.text)
+        self.assertIn("25 mg", self.text)
 
-    def test_review_fidelity_md_has_general_indication(self):
-        text = _read(os.path.join(STAGES_DIR, "review_fidelity.md"))
-        self.assertIn("general indication", text)
+    def test_review_emits_only_bounded_operations(self):
+        self.assertIn("bounded operations", self.text)
+        self.assertIn('`"replace"`', self.text)
+        self.assertIn('`"clear"`', self.text)
+        self.assertIn('`"remove"`', self.text)
+        self.assertIn("value is the fact's own wording", self.text)
+        self.assertIn("Do not apply the operations", self.text)
+        self.assertIn("Do not produce a corrected plan", self.text)
+
+    def test_reassembly_requires_a_fresh_review(self):
+        self.assertIn("smallest patient-facing change", self.text)
+        self.assertIn("fresh independent review", self.text)
+        self.assertIn("New patient-facing prose must never bypass review", self.text)
 
 
-class TestPatientRelevantConcision(unittest.TestCase):
-    """A complete ledger must not force every fact into the patient view."""
+class TestOptionalGlossary(unittest.TestCase):
+    def setUp(self):
+        self.text = _read(os.path.join(STAGES_DIR, "glossary.md"))
 
-    def test_assemble_prioritizes_patient_relevance(self):
-        text = _read(os.path.join(STAGES_DIR, "assemble.md"))
-        self.assertIn("PATIENT RELEVANCE", text)
-        self.assertIn("The goal is not to display every extracted fact", text)
-        self.assertIn("contrast names", text)
-        self.assertIn("generic education-sheet advice", text)
-        self.assertIn("two or three short sentences", text)
-
-    def test_coverage_checks_only_critical_omissions(self):
-        text = _read(os.path.join(STAGES_DIR, "review_coverage.md"))
-        self.assertIn("critical coverage", text.lower())
-        self.assertIn("Concision is a requirement", text)
-        self.assertIn("Set `present: false` only for an omitted critical fact", text)
-
-    def test_missing_stage_restores_smallest_critical_item(self):
-        text = _read(os.path.join(STAGES_DIR, "assemble_missing.md"))
-        self.assertIn("missing critical facts", text.lower())
-        self.assertIn("Add the smallest item", text)
-
-    def test_glossary_is_small_and_relevant(self):
-        text = _read(os.path.join(STAGES_DIR, "glossary.md"))
-        self.assertIn("no more than five terms", text)
-        self.assertIn("patient-relevant", text)
+    def test_glossary_is_optional_post_finalization_enrichment(self):
+        self.assertIn("optional post-finalization", self.text)
+        self.assertIn("06_plan.final.json", self.text)
+        self.assertIn("report.md", self.text)
+        self.assertIn("patient-visible finalized content", self.text)
+        self.assertIn("07_glossary.raw.json", self.text)
+        self.assertIn("07_glossary.json", self.text)
+        self.assertIn("no more than five terms", self.text)
+        self.assertIn("must not change", self.text)
 
 
 if __name__ == "__main__":

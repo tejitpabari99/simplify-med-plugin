@@ -15,6 +15,37 @@ import _paths  # noqa: E402
 ROOT = _paths.REPO_ROOT
 BUILD = os.path.join(ROOT, "build.py")
 
+EXPECTED_STAGE_FILES = {
+    "assemble.md", "glossary.md", "ground.md", "review.md",
+}
+EXPECTED_SCRIPT_FILES = {
+    "_version.py", "anchor_check.py", "cite_check.py", "finalize.py",
+    "glossary_check.py", "merge_facts.py", "numeric_parity.py",
+    "plan_view.py", "readability.py", "render_audit.py", "render_html.py",
+    "render_md.py", "runlog.py", "settle_review.py", "textnorm.py",
+    "unitize.py", "validate.py",
+}
+EXPECTED_SCHEMA_FILES = {
+    "care_plan.schema.json", "care_plan_agent.schema.json",
+    "facts.schema.json", "facts_raw.schema.json", "flags.schema.json",
+    "glossary.schema.json", "glossary_raw.schema.json",
+    "review.schema.json", "review_raw.schema.json", "run.schema.json",
+    "units.schema.json",
+}
+OBSOLETE_PIPELINE_FILES = {
+    "skills/simplify/stages/assemble_missing.md",
+    "skills/simplify/stages/correct.md",
+    "skills/simplify/stages/review_coverage.md",
+    "skills/simplify/stages/review_fidelity.md",
+    "skills/simplify/scripts/diff_guard.py",
+    "skills/simplify/scripts/sanitize_review.py",
+    "skills/simplify/schema/additions.schema.json",
+    "skills/simplify/schema/additions_raw.schema.json",
+    "skills/simplify/schema/coverage.schema.json",
+    "skills/simplify/schema/coverage_raw.schema.json",
+    "skills/simplify/schema/manifest.schema.json",
+}
+
 
 def _run_build(out_dir: str, repo_root: str, dev: bool = False) -> subprocess.CompletedProcess:
     command = [sys.executable, os.path.join(repo_root, "build.py"), "--out", out_dir]
@@ -64,6 +95,11 @@ class TestOpenAiPluginBuild(unittest.TestCase):
 
             with zipfile.ZipFile(zip_path) as archive:
                 names = set(archive.namelist())
+                relative_names = {
+                    name.removeprefix("simplify-med/")
+                    for name in names
+                    if not name.endswith("/")
+                }
                 portable = _read_archive_json(archive, "simplify-med", "plugin.json")
                 compatibility = _read_archive_json(
                     archive, "simplify-med", ".codex-plugin/plugin.json"
@@ -108,6 +144,35 @@ class TestOpenAiPluginBuild(unittest.TestCase):
             self.assertNotIn("mcpServers", text)
             self.assertNotIn("type: mcp", text)
             self.assertNotIn("streamable_http", text)
+        self.assertEqual(
+            {
+                os.path.basename(name) for name in relative_names
+                if name.startswith("skills/simplify/stages/")
+            },
+            EXPECTED_STAGE_FILES,
+        )
+        self.assertEqual(
+            {
+                os.path.basename(name) for name in relative_names
+                if name.startswith("skills/simplify/scripts/")
+            },
+            EXPECTED_SCRIPT_FILES,
+        )
+        self.assertEqual(
+            {
+                os.path.basename(name) for name in relative_names
+                if name.startswith("skills/simplify/schema/")
+            },
+            EXPECTED_SCHEMA_FILES,
+        )
+        self.assertTrue(OBSOLETE_PIPELINE_FILES.isdisjoint(relative_names))
+        for required in (
+            "skills/simplify/stages/review.md",
+            "skills/simplify/scripts/settle_review.py",
+            "skills/simplify/schema/review.schema.json",
+            "skills/simplify/schema/review_raw.schema.json",
+        ):
+            self.assertIn(required, relative_names)
 
     def test_dev_build_increments_and_stamps_both_packaged_manifests(self):
         with tempfile.TemporaryDirectory() as repo_copy, tempfile.TemporaryDirectory() as out_dir:

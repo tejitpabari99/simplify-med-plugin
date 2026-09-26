@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Self-contained HTML renderer for a final care plan.
 
-`render(plan) -> str` fills `templates/report.html` (via `string.Template`)
+`render(plan, glossary=None) -> str` fills `templates/report.html` (via `string.Template`)
 with HTML-escaped content and produces one file: inline CSS, inline JS, no
 external assets, no network calls. Section order and content come from
 `plan_view`, shared with `render_md.py`.
@@ -25,6 +25,7 @@ from string import Template
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import plan_view  # noqa: E402
 import runlog  # noqa: E402
+import validate  # noqa: E402
 
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATE_PATH = os.path.normpath(
@@ -203,26 +204,18 @@ def _render_section(section, glossary_terms, used_terms) -> str:
     return "\n".join(out)
 
 
-def render(plan: dict) -> str:
-    view = plan_view.build_view(plan)
+def render(plan: dict, glossary: dict | None = None, legacy_glossary: bool = False) -> str:
+    view = plan_view.build_view(plan, glossary=glossary, legacy_glossary=legacy_glossary)
 
     body_parts = []
 
-    if view["notices"]:
-        notice_html = "".join(f"<p>{_esc(n)}</p>" for n in view["notices"])
-        body_parts.append(f'<div class="notice">{notice_html}</div>')
-
     body_parts.append(f'<h1>{_esc(view["title"])}</h1>')
-    body_parts.append(
-        '<p class="interactive-hint">Tap a checkbox to mark a step done. '
-        "Tap or focus a highlighted word for its definition.</p>"
-    )
-
-    score_line = view.get("score_line")
-    if score_line:
-        body_parts.append(f'<p class="score-line">{_esc(score_line)}</p>')
 
     glossary_terms = _glossary_patterns(view)
+    hint = "Tap a checkbox to mark a step done."
+    if glossary_terms:
+        hint += " Tap or focus a highlighted word for its definition."
+    body_parts.append(f'<p class="interactive-hint">{hint}</p>')
     used_terms: set[str] = set()
 
     for section in view["sections"]:
@@ -235,14 +228,12 @@ def render(plan: dict) -> str:
     )
 
     body_html = "\n".join(body_parts)
-    plan_json = json.dumps(plan, indent=2, sort_keys=False).replace("</", "<\\/")
     run_id = (plan.get("meta") or {}).get("run_id", "")
 
     template = Template(_read_template())
     return template.substitute(
         title=_esc(view["title"]),
         body=body_html,
-        plan_json=plan_json,
         run_id=json.dumps(run_id),
     )
 
@@ -253,6 +244,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--plan", default=None, help="Path to the plan JSON (default: <run-dir>/06_plan.final.json)")
+    parser.add_argument("--glossary", default=None, help="Optional glossary JSON (default: <run-dir>/07_glossary.json when present)")
     parser.add_argument("--out", default=None, help="Output path (default: <run-dir>/report.html)")
     return parser
 
@@ -269,13 +261,46 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    with open(plan_path, "r", encoding="utf-8") as f:
-        plan = json.load(f)
+    try:
+        with open(plan_path, "r", encoding="utf-8") as f:
+            plan = json.load(f)
+        plan_view.assert_renderable_plan(plan, args.run_dir, plan_path)
+        glossary_path = args.glossary or os.path.join(args.run_dir, "07_glossary.json")
+        glossary = None
+        if os.path.isfile(glossary_path):
+            with open(glossary_path, "r", encoding="utf-8") as f:
+                glossary = json.load(f)
+            glossary_errors = validate.validate(glossary, validate.load_schema("glossary"))
+            if glossary_errors:
+                raise ValueError("invalid optional glossary: " + "; ".join(glossary_errors))
+            plan_run_id = (plan.get("meta") or {}).get("run_id")
+            if glossary.get("run_id") != plan_run_id:
+                raise ValueError("optional glossary does not belong to the finalized plan")
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(f"render_html: {error}", file=sys.stderr)
+        return 1
 
     out_path = args.out or os.path.join(args.run_dir, "report.html")
-    text = render(plan)
+    text = render(
+        plan,
+        glossary=glossary,
+        legacy_glossary=plan.get("schema_version") == "1.0" and glossary is None,
+    )
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(text)
+
+    run_log_path = os.path.join(args.run_dir, "run.json")
+    if plan.get("schema_version") != "1.0" and os.path.isfile(run_log_path):
+        relative_output = os.path.relpath(out_path, args.run_dir)
+        artifacts = [] if relative_output == ".." or relative_output.startswith(".." + os.sep) else [relative_output]
+        runlog.record(
+            args.run_dir,
+            "render_html",
+            "ok",
+            checks={"glossary_terms": len((glossary or {}).get("terms", []))},
+            artifacts=artifacts,
+            run_id=(plan.get("meta") or {}).get("run_id"),
+        )
 
     print(f"OK wrote {out_path}")
     print(f"render_html: ok | path={out_path}")

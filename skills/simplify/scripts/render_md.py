@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Markdown renderer for a final care plan.
 
-`render(plan) -> str` builds the same seven sections, in the same order,
+`render(plan) -> str` builds the concise patient-facing sections, in the same order,
 as `render_html.py`, via the shared `plan_view` module. No HTML in the
 output.
 
@@ -102,15 +102,6 @@ def render(plan: dict) -> str:
     view = plan_view.build_view(plan)
     lines = [f"# {view['title']}", ""]
 
-    for notice in view["notices"]:
-        lines.append(f"> {notice}")
-        lines.append("")
-
-    score_line = view.get("score_line")
-    if score_line:
-        lines.append(f"_{score_line}_")
-        lines.append("")
-
     for section in view["sections"]:
         lines.extend(_render_section(section))
 
@@ -130,8 +121,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     plan_path = args.plan or os.path.join(args.run_dir, "06_plan.final.json")
-    with open(plan_path, "r", encoding="utf-8") as f:
-        plan = json.load(f)
+    try:
+        with open(plan_path, "r", encoding="utf-8") as f:
+            plan = json.load(f)
+        plan_view.assert_renderable_plan(plan, args.run_dir, plan_path)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(f"render_md: {error}", file=sys.stderr)
+        return 1
 
     out_path = args.out or os.path.join(args.run_dir, "report.md")
     text = render(plan)

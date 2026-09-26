@@ -16,4 +16,27 @@ LANGUAGE RULES -- apply to every field you write:
 - Do not repeat a fact in multiple sections unless repetition is needed to prevent a safety error.
 - Leave an optional field empty or null when the source does not state it. Do not write filler such as "not stated in your note" into patient-facing text.
 
+CRITICAL VS SUPPORTING -- preserve what changes understanding, action, or safety:
+
+The goal is not to display every extracted fact. The goal is a concise, source-grounded explanation of what happened, what matters now, and what the patient should do next. Concision is a requirement, not a reason to omit critical content.
+
+Critical patient-facing content normally includes:
+- the main reason for the visit;
+- the clinician's main conclusion, documented diagnosis, or important unresolved finding;
+- medication starts, stops, changes, exact doses, frequencies, timing, and home-use instructions;
+- pending tests, referrals, appointments, monitoring, follow-up timing, and who to contact;
+- explicit warning signs with the source's action and urgency;
+- uncertainty, conflicts, declined or conditional treatment, and missing details that could change an action;
+- a reassuring result when it directly explains the disposition or next step.
+
+Supporting content normally stays out of the patient-facing report:
+- technical test mechanics, including contrast names or doses, machine settings, sequences, and measurement metadata;
+- raw normal values, incidental findings, or completed-test inventories that do not change the plan;
+- repeated facts already represented clearly;
+- rejected, non-actionable differential diagnoses;
+- generic education, broad wellness guidance, or conditional advice that is not patient-specific;
+- stable background history or medicines that did not change and do not explain the visit.
+
+Generic education does not become patient-specific merely because it was attached to discharge paperwork. Include it only when the clinical record applies it to this patient, it changes this patient's documented action, or omitting it would change what the patient treats as urgent. When supporting content is omitted, keep it auditable through the structured omission disposition required by the care-plan schema; do not expand it into visible prose.
+
 PLAIN WORDS -- `reference/ahrq_plain_language.json` lists medical words and their everyday alternatives. Prefer the everyday alternative; when a medical term must stay (a diagnosis name, a drug name), keep it and put the plain meaning next to it once.

@@ -1,436 +1,449 @@
 #!/usr/bin/env python3
-"""Citation guard for the assemble path.
-
-Default mode validates the assemble stage's raw output
-(``03_plan.raw.json``) against ``care_plan_agent.schema.json``, then applies
-a set of deterministic guards -- ported from simplify-med's
-``_verify_assembly`` (``backend/care_plan/pipeline.py``) -- that drop or
-repair anything the model asserted without a fact behind it, and writes
-``03_plan.draft.json``.
-
-``--additions`` mode does the analogous job for the assemble-missing stage's
-output (``05_additions.raw.json``): every addition must cite only facts
-listed as missing in ``04_coverage.json``, or it is dropped.
-
-Stdlib only. Runnable as ``python3 cite_check.py --run-dir D [--additions]``.
-"""
+"""Fail-closed citation and fact-disposition validation for care plans."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import validate  # noqa: E402
 import runlog  # noqa: E402
+import validate  # noqa: E402
 from _version import SCHEMA_VERSION  # noqa: E402
 
 
-# Sections that are flat top-level arrays of items on the care plan (agent)
-# schema, each item carrying its own `source_fact_ids`.
 ITEM_LIST_FIELDS = (
-    "reason_for_visit", "medications", "tests", "procedures",
-    "other", "follow_up", "warning_signs",
+    "reason_for_visit", "medications", "tests", "procedures", "other",
+    "follow_up", "warning_signs",
 )
-# The NOT STATED rule (assemble.md) applies `why` only to these four.
-WHY_FIELDS = ("medications", "tests", "procedures", "other")
-# STATUS is required (never null) on these five.
-STATUS_REQUIRED_FIELDS = ("medications", "tests", "procedures", "other", "follow_up")
-SEVERITY_ENUM = {"high", "medium", "low"}
-URGENCY_ENUM = {"emergency", "call_doctor", "monitor", "normal_side_effect"}
+OMISSION_REASONS = {
+    "duplicate_or_already_represented", "technical_detail",
+    "routine_non_actionable", "rejected_non_actionable_differential",
+    "generic_not_patient_specific", "stable_unchanged_background",
+}
 
-# additions_raw.schema.json / additions.schema.json use the same item shapes
-# as the care plan, but `diagnosis` is flattened to a top-level
-# `diagnosis_details` array (no `changed_since_last_visit`).
-ADDITIONS_ITEM_FIELDS = (
-    "reason_for_visit", "diagnosis_details", "medications", "tests",
-    "procedures", "other", "follow_up", "warning_signs",
+_GENERIC_PATTERNS = (
+    re.compile(r"\b(?:all|most) (?:adults|patients|people)\b", re.IGNORECASE),
+    re.compile(r"\b(?:general|generic|broad) (?:education|advice|guidance|information)\b", re.IGNORECASE),
+    re.compile(r"\bhealthy (?:adults|people) should\b", re.IGNORECASE),
+    re.compile(r"\beveryone should\b", re.IGNORECASE),
+    re.compile(r"\beducation (?:sheet|handout|material)\b", re.IGNORECASE),
 )
+_BROAD_WELLNESS_PATTERN = re.compile(
+    r"\b(?:exercise regularly|regular exercise|healthy diet|eat (?:a )?healthy|"
+    r"balanced diet|drink (?:more |plenty of )?water|good sleep|sleep hygiene|"
+    r"healthy lifestyle|wellness advice)\b",
+    re.IGNORECASE,
+)
+_WELLNESS_TOPIC_PATTERN = re.compile(
+    r"\b(?:exercise|physical activity|walking|healthy diet|balanced diet|hydration|sleep)\b",
+    re.IGNORECASE,
+)
+_QUANTIFIED_WELLNESS_PATTERN = re.compile(
+    r"(?:\b\d+(?:\.\d+)?\s+(?:minutes?|hours?|days?|servings?)\b|"
+    r"\b(?:daily|weekly|each day|each week|per day|per week)\b)",
+    re.IGNORECASE,
+)
+_PATIENT_SPECIFIC_PATTERN = re.compile(
+    r"\b(?:for (?:this|the) patient|the patient (?:was|has been) "
+    r"(?:advised|instructed|told)|(?:clinician|doctor|provider) "
+    r"(?:advised|instructed|recommended|told)|because of (?:your|the patient's)|"
+    r"due to (?:your|the patient's)|to (?:manage|treat|address|lower|improve) your|"
+    r"after your (?:result|diagnosis|visit)|patient-specific)\b",
+    re.IGNORECASE,
+)
+_RESULT_SIGNAL_PATTERN = re.compile(
+    r"\b(?:result|normal|negative|positive|found|showed|revealed|demonstrated|"
+    r"no evidence|no [a-z][a-z-]+)\b",
+    re.IGNORECASE,
+)
+_DISPOSITION_SIGNAL_PATTERN = re.compile(
+    r"\b(?:discharged|admitted|sent home|cleared|reassur|decision|ruled out|"
+    r"excluded|no treatment|no further|therefore|because|so)\b",
+    re.IGNORECASE,
+)
+_MEANINGFUL_RESULT_PATTERN = re.compile(
+    r"\b(?:abnormal|positive|elevated|worsened|improved|mass|fracture|infection)\b",
+    re.IGNORECASE,
+)
+_TECHNICAL_PATTERN = re.compile(
+    r"\b(?:technical|contrast|slice thickness|sequence|protocol|device detail|imaging technique)\b",
+    re.IGNORECASE,
+)
+_ROUTINE_PATTERN = re.compile(
+    r"\b(?:routine|normal|incidental|non-actionable|no action|completed)\b",
+    re.IGNORECASE,
+)
+_DIFFERENTIAL_PATTERN = re.compile(
+    r"\b(?:rejected|ruled out|unlikely|not consistent with|differential)\b",
+    re.IGNORECASE,
+)
+_STABLE_PATTERN = re.compile(
+    r"\b(?:stable|unchanged|background history|continue unchanged|home medication)\b",
+    re.IGNORECASE,
+)
+
+
+class PlanCitationError(ValueError):
+    """Raised when a plan is not exhaustively and validly fact-backed."""
+
+    def __init__(self, errors: list[str]):
+        self.errors = errors
+        super().__init__("; ".join(errors))
 
 
 def _read_json(path: str) -> dict:
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _write_json(path: str, data: dict) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, sort_keys=False)
-        f.write("\n")
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2, sort_keys=False)
+        handle.write("\n")
 
 
 def _run_id(run_dir: str) -> str:
     return os.path.basename(os.path.normpath(run_dir))
 
 
-def _load_valid_fact_ids(run_dir: str) -> set[int]:
-    facts_path = os.path.join(run_dir, "02_facts.json")
-    data = _read_json(facts_path)
-    return {fact["id"] for fact in data.get("facts", [])}
+def _fact_list(facts: dict | list[dict]) -> list[dict]:
+    value = facts.get("facts", []) if isinstance(facts, dict) else facts
+    return value if isinstance(value, list) else []
 
 
-def _filter_source_fact_ids(item: dict, valid_ids: set[int]) -> tuple[dict, bool]:
-    """Drop any `source_fact_ids` entry not in `valid_ids`. Returns the
-    (possibly copied) item and whether every id was dropped (nothing
-    survives to back this item's claim)."""
-    original = item.get("source_fact_ids", [])
-    cited = [i for i in original if i in valid_ids]
-    if cited != original:
-        item = dict(item)
-        item["source_fact_ids"] = cited
-    return item, (len(cited) == 0)
+def _fact_text(fact: dict) -> str:
+    return f"{fact.get('text', '')} {fact.get('quote', '')}".strip()
 
 
-def _null_empty_why(item: dict) -> dict:
-    if item.get("why", None) == "":
-        item = dict(item)
-        item["why"] = None
-    return item
+def _is_generic_advice(fact: dict) -> bool:
+    text = _fact_text(fact)
+    if any(pattern.search(text) for pattern in _GENERIC_PATTERNS):
+        return True
+    broad_wellness = bool(_BROAD_WELLNESS_PATTERN.search(text)) or bool(
+        _WELLNESS_TOPIC_PATTERN.search(text) and _QUANTIFIED_WELLNESS_PATTERN.search(text)
+    )
+    return broad_wellness and not bool(_PATIENT_SPECIFIC_PATTERN.search(text))
 
 
-def _fix_enum(item: dict, key: str, enum: set[str]) -> dict:
-    value = item.get(key)
-    if value is not None and value not in enum:
-        item = dict(item)
-        item[key] = None
-    return item
+def _is_critical_fact(fact: dict) -> bool:
+    category = fact.get("category")
+    text = _fact_text(fact)
+    if _is_generic_advice(fact):
+        return False
+    if category in {"reason_for_visit", "follow_up", "warning_signs"}:
+        return True
+    if category == "medications":
+        if re.search(
+            r"\b(?:start|begin|stop|discontinue|hold|increase|decrease|change|switch|"
+            r"dose|dosage|frequency|timing|duration|take|use|mg|mcg|tablet|capsule)\b",
+            text,
+            re.IGNORECASE,
+        ):
+            return True
+        return not bool(_STABLE_PATTERN.search(text))
+    if category == "diagnosis":
+        return not bool(_DIFFERENTIAL_PATTERN.search(text) or _STABLE_PATTERN.search(text))
+    if category in {"tests", "procedures"}:
+        pending_or_actionable = bool(re.search(
+            r"\b(?:order|ordered|pending|schedule|scheduled|refer|follow up|unresolved)\b",
+            text, re.IGNORECASE,
+        ))
+        result_explains_disposition = bool(
+            _RESULT_SIGNAL_PATTERN.search(text) and _DISPOSITION_SIGNAL_PATTERN.search(text)
+        )
+        return pending_or_actionable or result_explains_disposition or bool(
+            _MEANINGFUL_RESULT_PATTERN.search(text)
+        )
+    if category == "other":
+        return bool(
+            _PATIENT_SPECIFIC_PATTERN.search(text)
+            or re.search(
+                r"\b(?:avoid|do not|nothing by mouth|no driving|precaution|restriction|hold)\b",
+                text,
+                re.IGNORECASE,
+            )
+        )
+    return False
 
 
-def _default_status(item: dict) -> tuple[dict, bool]:
-    if item.get("status") is None:
-        item = dict(item)
-        item["status"] = "to_do"
-        return item, True
-    return item, False
+def _is_duplicate_of_visible_fact(fact: dict, visible_facts: list[dict]) -> bool:
+    normalized = re.sub(r"\s+", " ", _fact_text(fact).strip().lower())
+    return any(
+        other.get("category") == fact.get("category")
+        and re.sub(r"\s+", " ", _fact_text(other).strip().lower()) == normalized
+        for other in visible_facts
+    )
 
 
-def _fatal(message: str) -> int:
+def _reason_matches_fact(reason: str, fact: dict, visible_facts: list[dict]) -> bool:
+    text = _fact_text(fact)
+    category = fact.get("category")
+    if reason == "duplicate_or_already_represented":
+        return _is_duplicate_of_visible_fact(fact, visible_facts)
+    if _is_critical_fact(fact):
+        return False
+    if reason == "technical_detail":
+        return category in {"tests", "procedures", "other"} and bool(_TECHNICAL_PATTERN.search(text))
+    if reason == "routine_non_actionable":
+        return not _is_critical_fact(fact) and bool(_ROUTINE_PATTERN.search(text))
+    if reason == "rejected_non_actionable_differential":
+        return category == "diagnosis" and bool(_DIFFERENTIAL_PATTERN.search(text))
+    if reason == "generic_not_patient_specific":
+        return _is_generic_advice(fact)
+    if reason == "stable_unchanged_background":
+        return bool(_STABLE_PATTERN.search(text))
+    return False
+
+
+def _citation_ids(
+    value,
+    path: str,
+    valid_ids: set[int],
+    errors: list[str],
+    *,
+    required: bool,
+) -> list[int]:
+    if not isinstance(value, list):
+        if required:
+            errors.append(f"{path} has content but no citations")
+        return []
+    if required and not value:
+        errors.append(f"{path} has content but no citations")
+        return []
+    cited: list[int] = []
+    for fact_id in value:
+        if not isinstance(fact_id, int):
+            errors.append(f"{path} contains a non-integer fact ID")
+        elif fact_id not in valid_ids:
+            errors.append(f"{path} cites unknown fact ID {fact_id}")
+        else:
+            cited.append(fact_id)
+    if len(cited) != len(set(cited)):
+        errors.append(f"{path} cites the same fact more than once")
+    return cited
+
+
+def _has_content(value) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list):
+        return any(_has_content(item) for item in value)
+    if value is None:
+        return False
+    return True
+
+
+def _item_has_visible_content(item: dict) -> bool:
+    return any(key != "source_fact_ids" and _has_content(value) for key, value in item.items())
+
+
+def assert_plan_citations(plan: dict, facts: dict | list[dict]) -> dict:
+    """Assert complete visible-or-omitted disposition without mutating input."""
+    errors: list[str] = []
+    fact_list = _fact_list(facts)
+    fact_ids = [fact.get("id") for fact in fact_list]
+    duplicate_fact_ids = sorted(
+        fact_id for fact_id, count in Counter(fact_ids).items()
+        if isinstance(fact_id, int) and count > 1
+    )
+    if duplicate_fact_ids:
+        errors.append(f"fact ledger contains duplicate IDs {duplicate_fact_ids}")
+    facts_by_id = {
+        fact["id"]: fact for fact in fact_list
+        if isinstance(fact, dict) and isinstance(fact.get("id"), int)
+    }
+    valid_ids = set(facts_by_id)
+    visible_ids: set[int] = set()
+
+    summary = plan.get("summary")
+    summary_visible = isinstance(summary, str) and bool(summary.strip())
+    summary_ids = _citation_ids(
+        plan.get("summary_fact_ids"), "summary", valid_ids, errors, required=summary_visible,
+    )
+    if summary_visible:
+        visible_ids.update(summary_ids)
+
+    diagnosis = plan.get("diagnosis") if isinstance(plan.get("diagnosis"), dict) else {}
+    changed = diagnosis.get("changed_since_last_visit")
+    changed_visible = isinstance(changed, str) and bool(changed.strip())
+    changed_ids = _citation_ids(
+        diagnosis.get("changed_since_last_visit_fact_ids"),
+        "diagnosis.changed_since_last_visit", valid_ids, errors, required=changed_visible,
+    )
+    if changed_visible:
+        visible_ids.update(changed_ids)
+    for index, detail in enumerate(diagnosis.get("details", [])):
+        if isinstance(detail, dict):
+            visible = _item_has_visible_content(detail)
+            cited = _citation_ids(
+                detail.get("source_fact_ids"), f"diagnosis.details[{index}]", valid_ids, errors,
+                required=visible,
+            )
+            if visible:
+                visible_ids.update(cited)
+
+    for section in ITEM_LIST_FIELDS:
+        items = plan.get(section, [])
+        if not isinstance(items, list):
+            continue
+        for index, item in enumerate(items):
+            if isinstance(item, dict):
+                visible = _item_has_visible_content(item)
+                cited = _citation_ids(
+                    item.get("source_fact_ids"), f"{section}[{index}]", valid_ids, errors,
+                    required=visible,
+                )
+                if visible:
+                    visible_ids.update(cited)
+
+    questions_cited = 0
+    questions = plan.get("questions", [])
+    if isinstance(questions, list):
+        for index, question in enumerate(questions):
+            if not isinstance(question, dict):
+                errors.append(f"questions[{index}] must be cited content")
+                continue
+            text = question.get("question")
+            visible = isinstance(text, str) and bool(text.strip())
+            cited = _citation_ids(
+                question.get("source_fact_ids"), f"questions[{index}]", valid_ids, errors,
+                required=visible,
+            )
+            if visible:
+                visible_ids.update(cited)
+                if cited:
+                    questions_cited += 1
+
+    omission_entries = plan.get("omitted_facts", [])
+    omitted_ids: list[int] = []
+    if not isinstance(omission_entries, list):
+        errors.append("omitted_facts must be a list")
+        omission_entries = []
+    for index, entry in enumerate(omission_entries):
+        if not isinstance(entry, dict):
+            errors.append(f"omitted_facts[{index}] must be an object")
+            continue
+        fact_id = entry.get("fact_id")
+        reason = entry.get("reason")
+        if reason not in OMISSION_REASONS:
+            errors.append(f"omitted_facts[{index}] has invalid omission reason {reason!r}")
+        if not isinstance(fact_id, int) or fact_id not in valid_ids:
+            errors.append(f"unknown omitted fact ID {fact_id}")
+            continue
+        omitted_ids.append(fact_id)
+        visible_facts = [facts_by_id[visible_id] for visible_id in visible_ids]
+        if reason in OMISSION_REASONS and not _reason_matches_fact(
+            reason, facts_by_id[fact_id], visible_facts,
+        ):
+            errors.append(f"critical fact ID {fact_id} cannot be omitted as {reason}")
+
+    for fact_id, count in sorted(Counter(omitted_ids).items()):
+        if count > 1:
+            errors.append(f"fact ID {fact_id} is omitted more than once")
+    omitted_set = set(omitted_ids)
+    for fact_id in sorted(visible_ids & omitted_set):
+        errors.append(f"fact ID {fact_id} is both visible and omitted")
+    for fact_id in sorted(valid_ids - visible_ids - omitted_set):
+        errors.append(f"fact ID {fact_id} is uncovered")
+    for fact_id in sorted(visible_ids):
+        if _is_generic_advice(facts_by_id[fact_id]):
+            errors.append(f"generic advice fact ID {fact_id} is presented as patient-specific")
+
+    if errors:
+        raise PlanCitationError(errors)
+    return {
+        "facts_total": len(valid_ids),
+        "facts_visible": len(visible_ids),
+        "facts_omitted": len(omitted_set),
+        "questions_cited": questions_cited,
+    }
+
+
+def _failed(run_dir: str, message: str, errors: list[str] | None = None) -> int:
+    runlog.record(
+        run_dir, "plan_check", "failed",
+        checks={"validation_errors": errors or [message]},
+    )
     print(message, file=sys.stderr)
+    for error in errors or []:
+        print(f"  {error}", file=sys.stderr)
     return 1
 
 
-def _apply_guards(raw: dict, valid_ids: set[int]) -> tuple[dict, dict]:
-    """The deterministic guards from ``_verify_assembly``, as a pure
-    function: `raw` in, `(guarded_plan, checks)` out. No file I/O, no schema
-    validation -- kept separate from `_run_assemble` so it can be unit
-    tested directly against inputs the care_plan_agent schema's own
-    structural constraints (`questions` maxItems 3, required `status`,
-    restricted `severity`/`urgency` enums) would otherwise reject before a
-    guard ever ran on them in the full CLI flow."""
-    plan = dict(raw)
-
-    items_in = 0
-    items_kept = 0
-    dropped_uncited_by_section: dict[str, int] = {}
-    why_nulled = 0
-    status_defaulted = 0
-
-    # (1) questions truncated to 3
-    questions = plan.get("questions", [])
-    questions_truncated = len(questions) > 3
-    plan["questions"] = questions[:3]
-
-    # (2) summary_fact_ids filtered; summary text kept even if uncited
-    summary = plan.get("summary", "")
-    summary_fact_ids = plan.get("summary_fact_ids", [])
-    cited_summary_ids = [i for i in summary_fact_ids if i in valid_ids]
-    summary_uncited = bool(summary) and bool(summary_fact_ids) and not cited_summary_ids
-    plan["summary_fact_ids"] = cited_summary_ids
-
-    # (3) + (5) + (6) + (7) over the flat item-list sections
-    for field in ITEM_LIST_FIELDS:
-        items = plan.get(field, [])
-        items_in += len(items)
-        kept = []
-        for item in items:
-            item, all_dropped = _filter_source_fact_ids(item, valid_ids)
-            if all_dropped:
-                dropped_uncited_by_section[field] = dropped_uncited_by_section.get(field, 0) + 1
-                continue
-            if field in WHY_FIELDS:
-                before = item.get("why", None)
-                item = _null_empty_why(item)
-                if before == "" and item.get("why") is None:
-                    why_nulled += 1
-            if field == "warning_signs":
-                item = _fix_enum(item, "urgency", URGENCY_ENUM)
-            if field in STATUS_REQUIRED_FIELDS:
-                item, defaulted = _default_status(item)
-                if defaulted:
-                    status_defaulted += 1
-            kept.append(item)
-        plan[field] = kept
-        items_kept += len(kept)
-
-    # diagnosis.details is the one nested item container
-    diagnosis = dict(plan.get("diagnosis", {}))
-    details = diagnosis.get("details", [])
-    items_in += len(details)
-    kept_details = []
-    for detail in details:
-        detail, all_dropped = _filter_source_fact_ids(detail, valid_ids)
-        if all_dropped:
-            dropped_uncited_by_section["diagnosis"] = dropped_uncited_by_section.get("diagnosis", 0) + 1
-            continue
-        detail = _fix_enum(detail, "severity", SEVERITY_ENUM)
-        kept_details.append(detail)
-    diagnosis["details"] = kept_details
-    items_kept += len(kept_details)
-
-    # (4) changed_since_last_visit_fact_ids filtered
-    changed = diagnosis.get("changed_since_last_visit", "")
-    changed_ids = diagnosis.get("changed_since_last_visit_fact_ids", [])
-    cited_changed_ids = [i for i in changed_ids if i in valid_ids]
-    if changed and changed_ids and not cited_changed_ids:
-        diagnosis["changed_since_last_visit"] = ""
-        diagnosis["changed_since_last_visit_fact_ids"] = []
-    else:
-        diagnosis["changed_since_last_visit_fact_ids"] = cited_changed_ids
-    plan["diagnosis"] = diagnosis
-
-    checks = {
-        "items_in": items_in,
-        "items_kept": items_kept,
-        "dropped_uncited_by_section": dropped_uncited_by_section,
-        "questions_truncated": questions_truncated,
-        "summary_uncited": summary_uncited,
-        "why_nulled": why_nulled,
-        "status_defaulted": status_defaulted,
-    }
-    return plan, checks
-
-
-# --- assemble mode -----------------------------------------------------
-
 def _run_assemble(run_dir: str) -> int:
     raw_path = os.path.join(run_dir, "03_plan.raw.json")
+    facts_path = os.path.join(run_dir, "02_facts.json")
+    draft_path = os.path.join(run_dir, "03_plan.draft.json")
+    if os.path.exists(draft_path):
+        os.remove(draft_path)
     if not os.path.isfile(raw_path):
-        return _fatal(
-            "cite_check: could not find 03_plan.raw.json in the run directory. "
-            "The assemble stage must write this file before cite_check can run."
-        )
+        return _failed(run_dir, "cite_check: could not find 03_plan.raw.json in the run directory.")
+    if not os.path.isfile(facts_path):
+        return _failed(run_dir, "cite_check: could not find 02_facts.json in the run directory.")
     try:
         raw = _read_json(raw_path)
+        facts = _read_json(facts_path)
     except json.JSONDecodeError as exc:
-        return _fatal(f"cite_check: 03_plan.raw.json is not valid JSON ({exc}).")
+        return _failed(run_dir, f"cite_check: input is not valid JSON ({exc}).")
 
-    agent_schema = validate.load_schema("care_plan_agent")
-    schema_errors = validate.validate(raw, agent_schema)
+    schema_errors = validate.validate(raw, validate.load_schema("care_plan_agent"))
     if schema_errors:
-        print(
-            "cite_check: 03_plan.raw.json does not match care_plan_agent.schema.json. "
-            "Retry the assemble stage with these errors:",
-            file=sys.stderr,
+        return _failed(
+            run_dir,
+            "cite_check: 03_plan.raw.json does not match care_plan_agent.schema.json:",
+            schema_errors,
         )
-        for error in schema_errors:
-            print(f"  {error}", file=sys.stderr)
-        return 1
+    try:
+        checks = assert_plan_citations(raw, facts)
+    except PlanCitationError as exc:
+        return _failed(
+            run_dir, "cite_check: plan citation/disposition validation failed:", exc.errors,
+        )
 
-    valid_ids = _load_valid_fact_ids(run_dir)
-    plan, guard_checks = _apply_guards(raw, valid_ids)
-    items_kept = guard_checks["items_kept"]
-    dropped_uncited_by_section = guard_checks["dropped_uncited_by_section"]
-
-    run_id = _run_id(run_dir)
     plugin_version = runlog.plugin_version()
-    created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-
+    plan = dict(raw)
     plan["schema_version"] = SCHEMA_VERSION
     plan["plugin_version"] = plugin_version
     plan["meta"] = {
-        "run_id": run_id,
-        "plugin_version": plugin_version,
-        "schema_version": SCHEMA_VERSION,
-        "level": "standard",
-        "created_at": created_at,
+        "run_id": _run_id(run_dir), "plugin_version": plugin_version,
+        "schema_version": SCHEMA_VERSION, "level": "standard",
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    plan["notices"] = []
-    plan["terms"] = {}
-
-    care_plan_schema = validate.load_schema("care_plan")
-    plan_errors = validate.validate(plan, care_plan_schema)
+    plan_errors = validate.validate(plan, validate.load_schema("care_plan"))
     if plan_errors:
-        print(
-            "cite_check: internal bug -- the guarded plan does not match "
-            "care_plan.schema.json (this is a bug in cite_check.py, not in "
-            "the assemble stage output):",
-            file=sys.stderr,
-        )
-        for error in plan_errors:
-            print(f"  {error}", file=sys.stderr)
-        return 1
+        return _failed(run_dir, "cite_check: internal plan construction error:", plan_errors)
 
-    draft_path = os.path.join(run_dir, "03_plan.draft.json")
     _write_json(draft_path, plan)
-
-    status = "degraded" if dropped_uncited_by_section else "ok"
-    runlog.record(run_dir, "assemble", status, checks=guard_checks)
-
-    print(f"OK wrote {draft_path} ({items_kept}/{guard_checks['items_in']} items kept)")
-    print(
-        f"assemble: {status} | items_in={guard_checks['items_in']} items_kept={items_kept}"
+    runlog.record(
+        run_dir,
+        "plan_check",
+        "ok",
+        checks=checks,
+        artifacts=["03_plan.draft.json"],
+        run_id=_run_id(run_dir),
     )
-    return 0
-
-
-# --- additions mode ------------------------------------------------------
-
-def _empty_additions(run_dir: str) -> dict:
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "plugin_version": runlog.plugin_version(),
-        "run_id": _run_id(run_dir),
-        "reason_for_visit": [],
-        "diagnosis_details": [],
-        "medications": [],
-        "tests": [],
-        "procedures": [],
-        "other": [],
-        "follow_up": [],
-        "warning_signs": [],
-        "low_priority": [],
-        "dropped": [],
-    }
-
-
-def _run_additions(run_dir: str) -> int:
-    raw_path = os.path.join(run_dir, "05_additions.raw.json")
-    out_path = os.path.join(run_dir, "05_additions.json")
-
-    if not os.path.isfile(raw_path):
-        _write_json(out_path, _empty_additions(run_dir))
-        runlog.record(
-            run_dir, "assemble_missing", "skipped",
-            checks={"items_in": 0, "items_kept": 0, "dropped_not_missing": 0, "dropped_uncited": 0},
-        )
-        print(f"OK skipped (no 05_additions.raw.json found); wrote empty {out_path}")
-        print("assemble_missing: skipped | items_in=0 items_kept=0")
-        return 0
-
-    try:
-        raw = _read_json(raw_path)
-    except json.JSONDecodeError as exc:
-        return _fatal(f"cite_check --additions: 05_additions.raw.json is not valid JSON ({exc}).")
-
-    raw_schema = validate.load_schema("additions_raw")
-    schema_errors = validate.validate(raw, raw_schema)
-    if schema_errors:
-        print(
-            "cite_check --additions: 05_additions.raw.json does not match "
-            "additions_raw.schema.json. Retry the assemble-missing stage with "
-            "these errors:",
-            file=sys.stderr,
-        )
-        for error in schema_errors:
-            print(f"  {error}", file=sys.stderr)
-        return 1
-
-    valid_ids = _load_valid_fact_ids(run_dir)
-    coverage_path = os.path.join(run_dir, "04_coverage.json")
-    if not os.path.isfile(coverage_path):
-        return _fatal(
-            "cite_check --additions: could not find 04_coverage.json in the "
-            "run directory. review-coverage and sanitize_review must run before "
-            "cite_check --additions."
-        )
-    coverage = _read_json(coverage_path)
-    missing = set(coverage.get("missing", []))
-
-    result = {
-        "schema_version": SCHEMA_VERSION,
-        "plugin_version": runlog.plugin_version(),
-        "run_id": _run_id(run_dir),
-    }
-
-    items_in = 0
-    items_kept = 0
-    dropped_not_missing = 0
-    dropped_uncited = 0
-    dropped_log: list[dict] = []
-
-    for field in ADDITIONS_ITEM_FIELDS:
-        items = raw.get(field, [])
-        items_in += len(items)
-        kept = []
-        for item in items:
-            item, all_dropped = _filter_source_fact_ids(item, valid_ids)
-            cited = set(item.get("source_fact_ids", []))
-            if all_dropped or not cited:
-                dropped_uncited += 1
-                dropped_log.append({"item": item, "reason": "uncited"})
-                continue
-            if not cited.issubset(missing):
-                dropped_not_missing += 1
-                dropped_log.append({"item": item, "reason": "not_missing"})
-                continue
-            if field in WHY_FIELDS:
-                item = _null_empty_why(item)
-            if field == "diagnosis_details":
-                item = _fix_enum(item, "severity", SEVERITY_ENUM)
-            if field == "warning_signs":
-                item = _fix_enum(item, "urgency", URGENCY_ENUM)
-            if field in STATUS_REQUIRED_FIELDS:
-                item, _defaulted = _default_status(item)
-            kept.append(item)
-        result[field] = kept
-        items_kept += len(kept)
-
-    result["low_priority"] = raw.get("low_priority", [])
-    result["dropped"] = dropped_log
-
-    additions_schema = validate.load_schema("additions")
-    result_errors = validate.validate(result, additions_schema)
-    if result_errors:
-        print(
-            "cite_check --additions: internal bug -- the guarded additions do "
-            "not match additions.schema.json (this is a bug in cite_check.py, "
-            "not in the assemble-missing stage output):",
-            file=sys.stderr,
-        )
-        for error in result_errors:
-            print(f"  {error}", file=sys.stderr)
-        return 1
-
-    _write_json(out_path, result)
-
-    checks = {
-        "items_in": items_in,
-        "items_kept": items_kept,
-        "dropped_not_missing": dropped_not_missing,
-        "dropped_uncited": dropped_uncited,
-    }
-    status = "ok" if (dropped_not_missing == 0 and dropped_uncited == 0) else "degraded"
-    runlog.record(run_dir, "assemble_missing", status, checks=checks)
-
-    print(f"OK wrote {out_path} ({items_kept}/{items_in} items kept)")
+    print(f"OK wrote {draft_path} ({checks['facts_total']} facts accounted for)")
     print(
-        f"assemble_missing: {status} | items_in={items_in} items_kept={items_kept}"
+        "plan_check: ok | "
+        f"facts_visible={checks['facts_visible']} facts_omitted={checks['facts_omitted']}"
     )
     return 0
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Citation guard for assembled care-plan items (or their additions)."
-    )
+    parser = argparse.ArgumentParser(description="Validate assembled care-plan citations and omissions.")
     parser.add_argument("--run-dir", required=True, help="Path to the run directory")
-    parser.add_argument(
-        "--additions", action="store_true",
-        help="Guard 05_additions.raw.json against 04_coverage.json's missing list, "
-             "instead of guarding 03_plan.raw.json",
-    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _build_arg_parser()
-    args = parser.parse_args(argv)
-    if args.additions:
-        return _run_additions(args.run_dir)
-    return _run_assemble(args.run_dir)
+    return _run_assemble(_build_arg_parser().parse_args(argv).run_dir)
 
 
 if __name__ == "__main__":

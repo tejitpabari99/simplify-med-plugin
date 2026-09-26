@@ -1,9 +1,4 @@
-"""Kill test 1, fix #6: the harder two-document fixture set for kill test
-2 -- a multi-page discharge summary plus a standalone lab report for the
-same synthetic patient. This module only asserts the structural claims
-the fixtures are supposed to satisfy (parse, chunk count, continuous
-cross-file ids); it does not run the LLM stages.
-"""
+"""Structural checks for the synthetic schema-v2 document fixtures."""
 
 from __future__ import annotations
 
@@ -17,9 +12,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 
-DOCS_DIR = os.path.join(_paths.TESTS_DIR, "fixtures", "documents")
+DOCS_DIR = _paths.FIXTURE_DOCUMENTS_DIR
 DISCHARGE = os.path.join(DOCS_DIR, "synthetic-discharge-summary.txt")
 LAB_REPORT = os.path.join(DOCS_DIR, "synthetic-lab-report.txt")
+VISIT_NOTE = os.path.join(DOCS_DIR, "synthetic-visit-note.txt")
 
 
 def _unitize_script() -> str:
@@ -39,19 +35,14 @@ def _read_json(path: str):
 
 
 class TestFixturesExistAndParse(unittest.TestCase):
-    def test_discharge_summary_file_exists_and_is_synthetic(self):
-        self.assertTrue(os.path.isfile(DISCHARGE))
-        with open(DISCHARGE, "r", encoding="utf-8") as f:
-            first_line = f.readline()
-        self.assertTrue(first_line.startswith("#"), "first line must be a comment")
-        self.assertIn("SYNTHETIC", first_line)
-
-    def test_lab_report_file_exists_and_is_synthetic(self):
-        self.assertTrue(os.path.isfile(LAB_REPORT))
-        with open(LAB_REPORT, "r", encoding="utf-8") as f:
-            first_line = f.readline()
-        self.assertTrue(first_line.startswith("#"), "first line must be a comment")
-        self.assertIn("SYNTHETIC", first_line)
+    def test_every_document_is_explicitly_synthetic(self):
+        for path in (DISCHARGE, LAB_REPORT, VISIT_NOTE):
+            with self.subTest(path=path):
+                self.assertTrue(os.path.isfile(path))
+                with open(path, "r", encoding="utf-8") as f:
+                    first_line = f.readline()
+                self.assertTrue(first_line.startswith("#"), "first line must be a comment")
+                self.assertIn("SYNTHETIC", first_line)
 
     def test_discharge_summary_has_at_least_170_non_blank_lines(self):
         with open(DISCHARGE, "r", encoding="utf-8") as f:
@@ -79,6 +70,16 @@ class TestFixturesExistAndParse(unittest.TestCase):
             result2 = _run_unitize(run_dir2, f"{LAB_REPORT}:native")
             self.assertEqual(result2.returncode, 0, result2.stderr)
 
+            for current in (run_dir, run_dir2):
+                units = _read_json(os.path.join(current, "01_units.json"))
+                run_log = _read_json(os.path.join(current, "run.json"))
+                self.assertEqual(units["schema_version"], "2.0")
+                self.assertEqual(run_log["schema_version"], "2.0")
+                self.assertEqual(units["run_id"], run_log["run_id"])
+                self.assertEqual(units["plugin_version"], run_log["plugin_version"])
+                self.assertFalse(os.path.exists(os.path.join(current, "00_input", "manifest.json")))
+                self.assertEqual(run_log["stages"]["unitize"]["status"], "ok")
+
 
 class TestDischargeSummaryChunking(unittest.TestCase):
     """The discharge summary alone must yield exactly 2 chunks at the
@@ -92,6 +93,12 @@ class TestDischargeSummaryChunking(unittest.TestCase):
 
             units_doc = _read_json(os.path.join(run_dir, "01_units.json"))
             self.assertEqual(len(units_doc["chunks"]), 2)
+            self.assertEqual(
+                [chunk["k"] for chunk in units_doc["chunks"]],
+                [1, 2],
+            )
+            for chunk in units_doc["chunks"]:
+                self.assertTrue(os.path.isfile(os.path.join(run_dir, f"01_units.{chunk['k']}.txt")))
 
 
 class TestTwoFileRunContinuousIds(unittest.TestCase):
@@ -120,6 +127,18 @@ class TestTwoFileRunContinuousIds(unittest.TestCase):
                 files_in_order,
                 ["synthetic-discharge-summary.txt", "synthetic-lab-report.txt"],
             )
+            run_log = _read_json(os.path.join(run_dir, "run.json"))
+            self.assertEqual(
+                [item["file"] for item in run_log["inputs"]],
+                files_in_order,
+            )
+
+    def test_fixture_readme_forbids_model_output_and_fail_open_routes(self):
+        with open(os.path.join(_paths.FIXTURES_DIR, "README.md"), encoding="utf-8") as handle:
+            text = handle.read().lower()
+        self.assertIn("schema-v2", text)
+        self.assertIn("no fixture can preserve a direct-summary", text)
+        self.assertIn("fail-open publication route", text)
 
 
 if __name__ == "__main__":

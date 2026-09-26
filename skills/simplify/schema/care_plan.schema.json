@@ -5,6 +5,7 @@
   "required": [
     "schema_version",
     "plugin_version",
+    "meta",
     "summary",
     "summary_fact_ids",
     "reason_for_visit",
@@ -16,13 +17,48 @@
     "follow_up",
     "warning_signs",
     "questions",
-    "low_priority"
+    "omitted_facts"
   ],
   "additionalProperties": false,
   "definitions": {
     "fact_ids": {
       "type": "array",
+      "uniqueItems": true,
       "items": {"type": "integer", "minimum": 1}
+    },
+    "cited_fact_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "question": {
+      "type": "object",
+      "required": ["question", "source_fact_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "question": {"type": "string", "minLength": 1},
+        "source_fact_ids": {"$ref": "#/definitions/cited_fact_ids"}
+      }
+    },
+    "omitted_fact": {
+      "type": "object",
+      "required": ["fact_id", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "fact_id": {"type": "integer", "minimum": 1},
+        "reason": {
+          "type": "string",
+          "enum": [
+            "duplicate_or_already_represented",
+            "technical_detail",
+            "routine_non_actionable",
+            "rejected_non_actionable_differential",
+            "generic_not_patient_specific",
+            "stable_unchanged_background"
+          ]
+        }
+      }
     },
     "status": {
       "type": "string",
@@ -157,23 +193,14 @@
         "source_fact_ids": {"$ref": "#/definitions/fact_ids"}
       }
     },
-    "glossary_term": {
-      "type": "object",
-      "required": [],
-      "additionalProperties": false,
-      "properties": {
-        "definition": {"type": "string"},
-        "source": {"type": "string"}
-      }
-    },
     "meta": {
       "type": "object",
-      "required": [],
+      "required": ["run_id", "plugin_version", "schema_version"],
       "additionalProperties": false,
       "properties": {
-        "run_id": {"type": "string"},
-        "plugin_version": {"type": "string"},
-        "schema_version": {"type": "string"},
+        "run_id": {"type": "string", "minLength": 1},
+        "plugin_version": {"type": "string", "minLength": 1},
+        "schema_version": {"type": "string", "enum": ["2.0"]},
         "level": {"type": "string"},
         "created_at": {"type": "string"}
       }
@@ -189,8 +216,8 @@
     }
   },
   "properties": {
-    "schema_version": {"type": "string"},
-    "plugin_version": {"type": "string"},
+    "schema_version": {"type": "string", "enum": ["2.0"]},
+    "plugin_version": {"type": "string", "minLength": 1},
     "meta": {"$ref": "#/definitions/meta"},
     "notices": {"type": "array", "items": {"type": "string"}},
     "score": {"$ref": "#/definitions/score"},
@@ -204,8 +231,11 @@
     "other": {"type": "array", "items": {"$ref": "#/definitions/other_instruction"}},
     "follow_up": {"type": "array", "items": {"$ref": "#/definitions/follow_up"}},
     "warning_signs": {"type": "array", "items": {"$ref": "#/definitions/warning_sign"}},
-    "questions": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
-    "low_priority": {"type": "array", "items": {"type": "string"}},
-    "terms": {"type": "object", "additionalProperties": {"$ref": "#/definitions/glossary_term"}}
+    "questions": {"type": "array", "maxItems": 3, "items": {"$ref": "#/definitions/question"}},
+    "omitted_facts": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/definitions/omitted_fact"}
+    }
   }
 }

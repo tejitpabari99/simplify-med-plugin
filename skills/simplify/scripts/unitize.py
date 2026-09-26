@@ -17,6 +17,8 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
+import shutil
 import sys
 from datetime import datetime, timezone
 
@@ -31,14 +33,25 @@ _DEFAULT_METHOD = "native"
 _DEFAULT_CHUNK_SIZE = 150
 
 
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+def _input_digest(raw_files) -> str:
+    digest = hashlib.sha256()
+    for _path, method, raw_bytes in raw_files:
+        digest.update(method.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(len(raw_bytes).to_bytes(8, "big"))
+        digest.update(raw_bytes)
+    return digest.hexdigest()
 
 
-def _run_id_for(all_bytes: bytes) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    digest = hashlib.sha256(all_bytes).hexdigest()[:6]
-    return f"{ts}-{digest}"
+def _run_id_for(input_digest: str) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return f"{timestamp}-{input_digest[:6]}-{secrets.token_hex(3)}"
+
+
+def _prepare_run_dir(run_dir: str) -> None:
+    if os.path.exists(run_dir):
+        shutil.rmtree(run_dir)
+    os.makedirs(run_dir)
 
 
 def _parse_input_spec(spec: str) -> tuple[str, str]:
@@ -107,34 +120,17 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         raw_files.append((path, method, raw_bytes))
 
-    # Resolve the run directory.
+    input_digest = _input_digest(raw_files)
+    run_id = _run_id_for(input_digest)
     if args.run_dir is not None:
         run_dir = args.run_dir
     else:
-        all_bytes = b"".join(rb for _, _, rb in raw_files)
-        run_id = _run_id_for(all_bytes)
         run_dir = os.path.join(args.runs_dir, run_id)
-    os.makedirs(run_dir, exist_ok=True)
-    input_dir = os.path.join(run_dir, "00_input")
-    os.makedirs(input_dir, exist_ok=True)
-
-    run_id = os.path.basename(os.path.normpath(run_dir))
-
-    # Fatal: any input file that is empty (0 bytes).
-    empty = [path for path, _method, raw_bytes in raw_files if len(raw_bytes) == 0]
-    if empty:
-        runlog.record(run_dir, "unitize", "failed", checks={"empty_files": empty})
-        _fatal(
-            "unitize found an empty input file (" + ", ".join(empty) + "). "
-            "An empty document has no text to extract facts from, so the run cannot continue. "
-            "Provide a non-empty file for this input and try again."
-        )
-        return 1
-
-    return _run(raw_files, run_dir, run_id, args.chunk_size)
+    _prepare_run_dir(run_dir)
+    return _run(raw_files, run_dir, run_id, input_digest, args.chunk_size)
 
 
-def _run(raw_files, run_dir: str, run_id: str, chunk_size: int) -> int:
+def _run(raw_files, run_dir: str, run_id: str, input_digest: str, chunk_size: int) -> int:
     input_dir = os.path.join(run_dir, "00_input")
     os.makedirs(input_dir, exist_ok=True)
 
@@ -145,21 +141,30 @@ def _run(raw_files, run_dir: str, run_id: str, chunk_size: int) -> int:
     total_pages = 0
     blank_lines_skipped = 0
 
+    prepared_inputs = []
     for path, method, raw_bytes in raw_files:
         text = raw_bytes.decode("utf-8", errors="replace")
         basename = os.path.basename(path)
         dest_name = _dedupe_basename(basename, used_basenames)
         dest_path = os.path.join(input_dir, dest_name)
-        with open(dest_path, "wb") as f:
-            f.write(raw_bytes)
-
         pages = _split_pages(text)
-        total_pages += len(pages)
-        manifest_inputs.append({
+        input_record = {
             "file": dest_name,
             "extraction_method": method,
             "pages": len(pages),
-        })
+            "sha256": hashlib.sha256(raw_bytes).hexdigest(),
+        }
+        manifest_inputs.append(input_record)
+        prepared_inputs.append((dest_path, raw_bytes, pages, input_record))
+
+    runlog.initialize(run_dir, run_id, manifest_inputs)
+
+    for dest_path, raw_bytes, pages, input_record in prepared_inputs:
+        with open(dest_path, "wb") as f:
+            f.write(raw_bytes)
+        total_pages += len(pages)
+        method = input_record["extraction_method"]
+        dest_name = input_record["file"]
 
         for page_number, page_text in enumerate(pages, start=1):
             lines = page_text.split("\n")
@@ -181,12 +186,30 @@ def _run(raw_files, run_dir: str, run_id: str, chunk_size: int) -> int:
                 next_id += 1
             pages_per_page_list.append(page_units)
 
+    empty = [path for path, _method, raw_bytes in raw_files if len(raw_bytes) == 0]
+    copied_artifacts = [f"00_input/{item['file']}" for item in manifest_inputs]
+    if empty:
+        runlog.record(
+            run_dir,
+            "unitize",
+            "failed",
+            checks={"empty_files": empty, "input_digest": input_digest},
+            artifacts=copied_artifacts,
+            run_id=run_id,
+        )
+        _fatal(
+            "unitize found an empty input file (" + ", ".join(empty) + "). "
+            "An empty document has no text to extract facts from, so the run cannot continue. "
+            "Provide a non-empty file for this input and try again."
+        )
+        return 1
+
     all_units = [u for page_units in pages_per_page_list for u in page_units]
 
     if len(all_units) == 0:
         runlog.record(run_dir, "unitize", "failed", checks={
-            "files": len(raw_files), "pages": total_pages, "units": 0,
-        })
+            "files": len(raw_files), "pages": total_pages, "units": 0, "input_digest": input_digest,
+        }, artifacts=copied_artifacts, run_id=run_id)
         _fatal(
             "unitize found no usable text in the input document(s) -- every line was blank. "
             "There is nothing to extract facts from, so the run cannot continue. "
@@ -229,7 +252,7 @@ def _run(raw_files, run_dir: str, run_id: str, chunk_size: int) -> int:
     }
     errors = validate.validate(units_doc, validate.load_schema("units"))
     if errors:
-        runlog.record(run_dir, "unitize", "failed", checks={"schema_errors": errors})
+        runlog.record(run_dir, "unitize", "failed", checks={"schema_errors": errors}, run_id=run_id)
         _fatal("unitize produced a units document that failed its own schema; this is a bug in unitize.py.")
         return 1
 
@@ -244,33 +267,16 @@ def _run(raw_files, run_dir: str, run_id: str, chunk_size: int) -> int:
             for unit in group:
                 f.write(f"[{unit['id']}] {unit['text']}\n")
 
-    manifest_doc = {
-        "schema_version": SCHEMA_VERSION,
-        "plugin_version": PLUGIN_VERSION,
-        "run_id": run_id,
-        "created_at": _utc_now_iso(),
-        "level": "standard",
-        "inputs": manifest_inputs,
-    }
-    manifest_errors = validate.validate(manifest_doc, validate.load_schema("manifest"))
-    if manifest_errors:
-        runlog.record(run_dir, "unitize", "failed", checks={"schema_errors": manifest_errors})
-        _fatal("unitize produced a manifest that failed its own schema; this is a bug in unitize.py.")
-        return 1
-    manifest_path = os.path.join(input_dir, "manifest.json")
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest_doc, f, indent=2)
-        f.write("\n")
-    runlog.set_inputs(run_dir, manifest_inputs)
-
     checks = {
         "files": len(raw_files),
         "pages": total_pages,
         "units": len(all_units),
         "chunks": len(chunks_units),
         "blank_lines_skipped": blank_lines_skipped,
+        "input_digest": input_digest,
     }
-    runlog.record(run_dir, "unitize", "ok", checks=checks)
+    artifacts = copied_artifacts + ["01_units.json"] + [f"01_units.{k}.txt" for k in range(1, len(chunks_units) + 1)]
+    runlog.record(run_dir, "unitize", "ok", checks=checks, artifacts=artifacts, run_id=run_id)
 
     print(
         f"unitize: ok | files={checks['files']} units={checks['units']} "

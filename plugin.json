@@ -26,7 +26,7 @@
         "capabilities": ["Read", "Write"],
         "websiteURL": "https://github.com/tejitpabari99/simplify-med-plugin",
         "defaultPrompt": [
-          "Simplify this medical document into a plain-language care plan."
+          "Run the complete $simplify workflow on the supplied medical documents. Return only the validated final report and requested artifacts. Do not summarize the documents directly."
         ]
       }
     }

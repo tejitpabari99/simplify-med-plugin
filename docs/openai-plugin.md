@@ -73,6 +73,9 @@ The existing `simplify` skill predates the `references/` naming convention and r
 - Link to supporting files rather than copying their full contents into `SKILL.md`.
 - Read only the supporting files needed for the current stage or mode.
 - Allow the host to choose its normal execution and delegation mechanisms. State what may run in parallel, but do not prescribe internal dispatch payloads.
+- For a multi-stage, safety-sensitive workflow, state whether invocation must be explicit and put the complete-workflow contract near the top.
+- If partial execution is unsafe, prohibit direct outcome substitution and require validated terminal artifacts before user-facing content is presented.
+- Define retry, bounded repair, and terminal failure behavior. Required stages must fail closed rather than silently skip or degrade.
 - Do not require users or agents to run `python3 --version`, resolve an absolute skill path up front, or read empty platform hook files.
 - If a required command cannot run, report the concrete failure. Do not add speculative prerequisite checks.
 - Keep one `SKILL.md`; do not create packaging overlays or platform-specific copies.
@@ -115,18 +118,22 @@ The existing Python is retained because it implements deterministic safeguards a
 | `unitize.py`, `textnorm.py` | Keep | Stable line numbering, chunking, normalized matching, and source offsets are foundational to traceability. |
 | `anchor_check.py`, `merge_facts.py` | Keep | Independently verify source quotes and combine checked facts without asking the model to validate itself. |
 | `glossary_check.py`, `cite_check.py`, `numeric_parity.py` | Keep | Enforce schema, valid citations, bounded fields, and preservation of clinically important numbers. |
-| `sanitize_review.py`, `diff_guard.py` | Keep | Constrain review/correction output and prevent unsupported edits or PII substitutions. |
+| `settle_review.py` | Keep | Validate exhaustive independent review, apply exact bounded operations, require numeric resolutions, and prevent unsupported edits. |
 | `validate.py`, `runlog.py`, `_version.py` | Keep as internal helpers | Shared schema validation, atomic audit logging, and version fields are reused across the pipeline. They are not separate model workflow steps. |
-| `finalize.py`, `plan_view.py`, `readability.py` | Keep | Deterministically merge validated outputs, construct the final view, calculate reading level, and record notices. |
+| `finalize.py`, `plan_view.py`, `readability.py` | Keep | Assert complete current-run state, construct the patient view, calculate reading level, and publish only validated final artifacts. |
 | `render_md.py`, `render_html.py`, `render_audit.py` | Keep | Produce repeatable downloadable artifacts from validated JSON without a new model rewrite. |
 
 Do not add another Python file unless its deterministic responsibility cannot fit cleanly in an existing module. Revisit consolidation only when two modules have the same responsibility or are never reused independently; file size alone is not a reason to move logic into the model.
+
+The model owns language judgment: complete-clause fact extraction, concise critical-first assembly, and one independent semantic review. Python owns repeatable enforcement: source anchoring, schemas, citation and omission accounting, numeric parity, exact settlement, run identity, rendering, and final publication gates. Do not move medical-language judgment into Python merely to reduce model calls, and do not move deterministic safeguards into prompts merely to reduce file count.
 
 ## Medical workflow boundaries
 
 - The plugin explains supplied records; it does not diagnose, prescribe, triage beyond directing urgent concerns to appropriate care, or create facts absent from the documents.
 - Source anchoring and numeric preservation are product requirements, not optional implementation details.
-- The final report must expose uncertainty and degraded checks.
+- Critical patient-specific content remains visible; generic education, technical mechanics, duplicate facts, and routine non-actionable detail may be omitted only with an audited disposition reviewed independently.
+- Required clinical stages fail closed. A missing, failed, degraded, stale, or invalid core stage cannot produce a report.
+- Completed legacy reports may remain renderable, but an in-progress run must not cross a schema boundary.
 - Source documents, fact ledgers, and audit artifacts remain local to the skill run unless the user explicitly moves or shares them.
 
 ## Adding a skill
@@ -154,6 +161,9 @@ Do not add another Python file unless its deterministic responsibility cannot fi
 - Is `build-versions.json` absent from the package?
 - Does the package contain only manifests and skills?
 - Are medical claims source-bound and independently checked?
+- Does explicit invocation complete every required stage before presenting clinical content?
+- Is every verified fact visible or covered by an independently reviewed omission disposition?
+- Do bounded repairs receive a fresh review whenever they add patient-facing prose?
 - Are tests checking behavior rather than prose formatting?
 
 ## Anti-patterns
@@ -165,3 +175,5 @@ Do not add another Python file unless its deterministic responsibility cannot fi
 - Exact sub-agent dispatch message templates in a portable skill.
 - Adding a script for a one-off language judgment the model can perform directly.
 - Removing citation, numeric, schema, or correction guards because the model can usually self-check.
+- Letting a host satisfy a staged skill by returning the requested outcome directly.
+- Publishing a draft after a missing review, degraded core check, or failed finalization.

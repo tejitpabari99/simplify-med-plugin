@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import sys
@@ -10,121 +11,102 @@ import _paths  # noqa: E402
 import glossary_check  # noqa: E402
 import runlog  # noqa: E402
 import validate  # noqa: E402
-from _version import PLUGIN_VERSION, SCHEMA_VERSION  # noqa: E402
+from test_plan_view import _base_plan  # noqa: E402
 
 
-def _write_json(path, doc):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(doc, f)
+def _write_json(path, document):
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(document, handle, indent=2)
+        handle.write("\n")
 
 
-def _units_doc(run_id, texts):
-    units = [
-        {"id": i + 1, "file": "a.txt", "page": 1, "line": i + 1, "text": t, "extraction_method": "native"}
-        for i, t in enumerate(texts)
-    ]
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "plugin_version": PLUGIN_VERSION,
-        "run_id": run_id,
-        "units": units,
-        "chunks": [{"k": 1, "first_id": 1, "last_id": len(units)}] if units else [],
-    }
+def _prepare_finalized_run(run_dir):
+    run_id = os.path.basename(run_dir)
+    plan = _base_plan()
+    plan["meta"]["run_id"] = run_id
+    _write_json(os.path.join(run_dir, "06_plan.final.json"), plan)
+    _write_json(
+        os.path.join(run_dir, "run.json"),
+        {
+            "run_id": run_id,
+            "stages": {
+                "finalize": {
+                    "status": "ok",
+                    "attempts": 1,
+                    "started_at": "2026-09-26T00:00:00+00:00",
+                    "finished_at": "2026-09-26T00:00:01+00:00",
+                    "checks": {},
+                    "artifacts": [{"path": "06_plan.final.json"}, {"path": "report.md"}],
+                },
+            },
+        },
+    )
+    return plan
 
 
 class TestGlossaryCheck(unittest.TestCase):
-    def test_missing_raw_file_yields_empty_skipped(self):
-        with tempfile.TemporaryDirectory() as d:
-            run_id = os.path.basename(d)
-            _write_json(os.path.join(d, "01_units.json"), _units_doc(run_id, ["Metoprolol prescribed."]))
-
-            rc = glossary_check.main(["--run-dir", d])
+    def test_matches_only_visible_finalized_content_and_uses_07_artifacts(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            plan = _prepare_finalized_run(run_dir)
+            raw = {
+                "terms": [
+                    {"term": "MRI", "matched_term": "MRI", "definition": "A scan that uses magnets.", "source": "llm_proposed"},
+                    {"term": "Numb feet", "matched_term": "numb feet", "definition": "Reduced feeling in the feet.", "source": "llm_proposed"},
+                ],
+            }
+            _write_json(os.path.join(run_dir, "07_glossary.raw.json"), raw)
+            before = copy.deepcopy(plan)
+            rc = glossary_check.main(["--run-dir", run_dir])
             self.assertEqual(rc, 0)
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "02_glossary.json")))
+            with open(os.path.join(run_dir, "07_glossary.json"), encoding="utf-8") as handle:
+                glossary = json.load(handle)
+            self.assertEqual([item["matched_term"] for item in glossary["terms"]], ["MRI"])
+            self.assertEqual(validate.validate(glossary, validate.load_schema("glossary")), [])
+            with open(os.path.join(run_dir, "06_plan.final.json"), encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle), before)
 
-            with open(os.path.join(d, "02_glossary.json"), "r", encoding="utf-8") as f:
-                doc = json.load(f)
-            self.assertEqual(doc["terms"], [])
-
-            data = runlog.read(d)
-            self.assertEqual(data["stages"]["glossary"]["status"], "skipped")
-
-    def test_drops_term_not_in_source(self):
-        with tempfile.TemporaryDirectory() as d:
-            run_id = os.path.basename(d)
-            _write_json(os.path.join(d, "01_units.json"), _units_doc(run_id, ["Patient has calcified plaque."]))
-            raw = {"terms": [
-                {"term": "calcified", "matched_term": "calcified", "definition": "Hardened by calcium buildup.", "source": "llm_proposed"},
-                {"term": "stenosis", "matched_term": "stenosis", "definition": "A narrowing of a blood vessel.", "source": "llm_proposed"},
-            ]}
-            _write_json(os.path.join(d, "02_glossary.raw.json"), raw)
-
-            rc = glossary_check.main(["--run-dir", d])
+    def test_missing_raw_file_writes_empty_optional_artifact_and_skip_reason(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            _prepare_finalized_run(run_dir)
+            rc = glossary_check.main(["--run-dir", run_dir])
             self.assertEqual(rc, 0)
+            with open(os.path.join(run_dir, "07_glossary.json"), encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["terms"], [])
+            stage = runlog.read(run_dir)["stages"]["glossary"]
+            self.assertEqual(stage["status"], "skipped")
+            self.assertEqual(stage["skip_reason"], "no glossary proposals were requested")
+            self.assertEqual(stage["artifacts"], [{"path": "07_glossary.json"}])
 
-            with open(os.path.join(d, "02_glossary.json"), "r", encoding="utf-8") as f:
-                doc = json.load(f)
-            matched = {t["matched_term"] for t in doc["terms"]}
-            self.assertEqual(matched, {"calcified"})
-
-            data = runlog.read(d)
-            self.assertEqual(data["stages"]["glossary"]["checks"]["dropped_not_in_source"], 1)
-            self.assertEqual(data["stages"]["glossary"]["status"], "degraded")
-
-    def test_caps_at_5_keeping_file_order(self):
-        with tempfile.TemporaryDirectory() as d:
-            run_id = os.path.basename(d)
-            texts = [f"term{i} appears here" for i in range(30)]
-            _write_json(os.path.join(d, "01_units.json"), _units_doc(run_id, texts))
-            raw = {"terms": [
-                {"term": f"term{i}", "matched_term": f"term{i}", "definition": f"Definition {i}.", "source": "llm_proposed"}
-                for i in range(30)
-            ]}
-            _write_json(os.path.join(d, "02_glossary.raw.json"), raw)
-
-            rc = glossary_check.main(["--run-dir", d])
-            self.assertEqual(rc, 0)
-
-            with open(os.path.join(d, "02_glossary.json"), "r", encoding="utf-8") as f:
-                doc = json.load(f)
-            self.assertEqual(len(doc["terms"]), 5)
-            self.assertEqual([t["matched_term"] for t in doc["terms"]], [f"term{i}" for i in range(5)])
-
-            data = runlog.read(d)
-            self.assertEqual(data["stages"]["glossary"]["checks"]["dropped_cap"], 25)
-
-    def test_schema_invalid_raw_prints_errors_and_exits_1(self):
-        with tempfile.TemporaryDirectory() as d:
-            run_id = os.path.basename(d)
-            _write_json(os.path.join(d, "01_units.json"), _units_doc(run_id, ["Some text."]))
-            _write_json(os.path.join(d, "02_glossary.raw.json"), {"terms": [{"term": "x"}]})  # missing fields
-
-            rc = glossary_check.main(["--run-dir", d])
+    def test_requires_successful_finalization(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            rc = glossary_check.main(["--run-dir", run_dir])
             self.assertEqual(rc, 1)
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "07_glossary.json")))
 
-    def test_force_source_and_dedupe_and_empty_definition(self):
-        with tempfile.TemporaryDirectory() as d:
-            run_id = os.path.basename(d)
-            _write_json(os.path.join(d, "01_units.json"), _units_doc(run_id, ["Patient has calcified plaque."]))
-            raw = {"terms": [
-                {"term": "calcified", "matched_term": "calcified", "definition": "Hardened by calcium.", "source": "llm_proposed"},
-                {"term": "calcified", "matched_term": "CALCIFIED", "definition": "Duplicate entry.", "source": "llm_proposed"},
-                {"term": "plaque", "matched_term": "plaque", "definition": "", "source": "llm_proposed"},
-            ]}
-            _write_json(os.path.join(d, "02_glossary.raw.json"), raw)
+    def test_rejects_partial_or_schema_v1_run(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            plan = _base_plan("1.0")
+            plan["meta"]["run_id"] = os.path.basename(run_dir)
+            _write_json(os.path.join(run_dir, "06_plan.final.json"), plan)
+            _write_json(os.path.join(run_dir, "run.json"), {"run_id": os.path.basename(run_dir), "stages": {"finalize": {"status": "ok"}}})
+            rc = glossary_check.main(["--run-dir", run_dir])
+            self.assertEqual(rc, 1)
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "07_glossary.json")))
 
-            rc = glossary_check.main(["--run-dir", d])
-            self.assertEqual(rc, 0)
-
-            with open(os.path.join(d, "02_glossary.json"), "r", encoding="utf-8") as f:
-                doc = json.load(f)
-            self.assertEqual(len(doc["terms"]), 1)
-            self.assertEqual(doc["terms"][0]["source"], "llm_proposed")
-
-            errors = validate.validate(doc, validate.load_schema("glossary"))
-            self.assertEqual(errors, [])
-
-            data = runlog.read(d)
-            self.assertEqual(data["stages"]["glossary"]["checks"]["dropped_duplicate"], 1)
+    def test_rejects_more_proposals_than_the_optional_schema_allows(self):
+        with tempfile.TemporaryDirectory() as run_dir:
+            plan = _prepare_finalized_run(run_dir)
+            plan["summary"] = "alpha beta gamma delta epsilon zeta"
+            _write_json(os.path.join(run_dir, "06_plan.final.json"), plan)
+            raw_terms = [
+                {"term": term, "matched_term": term, "definition": f"Definition {term}.", "source": "llm_proposed"}
+                for term in ("alpha", "ALPHA", "beta", "gamma", "delta", "epsilon", "zeta")
+            ]
+            _write_json(os.path.join(run_dir, "07_glossary.raw.json"), {"terms": raw_terms})
+            rc = glossary_check.main(["--run-dir", run_dir])
+            self.assertEqual(rc, 1)
+            self.assertFalse(os.path.exists(os.path.join(run_dir, "07_glossary.json")))
 
 
 if __name__ == "__main__":

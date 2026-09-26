@@ -13,19 +13,30 @@ caller's sys.path is set up).
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
+import hashlib
 import json
 import os
 import sys
 import tempfile
+import threading
 from datetime import datetime, timezone
 
 try:
     from _version import PLUGIN_VERSION, SCHEMA_VERSION
 except ImportError:  # pragma: no cover - defensive, mirrors validate.py style
     PLUGIN_VERSION = "0.1.0"
-    SCHEMA_VERSION = "1.0"
+    SCHEMA_VERSION = "2.0"
 
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_CORE_STAGES = frozenset({
+    "unitize", "ground", "assemble", "plan_check", "numeric_parity",
+    "review", "settle_review", "finalize",
+})
+_OPTIONAL_STAGES = frozenset({"glossary", "render_md", "render_html", "render_audit"})
+_THREAD_LOCKS: dict[str, threading.Lock] = {}
+_THREAD_LOCKS_GUARD = threading.Lock()
 
 
 def _utc_now_iso() -> str:
@@ -80,16 +91,37 @@ def _atomic_write(path: str, data: dict) -> None:
         raise
 
 
+def _thread_lock(run_dir: str) -> threading.Lock:
+    key = os.path.abspath(run_dir)
+    with _THREAD_LOCKS_GUARD:
+        return _THREAD_LOCKS.setdefault(key, threading.Lock())
+
+
+@contextlib.contextmanager
+def _locked(run_dir: str):
+    os.makedirs(run_dir, exist_ok=True)
+    digest = hashlib.sha256(os.path.abspath(run_dir).encode("utf-8")).hexdigest()
+    lock_path = os.path.join(tempfile.gettempdir(), f"simplify-runlog-{digest}.lock")
+    with _thread_lock(run_dir):
+        with open(lock_path, "a", encoding="utf-8") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def read(run_dir: str) -> dict:
     """Return the parsed contents of <run_dir>/run.json (empty dict if absent)."""
-    path = _run_json_path(run_dir)
-    if not os.path.isfile(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with _locked(run_dir):
+        path = _run_json_path(run_dir)
+        if not os.path.isfile(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
 
 
-def _ensure_run_json(run_dir: str) -> dict:
+def _ensure_run_json_unlocked(run_dir: str) -> dict:
     path = _run_json_path(run_dir)
     if os.path.isfile(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -108,6 +140,51 @@ def _ensure_run_json(run_dir: str) -> dict:
     return data
 
 
+def initialize(run_dir: str, run_id: str, inputs_list: list) -> dict:
+    """Create a fresh schema-v2 run log, replacing any prior run identity."""
+    if not isinstance(run_id, str) or not run_id:
+        raise ValueError("run_id must be a non-empty string")
+    data = {
+        "schema_version": SCHEMA_VERSION,
+        "plugin_version": plugin_version(),
+        "run_id": run_id,
+        "created_at": _utc_now_iso(),
+        "level": "standard",
+        "inputs": inputs_list,
+        "stages": {},
+        "notices": [],
+    }
+    with _locked(run_dir):
+        _atomic_write(_run_json_path(run_dir), data)
+    return data
+
+
+def _normalize_artifacts(artifacts: list | None) -> list[dict]:
+    normalized = []
+    for artifact in artifacts or []:
+        path = artifact if isinstance(artifact, str) else artifact.get("path") if isinstance(artifact, dict) else None
+        if not isinstance(path, str) or not path or os.path.isabs(path):
+            raise ValueError("artifact paths must be non-empty paths relative to the run directory")
+        normalized_path = os.path.normpath(path)
+        if normalized_path == ".." or normalized_path.startswith(".." + os.sep):
+            raise ValueError("artifact paths must stay inside the run directory")
+        normalized.append({"path": normalized_path.replace(os.sep, "/")})
+    return normalized
+
+
+def _validate_stage(stage: str, status: str, skip_reason: str | None) -> None:
+    if stage not in _CORE_STAGES | _OPTIONAL_STAGES:
+        raise ValueError(f"unrecognized stage: {stage}")
+    if stage in _CORE_STAGES and status not in {"ok", "failed"}:
+        raise ValueError(f"core stage {stage} requires status ok or failed")
+    if stage in _OPTIONAL_STAGES and status not in {"ok", "degraded", "failed", "skipped"}:
+        raise ValueError(f"invalid optional stage status: {status}")
+    if status == "skipped" and (stage not in _OPTIONAL_STAGES or not skip_reason):
+        raise ValueError("skipped optional stages require a skip reason")
+    if status != "skipped" and skip_reason is not None:
+        raise ValueError("skip_reason is only valid for skipped optional stages")
+
+
 def record(
     run_dir: str,
     stage: str,
@@ -116,6 +193,9 @@ def record(
     attempts: int | None = None,
     started: bool = False,
     finished: bool = True,
+    artifacts: list | None = None,
+    skip_reason: str | None = None,
+    run_id: str | None = None,
 ) -> dict:
     """Create run.json if missing and upsert stages[stage].
 
@@ -124,56 +204,74 @@ def record(
     time this stage is recorded (or whenever `started=True` is passed and
     it is not already set). `finished_at` is set when `finished=True`.
     """
-    data = _ensure_run_json(run_dir)
-    stages = data.setdefault("stages", {})
-    entry = stages.get(stage)
-    if entry is None:
-        entry = {
-            "status": status,
-            "attempts": attempts if attempts is not None else 0,
-            "started_at": None,
-            "finished_at": None,
-            "checks": {},
-        }
-        stages[stage] = entry
-
-    entry["status"] = status
-    if attempts is not None:
-        entry["attempts"] = attempts
-
-    if (started or entry.get("started_at") is None):
-        entry["started_at"] = _utc_now_iso()
-
-    if checks:
-        existing_checks = entry.get("checks") or {}
-        existing_checks.update(checks)
-        entry["checks"] = existing_checks
-    elif entry.get("checks") is None:
-        entry["checks"] = {}
-
-    if finished:
-        entry["finished_at"] = _utc_now_iso()
-
-    _atomic_write(_run_json_path(run_dir), data)
-    return data
+    _validate_stage(stage, status, skip_reason)
+    normalized_artifacts = _normalize_artifacts(artifacts)
+    with _locked(run_dir):
+        data = _ensure_run_json_unlocked(run_dir)
+        if run_id is not None and data.get("run_id") != run_id:
+            raise ValueError(f"run_id {run_id!r} does not own {run_dir!r}")
+        stages = data.setdefault("stages", {})
+        entry = stages.get(stage)
+        now = _utc_now_iso()
+        if entry is None:
+            attempt_count = attempts if attempts is not None else 1
+            entry = {
+                "status": status,
+                "attempts": attempt_count,
+                "started_at": now,
+                "finished_at": None,
+                "checks": {},
+                "artifacts": [],
+            }
+            stages[stage] = entry
+        else:
+            if attempts is not None:
+                if attempts < entry.get("attempts", 0):
+                    raise ValueError("attempt count cannot decrease")
+                entry["attempts"] = attempts
+            elif started or (finished and entry.get("finished_at") is not None):
+                entry["attempts"] = entry.get("attempts", 0) + 1
+            if entry.get("started_at") is None:
+                entry["started_at"] = now
+        entry["status"] = status
+        if started:
+            entry["finished_at"] = None
+        if checks:
+            entry.setdefault("checks", {}).update(checks)
+        existing_artifacts = entry.setdefault("artifacts", [])
+        for artifact in normalized_artifacts:
+            if artifact not in existing_artifacts:
+                existing_artifacts.append(artifact)
+        if status == "skipped":
+            entry["skip_reason"] = skip_reason
+        else:
+            entry.pop("skip_reason", None)
+        if finished:
+            entry["finished_at"] = now
+        _atomic_write(_run_json_path(run_dir), data)
+        return data
 
 
 def notice(run_dir: str, text: str) -> dict:
     """Append `text` to notices if not already present."""
-    data = _ensure_run_json(run_dir)
-    notices = data.setdefault("notices", [])
-    if text not in notices:
-        notices.append(text)
-    _atomic_write(_run_json_path(run_dir), data)
-    return data
+    with _locked(run_dir):
+        data = _ensure_run_json_unlocked(run_dir)
+        notices = data.setdefault("notices", [])
+        if text not in notices:
+            notices.append(text)
+        _atomic_write(_run_json_path(run_dir), data)
+        return data
 
 
-def set_inputs(run_dir: str, inputs_list: list) -> dict:
+def set_inputs(run_dir: str, inputs_list: list, run_id: str | None = None) -> dict:
     """Replace the run's `inputs` list."""
-    data = _ensure_run_json(run_dir)
-    data["inputs"] = inputs_list
-    _atomic_write(_run_json_path(run_dir), data)
-    return data
+    with _locked(run_dir):
+        data = _ensure_run_json_unlocked(run_dir)
+        if run_id is not None and data.get("run_id") != run_id:
+            raise ValueError(f"run_id {run_id!r} does not own {run_dir!r}")
+        data["inputs"] = inputs_list
+        _atomic_write(_run_json_path(run_dir), data)
+        return data
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -188,6 +286,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--checks", default=None, help="JSON object of checks to merge in")
     parser.add_argument("--attempts", type=int, default=None, help="Attempt count")
+    parser.add_argument("--artifact", action="append", default=None, help="Produced artifact path")
+    parser.add_argument("--skip-reason", default=None, help="Reason an optional stage was skipped")
+    parser.add_argument("--run-id", default=None, help="Expected current run identity")
     parser.add_argument("--notice", default=None, help="Append a notice to the run log")
     return parser
 
@@ -213,6 +314,9 @@ def main(argv: list[str] | None = None) -> int:
         status=args.status,
         checks=checks,
         attempts=args.attempts,
+        artifacts=args.artifact,
+        skip_reason=args.skip_reason,
+        run_id=args.run_id,
     )
 
     if args.notice:

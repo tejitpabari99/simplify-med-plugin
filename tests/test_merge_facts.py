@@ -44,21 +44,18 @@ class TestMergeFacts(unittest.TestCase):
         _write_json(os.path.join(run_dir, "01_units.json"), _make_units_doc(run_id, units, chunks))
         return units, chunks
 
-    def test_renumbering_dedup_and_facts_txt(self):
+    def test_renumbering_dedup_and_no_text_ledger(self):
         with tempfile.TemporaryDirectory() as d:
             run_id = os.path.basename(d)
             self._base_units(d, run_id)
 
             chunk1 = {"facts": [
-                {"category": "medications", "unit_id": 1, "quote": "metoprolol 25 mg", "text": "metoprolol 25mg twice daily"},
-                {"category": "tests", "unit_id": 2, "quote": "fasting lipid panel", "text": "fasting lipid panel ordered"},
+                {"category": "medications", "unit_id": 1, "quote": "Continue metoprolol 25 mg twice daily", "text": "metoprolol 25mg twice daily"},
+                {"category": "tests", "unit_id": 2, "quote": "Order fasting lipid panel", "text": "fasting lipid panel ordered"},
+                {"category": "medications", "unit_id": 1, "quote": "Continue metoprolol 25 MG twice daily", "text": "dup"},
             ]}
             chunk2 = {"facts": [
-                {"category": "medications", "unit_id": 3, "quote": "aspirin 81mg", "text": "aspirin 81mg daily"},
-                # duplicate of chunk1's first fact (case-different quote, same normalized form).
-                {"category": "medications", "unit_id": 1, "quote": "metoprolol 25 MG", "text": "dup"},
-                # anchor-check failure: quote fails informativeness floor.
-                {"category": "medications", "unit_id": 4, "quote": "ok", "text": "bad"},
+                {"category": "medications", "unit_id": 3, "quote": "Start aspirin 81mg daily", "text": "aspirin 81mg daily"},
             ]}
             _write_json(os.path.join(d, "02_facts.1.raw.json"), chunk1)
             _write_json(os.path.join(d, "02_facts.2.raw.json"), chunk2)
@@ -70,26 +67,26 @@ class TestMergeFacts(unittest.TestCase):
                 facts_doc = json.load(f)
 
             ids = [f["id"] for f in facts_doc["facts"]]
-            self.assertEqual(ids, [1, 2, 3])  # 4th (duplicate) and 5th (uninformative) dropped
+            self.assertEqual(ids, [1, 2, 3])
 
             errors = validate.validate(facts_doc, validate.load_schema("facts"))
             self.assertEqual(errors, [])
 
-            with open(os.path.join(d, "02_facts.txt"), "r", encoding="utf-8") as f:
-                lines = f.read().splitlines()
-            self.assertEqual(lines[0], "[1] (medications) metoprolol 25mg twice daily")
-            self.assertEqual(lines[1], "[2] (tests) fasting lipid panel ordered")
-            self.assertEqual(lines[2], "[3] (medications) aspirin 81mg daily")
+            self.assertFalse(os.path.exists(os.path.join(d, "02_facts.txt")))
 
             data = runlog.read(d)
             checks = data["stages"]["ground"]["checks"]
-            self.assertEqual(checks["facts_in"], 5)
+            self.assertEqual(checks["facts_in"], 4)
             self.assertEqual(checks["facts_kept"], 3)
             self.assertEqual(checks["duplicates_removed"], 1)
-            self.assertEqual(checks["dropped_by_reason"].get("uninformative_quote"), 1)
-            self.assertEqual(data["stages"]["ground"]["status"], "degraded")
+            self.assertEqual(checks["dropped_by_reason"], {})
+            self.assertEqual(data["stages"]["ground"]["status"], "ok")
+            self.assertEqual(
+                [artifact["path"] for artifact in data["stages"]["ground"]["artifacts"]],
+                ["02_facts.1.raw.json", "02_facts.2.raw.json", "02_facts.json"],
+            )
 
-    def test_missing_chunk_is_degraded_not_failed(self):
+    def test_missing_chunk_is_fatal(self):
         with tempfile.TemporaryDirectory() as d:
             run_id = os.path.basename(d)
             units = [_unit(1, "Continue metoprolol 25 mg twice daily")]
@@ -97,20 +94,47 @@ class TestMergeFacts(unittest.TestCase):
             _write_json(os.path.join(d, "01_units.json"), _make_units_doc(run_id, units, chunks))
 
             chunk1 = {"facts": [
-                {"category": "medications", "unit_id": 1, "quote": "metoprolol 25 mg", "text": "metoprolol"},
+                {"category": "medications", "unit_id": 1, "quote": "Continue metoprolol 25 mg twice daily", "text": "metoprolol"},
             ]}
             _write_json(os.path.join(d, "02_facts.1.raw.json"), chunk1)
             # chunk 2's raw file is deliberately never written.
 
             rc = merge_facts.main(["--run-dir", d])
-            self.assertEqual(rc, 0)
+            self.assertEqual(rc, 1)
 
             data = runlog.read(d)
             checks = data["stages"]["ground"]["checks"]
             self.assertEqual(checks["missing_chunks"], [2])
             self.assertEqual(checks["chunks_expected"], 2)
             self.assertEqual(checks["chunks_found"], 1)
-            self.assertEqual(data["stages"]["ground"]["status"], "degraded")
+            self.assertEqual(data["stages"]["ground"]["status"], "failed")
+            self.assertFalse(os.path.exists(os.path.join(d, "02_facts.json")))
+
+    def test_invalid_expected_chunk_is_fatal(self):
+        with tempfile.TemporaryDirectory() as d:
+            run_id = os.path.basename(d)
+            self._base_units(d, run_id)
+            _write_json(os.path.join(d, "02_facts.1.raw.json"), {"facts": []})
+            _write_json(os.path.join(d, "02_facts.2.raw.json"), {"facts": [{"category": "tests"}]})
+
+            self.assertEqual(merge_facts.main(["--run-dir", d]), 1)
+            self.assertEqual(runlog.read(d)["stages"]["ground"]["status"], "failed")
+            self.assertFalse(os.path.exists(os.path.join(d, "02_facts.json")))
+
+    def test_any_rejected_fact_is_fatal(self):
+        with tempfile.TemporaryDirectory() as d:
+            run_id = os.path.basename(d)
+            units = [_unit(1, "No evidence of acute stroke")]
+            chunks = [{"k": 1, "first_id": 1, "last_id": 1}]
+            _write_json(os.path.join(d, "01_units.json"), _make_units_doc(run_id, units, chunks))
+            _write_json(os.path.join(d, "02_facts.1.raw.json"), {"facts": [
+                {"category": "tests", "unit_id": 1, "quote": "acute stroke", "text": "stroke"},
+            ]})
+
+            self.assertEqual(merge_facts.main(["--run-dir", d]), 1)
+            data = runlog.read(d)
+            self.assertEqual(data["stages"]["ground"]["checks"]["dropped_by_reason"], {"incomplete_clause": 1})
+            self.assertFalse(os.path.exists(os.path.join(d, "02_facts.json")))
 
     def test_zero_surviving_facts_is_failed(self):
         with tempfile.TemporaryDirectory() as d:
@@ -138,7 +162,7 @@ class TestMergeFacts(unittest.TestCase):
             _write_json(os.path.join(d, "01_units.json"), _make_units_doc(run_id, units, chunks))
 
             chunk1 = {"facts": [
-                {"category": "medications", "unit_id": 1, "quote": "metoprolol 25 mg", "text": "metoprolol"},
+                {"category": "medications", "unit_id": 1, "quote": "Continue metoprolol 25 mg twice daily", "text": "metoprolol"},
             ]}
             _write_json(os.path.join(d, "02_facts.1.raw.json"), chunk1)
 

@@ -7,14 +7,16 @@ content-selection logic instead of each re-deriving it. `visible_text(plan)`
 gives the flat patient-visible text used for glossary re-detection and the
 after-readability score.
 
-Nothing here ever surfaces `low_priority`, any `*_fact_ids` field, `meta`,
-or `run_id` -- those are audit-trail-only and belong to `render_audit.py`,
-which reads the plan directly instead of going through this view.
+Nothing here surfaces omissions, notices, telemetry, source identifiers,
+metadata, or run identifiers. Those belong only in the audit view.
 
 Stdlib only. Importable as `plan_view`.
 """
 
 from __future__ import annotations
+
+import json
+import os
 
 SEVERITY_LABELS = {"high": "Serious", "medium": "Moderate", "low": "Minor", None: ""}
 URGENCY_LABELS = {
@@ -244,45 +246,80 @@ def _section_watch(plan):
 
 
 def _section_questions(plan):
-    qs = [q for q in (plan.get("questions", []) or []) if q]
+    qs = []
+    for question in plan.get("questions", []) or []:
+        text = question.get("question", "") if isinstance(question, dict) else question
+        if text:
+            qs.append(text)
     if not qs:
         return None
     items = [{"n": i, "text": q} for i, q in enumerate(qs, start=1)]
     return {"key": "questions", "heading": "Questions to ask your doctor", "kind": "numbered", "items": items}
 
 
-def _section_glossary(plan):
-    terms = plan.get("terms", {}) or {}
-    if not terms:
+def _section_glossary(glossary):
+    if not glossary:
         return None
-    items = sorted(
-        ({"term": term, "definition": (data or {}).get("definition", "") or ""}
-         for term, data in terms.items()),
-        key=lambda t: t["term"].lower(),
-    )
+    if isinstance(glossary, dict) and isinstance(glossary.get("terms"), list):
+        items = [
+            {"term": item.get("term", "") or "", "definition": item.get("definition", "") or ""}
+            for item in glossary["terms"]
+            if item.get("term") and item.get("definition")
+        ]
+    else:
+        items = [
+            {"term": term, "definition": (data or {}).get("definition", "") or ""}
+            for term, data in glossary.items()
+            if term and (data or {}).get("definition")
+        ]
+    items.sort(key=lambda item: item["term"].lower())
+    if not items:
+        return None
     return {"key": "glossary", "heading": "Medical terms explained", "kind": "glossary", "items": items}
 
 
 _SECTION_BUILDERS = (
     _section_summary, _section_reason, _section_findings,
-    _section_next_steps, _section_watch, _section_questions, _section_glossary,
+    _section_next_steps, _section_watch, _section_questions,
 )
 
 
-def build_view(plan: dict) -> dict:
-    notices = list(plan.get("notices", []) or [])
+def build_view(plan: dict, glossary: dict | None = None, legacy_glossary: bool = False) -> dict:
     sections = []
     for builder in _SECTION_BUILDERS:
         section = builder(plan)
         if section:
             sections.append(section)
 
-    view = {
+    glossary_data = glossary
+    if glossary_data is None and legacy_glossary and plan.get("schema_version") == "1.0":
+        glossary_data = plan.get("terms", {}) or {}
+    glossary_section = _section_glossary(glossary_data)
+    if glossary_section:
+        sections.append(glossary_section)
+
+    return {
         "title": "Your visit, explained",
-        "notices": notices,
         "sections": sections,
     }
-    return view
+
+
+def assert_renderable_plan(plan: dict, run_dir: str, plan_path: str) -> None:
+    schema_version = plan.get("schema_version")
+    label = "completed schema-v1 final report" if schema_version == "1.0" else "completed final report"
+    if os.path.basename(plan_path) != "06_plan.final.json":
+        raise ValueError(f"rendering requires a {label}")
+    try:
+        with open(os.path.join(run_dir, "run.json"), "r", encoding="utf-8") as handle:
+            run_log = json.load(handle)
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"rendering requires a {label}") from error
+    if ((run_log.get("stages") or {}).get("finalize") or {}).get("status") != "ok":
+        raise ValueError(f"rendering requires a {label}")
+    plan_run_id = (plan.get("meta") or {}).get("run_id")
+    run_log_id = run_log.get("run_id")
+    if plan_run_id and run_log_id and plan_run_id != run_log_id:
+        raise ValueError("final plan and run log identities do not match")
 
 
 # --- visible text -------------------------------------------------------
@@ -320,10 +357,10 @@ def _texts_for_section(section):
     return [t for t in texts if t]
 
 
-def visible_text(plan: dict) -> str:
+def visible_text(plan: dict, glossary: dict | None = None) -> str:
     """All patient-visible strings of `plan`, in view order, joined by
     blank lines. Excludes glossary definitions and notices."""
-    view = build_view(plan)
+    view = build_view(plan, glossary=glossary)
     parts = []
     for section in view["sections"]:
         if section["key"] == "glossary":

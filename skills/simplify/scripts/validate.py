@@ -4,7 +4,7 @@
 Supports exactly the subset of JSON Schema (draft-07-ish) used by the
 schemas in ../schema/: `type`, `properties`, `required`,
 `additionalProperties`, `items`, `enum`, `minimum`, `maximum`, `minLength`,
-`maxItems`, `minItems`, `$ref` (to `#/definitions/<name>` within the same
+`maxItems`, `minItems`, `uniqueItems`, `$ref` (to `#/definitions/<name>` within the same
 document), `definitions`, and `anyOf`. Anything else present in a schema is
 silently ignored.
 
@@ -141,6 +141,13 @@ def _validate(instance, schema, root: dict, path: str, errors: list[str]) -> Non
                 f"{path or '$'}: array longer than maxItems {schema['maxItems']} "
                 f"(got length {len(instance)})"
             )
+        if schema.get("uniqueItems") is True:
+            for index, item in enumerate(instance):
+                if item in instance[:index]:
+                    errors.append(
+                        f"{path or '$'}: array items must be unique when uniqueItems is true"
+                    )
+                    break
         if "items" in schema:
             item_schema = schema["items"]
             for i, item in enumerate(instance):

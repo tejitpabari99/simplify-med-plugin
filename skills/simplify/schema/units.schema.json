@@ -30,9 +30,9 @@
     }
   },
   "properties": {
-    "schema_version": {"type": "string"},
-    "plugin_version": {"type": "string"},
-    "run_id": {"type": "string"},
+    "schema_version": {"type": "string", "enum": ["2.0"]},
+    "plugin_version": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
     "units": {"type": "array", "items": {"$ref": "#/definitions/unit"}},
     "chunks": {"type": "array", "items": {"$ref": "#/definitions/chunk"}}
   }

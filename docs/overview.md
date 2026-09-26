@@ -36,21 +36,30 @@ The report may contain:
 
 On request, the skill can also produce:
 
+- a validated glossary generated from visible finalized content;
 - `report.html` for printing or sharing;
 - `report.audit.md` showing the source support for report statements.
 
+These are optional post-finalization outputs. They never change the final plan, and their failure does not authorize the host to replace `report.md` with an improvised summary.
+
+Every verified fact is accounted for. Critical patient-specific facts appear in cited content; supporting facts receive one audited omission reason such as duplicate, generic education, technical detail, routine non-actionable information, or not patient-specific. Generic education does not become patient-specific merely because it was attached to discharge paperwork.
+
+The skill must be explicitly invoked. Once selected, it runs the complete workflow and returns only the validated `report.md` by default. It does not directly summarize the source or present clinical content from an intermediate artifact.
+
 ## How It Works
 
-The pipeline separates language reasoning from deterministic checks:
+The pipeline separates three model responsibilities from deterministic checks:
 
 1. `unitize.py` preserves files, pages, lines, and chunks.
-2. `ground.md` extracts source-anchored facts.
-3. `anchor_check.py` verifies every quote against the numbered source.
-4. `assemble.md` maps checked facts into the care-plan schema.
-5. Citation and numeric checks reject or flag unsupported output.
-6. Fidelity and critical-coverage reviews identify unsupported claims and important omissions without forcing every extracted detail into the report.
-7. Diff and citation guards constrain the repair stages.
-8. `finalize.py` merges validated results, records notices, and renders Markdown.
+2. The grounding model extracts complete-clause, source-anchored facts from each chunk; `anchor_check.py` and `merge_facts.py` require every expected chunk to pass.
+3. The assembly model creates a concise draft and assigns every non-visible fact an audited omission disposition.
+4. `cite_check.py` validates citations and fact dispositions, while `numeric_parity.py` creates stable numeric flags.
+5. One independent review model checks every visible fact and omission, fidelity, negation, uncertainty, medication status, urgency, and every numeric flag.
+6. `settle_review.py` validates the review and applies accepted operations exactly, then reruns citation, disposition, and numeric checks.
+7. If a critical omission requires new prose, the workflow permits one bounded reassembly followed by a fresh independent review. New prose never bypasses review.
+8. `finalize.py` is assertion-only: it publishes `06_plan.final.json` and `report.md` only when every required current-run stage and artifact passes.
+
+For `K` source chunks, the clean path uses `K + 2` model calls: `K` grounding calls, one assembly call, and one combined review call. A clean one-chunk run targets approximately 13 core artifacts. This is the implemented call and artifact contract; latency and token improvements still require representative benchmarking.
 
 The full rationale for the bundled scripts is in [openai-plugin.md](openai-plugin.md#current-python-decision).
 
@@ -64,7 +73,9 @@ The plugin does not:
 - replace a clinician, pharmacist, emergency service, or poison-control service;
 - guarantee that source documents are complete or correct.
 
-The report reflects only the supplied documents and explicitly records uncertainty or degraded checks.
+The report reflects only the supplied documents and preserves documented uncertainty. A missing, failed, degraded, stale, or invalid core stage prevents publication rather than producing a lower-confidence clinical report.
+
+Completed schema-v1 final reports can still be rendered to Markdown, HTML, or audit views. Partial schema-v1 runs are rejected; they must be restarted as fresh schema-v2 runs.
 
 ## Installable Package
 
