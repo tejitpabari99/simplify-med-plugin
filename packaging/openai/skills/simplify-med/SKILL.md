@@ -68,9 +68,10 @@ python3 <skill>/scripts/unitize.py --runs-dir <cwd>/simplify-runs --input <file>
 ```
 
 Append `:ocr` to a file transcribed from an image or scan, `:pasted` to
-typed/pasted text; otherwise nothing (default `native`) -- this only
-labels the audit trail. The last stdout line is `<run>`; resolve it and
-use it for everything below (unitize's status line prints too, but as
+typed/pasted text; a user-uploaded/attached text file, or text you
+extracted from a digital PDF/DOCX, gets no suffix (default `native`) --
+this only labels the audit trail. The last stdout line is `<run>`;
+resolve it and use it for everything below (unitize's status line prints too, but as
 the second-to-last line). Read `<run>/01_units.json`'s `chunks` array for
 the chunk count K. Exit 1 is fatal: explain the input problem in plain
 words (an empty file or one with no usable text).
