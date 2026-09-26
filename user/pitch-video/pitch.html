@@ -1,0 +1,446 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>simplify-med pitch</title>
+<link rel="stylesheet" href="fonts/local.css">
+<style>
+:root{--bg:#0A0F1C;--ink:#F4F1EA;--mute:#8C93A6;--dim:#4A5268;--coral:#FF6B57;--coralSoft:#FF6B5733;--teal:#3DDBB4;--tealSoft:#3DDBB42E;--amber:#FFC061;--line:#1E2638;--card:#111827;}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
+body{font-family:Inter,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
+.bg{position:absolute;inset:-200px;pointer-events:none}
+.abs{position:absolute}
+.scene{position:absolute;inset:0;opacity:0}
+.serif{font-family:'Instrument Serif',serif}
+.it{font-style:italic}
+.mono{font-family:'JetBrains Mono',monospace}
+.eyebrow{font-size:22px;letter-spacing:.22em;text-transform:uppercase;font-weight:600;color:var(--mute)}
+.center{left:0;right:0;text-align:center}
+.coral{color:var(--coral)}.teal{color:var(--teal)}.amber{color:var(--amber)}.mute{color:var(--mute)}
+.grain{position:absolute;inset:0;opacity:.06;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+.vign{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%)}
+svg text{font-family:Inter,sans-serif}
+.progress{position:absolute;left:0;bottom:0;height:4px;background:linear-gradient(90deg,var(--coral),var(--amber),var(--teal))}
+
+/* S1 */
+#q1{top:360px;font-size:104px;line-height:1.08;padding:0 180px}
+#q1 .caret{display:inline-block;width:5px;height:96px;background:var(--coral);vertical-align:-10px;margin-left:6px}
+#q1a{top:640px;font-size:26px;color:var(--mute);letter-spacing:.04em}
+#rs{left:0;right:0;top:720px;display:flex;justify-content:center;align-items:center;gap:56px}
+#rs .ri{display:flex;align-items:center;gap:18px}
+#rs b{font-size:124px;font-weight:900;letter-spacing:-.04em;line-height:1}
+#rs span{font-size:32px;line-height:1.2;color:var(--ink);font-weight:600;text-align:left}
+#rs i{width:2px;height:96px;background:#2A3346}
+#h1{top:300px;font-size:76px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+#h1 u{text-decoration:none;position:relative;color:var(--coral)}
+#h1 u i{position:absolute;left:0;bottom:-6px;height:8px;background:var(--coral);border-radius:4px}
+
+/* S2 */
+#s2t{top:150px;font-size:96px}
+.cnt{top:380px;width:480px;text-align:center}
+.cnt .n{font-size:230px;font-weight:900;letter-spacing:-.05em;line-height:1;font-variant-numeric:tabular-nums}
+.cnt .l{margin-top:18px;font-size:36px;font-weight:500;color:var(--mute);line-height:1.3}
+#s2f{top:850px;font-size:24px;color:var(--dim);letter-spacing:.08em}
+
+/* S3 */
+#s3h{top:86px;left:120px;font-size:54px;font-weight:800;letter-spacing:-.02em}
+.tile{width:800px;height:340px;border-radius:28px;background:rgba(255,255,255,.03);border:1px solid var(--line);padding:40px 44px;display:flex;gap:44px;align-items:center}
+.waffle{display:grid;grid-template-columns:repeat(10,18px);gap:7px;flex:none}
+.waffle b{width:18px;height:18px;border-radius:50%;background:#1C2437;display:block}
+.waffle b.on{background:var(--coral);box-shadow:0 0 10px #FF6B5766}
+.tile .pct{font-size:120px;font-weight:900;letter-spacing:-.05em;line-height:.95;color:var(--coral);font-variant-numeric:tabular-nums}
+.tile .pct small{font-size:60px}
+.tile .d{font-size:30px;line-height:1.3;font-weight:500;margin-top:14px}
+.tile .src{font-size:18px;color:var(--dim);margin-top:12px;letter-spacing:.03em}
+.bubble{max-width:1100px;padding:34px 44px;border-radius:34px 34px 34px 8px;background:#161E2E;border:1px solid #26314A;font-size:50px;line-height:1.2}
+.bubble .who{display:block;font-family:Inter;font-style:normal;font-size:20px;color:var(--mute);letter-spacing:.12em;text-transform:uppercase;margin-top:16px}
+
+/* S4 */
+#s4h{top:110px;left:120px;font-size:54px;font-weight:800;letter-spacing:-.02em}
+#s4q{top:300px;left:120px;width:760px;font-size:84px;line-height:1.06}
+#s4qa{top:640px;left:120px;font-size:22px;color:var(--mute);letter-spacing:.12em;text-transform:uppercase}
+#s4big{top:740px;left:120px;width:760px;display:flex;align-items:baseline;gap:26px}
+#s4big .n{font-size:120px;font-weight:900;color:var(--amber);letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+#s4big .l{font-size:28px;line-height:1.3;color:var(--ink)}
+#bars{top:300px;left:1000px;width:800px}
+#bars .t{font-size:22px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:600;margin-bottom:34px}
+.bar{margin-bottom:34px}
+.bar .lab{display:flex;justify-content:space-between;font-size:28px;font-weight:500;margin-bottom:12px}
+.bar .lab span:last-child{font-weight:800;font-variant-numeric:tabular-nums}
+.bar .tr{height:22px;border-radius:11px;background:#1A2234;overflow:hidden}
+.bar .fl{height:100%;border-radius:11px;background:var(--amber)}
+
+/* S5 */
+#logo{top:380px;font-size:150px;font-weight:900;letter-spacing:-.06em}
+#logo .dot{color:var(--teal)}
+#tag{top:590px;font-size:40px;color:var(--mute);font-weight:500}
+#tag b{color:var(--ink);font-weight:700}
+#chip{top:300px;display:flex;justify-content:center}
+#chip span{font-size:22px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--teal);border:1.5px solid var(--teal);padding:10px 22px;border-radius:40px}
+
+/* S6 */
+#doc{top:150px;left:100px;width:820px;height:640px;border-radius:24px;background:#F3EFE6;color:#2A2A2A;padding:44px 48px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.9;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.5)}
+#doc .hd{font-weight:500;color:#555;font-size:17px;letter-spacing:.1em;margin-bottom:18px}
+#doc mark{background:transparent;color:#2A2A2A;border-radius:4px;padding:0 3px}
+#doc mark.hot{background:#FFB4A8;color:#7A1D10}
+#doc .ln{color:#AAA;display:inline-block;width:38px}
+#plan{top:150px;left:1020px;width:800px;height:640px;border-radius:24px;background:#0F1B24;border:1.5px solid #1F4A45;padding:44px 48px;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.5)}
+#plan .hd{font-size:18px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal);font-weight:700;margin-bottom:26px}
+.pi{margin-bottom:30px}
+.pi .k{font-size:17px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:600;margin-bottom:6px}
+.pi .v{font-size:33px;line-height:1.35;font-weight:500}
+.cite{display:inline-block;font-family:'JetBrains Mono';font-size:16px;color:var(--teal);background:var(--tealSoft);border-radius:6px;padding:2px 8px;vertical-align:4px;margin-left:6px}
+#arrow{top:440px;left:915px;width:90px;height:40px}
+#swaps{top:850px;left:100px;right:100px;display:flex;gap:22px;align-items:center}
+.swap{position:relative;height:74px;min-width:300px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid var(--line);overflow:hidden;font-size:28px;font-weight:600}
+.swap div{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:0 20px;white-space:nowrap}
+.swap .a{color:var(--coral);text-decoration:line-through;text-decoration-thickness:2px}
+.swap .b{color:var(--teal)}
+#swapcap{top:955px;left:100px;font-size:22px;color:var(--mute);letter-spacing:.06em}
+#swapcap b{color:var(--ink)}
+#s6h{top:62px;left:100px;font-size:40px;font-weight:800;letter-spacing:-.02em}
+#s6syn{top:74px;right:100px;font-size:17px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+
+/* S7 */
+#s7h{top:130px;font-size:92px;font-weight:900;letter-spacing:-.04em}
+#s7s{top:260px;font-size:30px;color:var(--mute)}
+#pipe{top:380px;left:110px;width:1700px;height:230px}
+.node{position:absolute;top:60px;width:200px;height:110px;border-radius:20px;background:#0F1B24;border:1.5px solid #22303F;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.node .nm{font-size:25px;font-weight:700}
+.node .ty{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-top:6px;font-weight:600}
+.node.on{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal),0 0 40px #3DDBB455}
+.guar{top:700px;width:520px;padding:30px 34px;border-radius:22px;background:rgba(61,219,180,.06);border:1px solid #1F4A45}
+.guar .ic{width:44px;height:44px;border-radius:50%;background:var(--teal);color:#062019;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:26px;margin-bottom:18px}
+.guar .gt{font-size:30px;font-weight:700;line-height:1.25}
+.guar .gd{font-size:21px;color:var(--mute);margin-top:10px;line-height:1.4}
+
+/* S8 */
+#s8h{top:100px;font-size:72px;font-weight:900;letter-spacing:-.03em}
+#s8s{top:200px;font-size:28px;color:var(--mute)}
+.sk{top:290px;width:540px;height:640px;border-radius:28px;background:#0F1522;border:1.5px solid var(--line);padding:44px 44px}
+.sk .st{display:inline-block;font-size:17px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;padding:8px 16px;border-radius:30px}
+.sk .st.live{background:var(--teal);color:#062019}
+.sk .st.next{border:1.5px solid var(--amber);color:var(--amber)}
+.sk .nm{font-size:62px;font-weight:900;letter-spacing:-.04em;margin-top:26px}
+.sk .wh{font-size:22px;color:var(--mute);letter-spacing:.1em;text-transform:uppercase;font-weight:600;margin-top:6px}
+.sk .ds{font-size:30px;line-height:1.4;margin-top:24px}
+.sk .ev{position:absolute;left:44px;right:44px;bottom:40px}
+.sk .ev .et{font-size:18px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:14px}
+.mb{display:flex;align-items:center;gap:16px;margin-top:16px;font-size:24px;color:var(--mute)}
+.mb .w{width:130px}
+.mb .tr{flex:1;height:20px;border-radius:10px;background:#1A2234;overflow:hidden}
+.mb .fl{display:block;height:100%;border-radius:10px}
+.mb .v{width:76px;font-size:28px;text-align:right;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* S9 */
+#s9h{top:90px;left:120px;font-size:66px;font-weight:900;letter-spacing:-.03em;line-height:1.05;width:760px}
+#s9s{top:340px;left:120px;width:700px;font-size:30px;line-height:1.45;color:var(--mute)}
+#s9s b{color:var(--ink)}
+#s9stat{top:640px;left:120px;width:700px;display:flex;gap:24px;align-items:baseline}
+#s9stat .n{font-size:110px;font-weight:900;letter-spacing:-.05em;color:var(--teal)}
+#s9stat .l{font-size:26px;line-height:1.35}
+#net{top:60px;left:880px;width:960px;height:960px}
+
+/* S10 */
+#s10h{top:130px;font-size:30px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);font-weight:700}
+#s10t{top:190px;font-size:88px;line-height:1.05}
+#tl{top:470px;left:0;width:1920px;height:320px}
+#end{top:0;left:0;width:1920px;height:1080px}
+#endlogo{top:400px;font-size:130px;font-weight:900;letter-spacing:-.06em}
+#endtag{top:580px;font-size:56px}
+#endsub{top:700px;font-size:24px;color:var(--mute);letter-spacing:.14em;text-transform:uppercase}
+</style></head>
+<body><div id="stage">
+<div class="bg" id="bgA"></div><div class="bg" id="bgB"></div>
+
+<!-- S1 hook -->
+<div class="scene" id="S1">
+  <div class="abs center serif it" id="q1"><span id="q1t"></span><span class="caret" id="caret"></span></div>
+  <div class="abs center" id="q1a">— PATIENT INTERVIEW</div>
+  <div class="abs" id="rs"><div class="ri"><b class="coral">200+</b><span>patients<br>surveyed</span></div><i></i><div class="ri"><b class="amber">50</b><span>patient<br>interviews</span></div><i></i><div class="ri"><b class="teal">30</b><span>clinician<br>interviews</span></div></div>
+  <div class="abs center" id="h1">Patients walk out of the doctor's office<br>understanding <u>less<i id="ul"></i></u> than they need.</div>
+</div>
+
+<!-- S2 research scale -->
+<div class="scene" id="S2">
+  <div class="abs center serif it" id="s2t">So I went and asked.</div>
+  <div class="abs cnt" style="left:180px" id="c1"><div class="n coral" id="c1n">0</div><div class="l">unique patient<br>survey responses</div></div>
+  <div class="abs cnt" style="left:720px" id="c2"><div class="n amber" id="c2n">0</div><div class="l">patient<br>interviews</div></div>
+  <div class="abs cnt" style="left:1260px" id="c3"><div class="n teal" id="c3n">0</div><div class="l">clinician<br>interviews</div></div>
+  <div class="abs center" id="s2f">EVERY ANSWER CODED · 31 METRICS · A SOURCED EVIDENCE LEDGER · 5 FIGURES</div>
+</div>
+
+<!-- S3 patient pain -->
+<div class="scene" id="S3">
+  <div class="abs" id="s3h">What patients told me</div>
+  <div id="tiles"></div>
+  <div id="bubbles"></div>
+</div>
+
+<!-- S4 clinicians -->
+<div class="scene" id="S4">
+  <div class="abs" id="s4h">Clinicians feel it too.</div>
+  <div class="abs serif it" id="s4q">“A thousand pages, but only two usable ones.”</div>
+  <div class="abs" id="s4qa">— Clinician interview</div>
+  <div class="abs" id="s4big"><div class="n" id="s4n">0%</div><div class="l">of clinicians want concise,<br>structured visit information</div></div>
+  <div class="abs" id="bars"><div class="t">Top appointment barriers · clinicians</div></div>
+</div>
+
+<!-- S5 intro -->
+<div class="scene" id="S5">
+  <div class="abs center" id="chip"><span>The solution</span></div>
+  <div class="abs center" id="logo">simplify<span class="dot">·</span>med</div>
+  <div class="abs center" id="tag">Clinical paperwork in. <b>A plain-language care plan you can trust</b> out.</div>
+</div>
+
+<!-- S6 transform -->
+<div class="scene" id="S6">
+  <div class="abs" id="s6h">From jargon to a plan you can act on</div>
+  <div class="abs" id="s6syn">Synthetic record · for illustration</div>
+  <div class="abs" id="doc">
+    <div class="hd">DISCHARGE SUMMARY</div>
+    <div><span class="ln">14</span><mark data-k="0">Acute decompensated CHF</mark>, resolved</div>
+    <div><span class="ln">15</span>with <mark data-k="1">diuresis</mark>, now <mark data-k="2">euvolemic</mark>.</div>
+    <div><span class="ln">17</span><mark data-k="3">Acute pulmonary embolism</mark>, right</div>
+    <div><span class="ln">18</span>lower lobe, confirmed by CT angiography.</div>
+    <div><span class="ln">27</span>Pt reported <mark data-k="4">intermittent CP</mark>,</div>
+    <div><span class="ln">28</span>worse with <mark data-k="5">exertion</mark>, w/o radiation.</div>
+    <div><span class="ln">41</span>Start <mark data-k="6">apixaban 5 mg PO BID</mark>.</div>
+    <div><span class="ln">44</span>F/u cardiology <mark data-k="7">1-2 wks</mark>.</div>
+  </div>
+  <svg class="abs" id="arrow" viewBox="0 0 90 40"><path id="arrp" d="M4 20 H80 M66 6 L82 20 L66 34" fill="none" stroke="#3DDBB4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div class="abs" id="plan">
+    <div class="hd">Your care plan</div>
+    <div class="pi" id="p0"><div class="k">What happened</div><div class="v">Your heart failure suddenly got worse. Water pills removed the extra fluid.<span class="cite">L14–15</span></div></div>
+    <div class="pi" id="p1"><div class="k">Also found</div><div class="v">A blood clot in your right lung (pulmonary embolism).<span class="cite">L17</span></div></div>
+    <div class="pi" id="p2"><div class="k">Your medicine</div><div class="v">Apixaban 5 mg — by mouth, twice a day.<span class="cite">L41</span></div></div>
+    <div class="pi" id="p3"><div class="k">Next step</div><div class="v">See your heart doctor in 1–2 weeks.<span class="cite">L44</span></div></div>
+  </div>
+  <div class="abs" id="swaps"></div>
+  <div class="abs" id="swapcap"><b>299 AHRQ plain-language word swaps</b> built in · aims for a ~6th-grade reading level · numbers kept exactly as written</div>
+</div>
+
+<!-- S7 pipeline -->
+<div class="scene" id="S7">
+  <div class="abs center" id="s7h">Grounded, <span class="teal">not guessed.</span></div>
+  <div class="abs center" id="s7s">A fact-first pipeline: every language step is followed by a deterministic check.</div>
+  <svg class="abs" id="pipesvg" style="top:380px;left:110px" width="1700" height="230"></svg>
+  <div class="abs" id="pipe"></div>
+  <div class="abs guar" style="left:110px" id="g0"><div class="ic">✓</div><div class="gt">Every statement anchored to an exact source line</div><div class="gd">Quotes verified verbatim before anything is written.</div></div>
+  <div class="abs guar" style="left:700px" id="g1"><div class="ic">✓</div><div class="gt">Numbers checked independently</div><div class="gd">Never rounded, converted, or labeled “high” unless the record says so.</div></div>
+  <div class="abs guar" style="left:1290px" id="g2"><div class="ic">✓</div><div class="gt">Missing stays missing</div><div class="gd">No diagnosis, no new treatment, no guessing — with a full audit trail.</div></div>
+</div>
+
+<!-- S8 skills -->
+<div class="scene" id="S8">
+  <div class="abs center" id="s8h">Before, during &amp; after the visit</div>
+  <div class="abs center" id="s8s">Every skill maps to a pain point the research surfaced.</div>
+  <div class="abs sk" id="k0" style="left:120px"><span class="st live">Live</span><div class="nm">simplify</div><div class="wh">After the visit</div><div class="ds">Turns notes, labs &amp; discharge papers into a short, source-linked care plan.</div>
+    <div class="ev"><div class="et">Asked for it</div><div class="mb"><span class="w">Patients</span><span class="tr"><i class="fl" data-v="71.4"></i></span><span class="v">71%</span></div><div class="mb"><span class="w">Clinicians</span><span class="tr"><i class="fl" data-v="94.7"></i></span><span class="v">95%</span></div></div></div>
+  <div class="abs sk" id="k1" style="left:690px"><span class="st next">Coming next</span><div class="nm">prep</div><div class="wh">Before the visit</div><div class="ds">Appointment requirements, what to bring, and your top 3 questions, ranked.</div>
+    <div class="ev"><div class="et">Asked for it</div><div class="mb"><span class="w">Patients</span><span class="tr"><i class="fl" data-v="76.2"></i></span><span class="v">76%</span></div><div class="mb"><span class="w">Clinicians</span><span class="tr"><i class="fl" data-v="73.7"></i></span><span class="v">74%</span></div></div></div>
+  <div class="abs sk" id="k2" style="left:1260px"><span class="st next">Coming next</span><div class="nm">med-lit</div><div class="wh">Meets you where you are</div><div class="ds">A respectful, opt-in health-literacy profile (BHLS screen). No labels.</div>
+    <div class="ev"><div class="et">Asked for it</div><div class="mb"><span class="w">Patients</span><span class="tr"><i class="fl" data-v="61.9"></i></span><span class="v">62%</span></div><div class="mb"><span class="w">Clinicians</span><span class="tr"><i class="fl" data-v="78.9"></i></span><span class="v">79%</span></div></div></div>
+</div>
+
+<!-- S9 distribution -->
+<div class="scene" id="S9">
+  <div class="abs" id="s9h">Built to ship <span class="teal">where patients already ask.</span></div>
+  <div class="abs" id="s9s"><b>Distributed through ChatGPT</b> as a plugin — then connected to <b>Epic</b> and health systems to pull records in directly. No copy-paste. No lost pages.</div>
+  <div class="abs" id="s9stat"><div class="n" id="s9n">0%</div><div class="l">of patients already turn to<br>Google or ChatGPT after a visit</div></div>
+  <svg class="abs" id="net" viewBox="0 0 960 960"></svg>
+</div>
+
+<!-- S10 vision -->
+<div class="scene" id="S10">
+  <div class="abs center" id="s10h">The long game</div>
+  <div class="abs center serif" id="s10t">A <span class="it teal">longitudinal, structured</span> understanding<br>of every patient's health.</div>
+  <svg class="abs" id="tl" viewBox="0 0 1920 320"></svg>
+</div>
+<div class="scene" id="END">
+  <div class="abs center" id="endlogo">simplify<span class="teal">·</span>med</div>
+  <div class="abs center serif it" id="endtag">From paperwork to understanding.</div>
+  <div class="abs center" id="endsub">Visit after visit</div>
+</div>
+
+<div class="grain"></div><div class="vign"></div>
+<div class="progress" id="prog"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,a,b)=>clamp((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const back=x=>{const c=1.5;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)};
+const lerp=(a,b,x)=>a+(b-a)*x;
+// scene window opacity
+const win=(t,a,b,fi=.45,fo=.45)=>Math.min(P(t,a,a+fi),1-P(t,b-fo,b));
+function S(el,{o=1,x=0,y=0,s=1,blur=0,r=0}={}){if(typeof el==='string')el=$(el);el.style.opacity=o;el.style.transform=`translate(${x}px,${y}px) scale(${s}) rotate(${r}deg)`;el.style.filter=blur>0.05?`blur(${blur}px)`:'none';}
+// rise-in helper
+function rise(el,t,at,dur=.6,dist=40){const k=eo(P(t,at,at+dur));S(el,{o:k,y:(1-k)*dist,blur:(1-k)*8});return k;}
+function pop(el,t,at,dur=.55){const x=P(t,at,at+dur);const k=back(x);S(el,{o:clamp(x*2.2),s:lerp(.85,1,k)});return x;}
+
+const T={S1:[0,6.2],S2:[6.2,11],S3:[11,21.4],S4:[21.4,27.6],S5:[27.6,30.8],S6:[30.8,38.6],S7:[38.6,45.8],S8:[45.8,51.8],S9:[51.8,56.6],S10:[56.6,60.9],END:[0,0]};
+
+/* ---- build S3 tiles ---- */
+const tiles=[
+ {p:57,d:'left without fully understanding their condition',src:'Patient survey'},
+ {p:51,d:'missed critical questions — or were too overwhelmed to ask',src:'Patient survey'},
+ {p:76,d:'relay the visit to family from memory alone',src:'Patient survey'},
+ {p:78,d:'search Google/ChatGPT before the visit — <span class="amber">53% don’t trust what they find</span>',src:'Patient survey'}
+];
+const tilePos=[[120,200],[1000,200],[120,580],[1000,580]];
+const tw=$('tiles');
+tiles.forEach((d,i)=>{const el=document.createElement('div');el.className='abs tile';el.id='t'+i;el.style.left=tilePos[i][0]+'px';el.style.top=tilePos[i][1]+'px';
+ let w='<div class="waffle">';for(let j=0;j<100;j++)w+='<b></b>';w+='</div>';
+ el.innerHTML=w+`<div><div class="pct"><span class="pv">0</span><small>%</small></div><div class="d">${d.d}</div><div class="src">${d.src}</div></div>`;tw.appendChild(el);});
+const bubbles=[
+ {q:'“I forgot all the technical terms.”',w:'Patient',x:160,y:250},
+ {q:'“Sometimes I can’t think of the questions at the time.”',w:'Patient',x:520,y:470},
+ {q:'“I often feel overwhelmed with the amount of information shared.”',w:'Patient',x:260,y:700},
+];
+const bw=$('bubbles');
+bubbles.forEach((b,i)=>{const el=document.createElement('div');el.className='abs bubble serif it';el.id='b'+i;el.style.left=b.x+'px';el.style.top=b.y+'px';el.innerHTML=b.q+`<span class="who">${b.w}</span>`;bw.appendChild(el);});
+
+/* ---- S4 bars ---- */
+const bars=[['Missing medical history / documents',75],['Limited visit time',50],['Patient too overwhelmed to ask',37.5],['Language or communication',37.5]];
+bars.forEach((b,i)=>{const el=document.createElement('div');el.className='bar';el.id='bar'+i;el.innerHTML=`<div class="lab"><span>${b[0]}</span><span class="bv">0%</span></div><div class="tr"><div class="fl"></div></div>`;$('bars').appendChild(el);});
+
+/* ---- S6 swaps (from reference/ahrq_plain_language.json) ---- */
+const swaps=[['intermittent','off and on'],['exacerbate','make worse'],['oral','by mouth'],['prior to','before'],['febrile','feverish']];
+swaps.forEach((s,i)=>{const el=document.createElement('div');el.className='swap';el.id='sw'+i;el.innerHTML=`<div class="a">${s[0]}</div><div class="b">${s[1]}</div>`;$('swaps').appendChild(el);});
+
+/* ---- S7 pipeline ---- */
+const nodes=[['Unitize','script'],['Ground','model'],['Anchor check','script'],['Assemble','model · AHRQ'],['Review ×2','fidelity ‖ coverage'],['Numeric parity','script'],['Finalize','audit trail']];
+const NX=i=>i*250;
+nodes.forEach((n,i)=>{const el=document.createElement('div');el.className='node';el.id='n'+i;el.style.left=NX(i)+'px';el.innerHTML=`<div class="nm">${n[0]}</div><div class="ty">${n[1]}</div>`;$('pipe').appendChild(el);});
+$('pipesvg').innerHTML=`<line x1="100" y1="115" x2="${NX(6)+100}" y2="115" stroke="#22303F" stroke-width="4"/><line id="pl" x1="100" y1="115" x2="100" y2="115" stroke="#3DDBB4" stroke-width="4"/><circle id="pdot" cx="100" cy="115" r="12" fill="#3DDBB4" opacity="0"/><circle id="pglow" cx="100" cy="115" r="34" fill="#3DDBB4" opacity="0"/>`;
+
+/* ---- S9 network ---- */
+const net=$('net');const C=[480,480];
+const peers=[['Epic',0,'EHR'],['Hospitals',60,''],['Clinics',120,''],['Labs',180,''],['Pharmacies',240,''],['Health plans',300,'']];
+let nh='';
+peers.forEach((p,i)=>{const a=(p[1]-90)*Math.PI/180,R=340;const x=C[0]+R*Math.cos(a),y=C[1]+R*Math.sin(a);
+ nh+=`<line id="nl${i}" x1="${C[0]}" y1="${C[1]}" x2="${x}" y2="${y}" stroke="#3DDBB4" stroke-width="2.5" stroke-dasharray="6 10" opacity="0"/>`;
+ nh+=`<circle id="np${i}" r="7" fill="#FFC061" opacity="0"/>`;
+ const big=i===0;nh+=`<g id="nn${i}" opacity="0" transform="translate(${x},${y})"><circle r="${big?78:64}" fill="#0F1B24" stroke="${big?'#FFC061':'#2A3A4C'}" stroke-width="${big?3:2}"/><text text-anchor="middle" y="${big?4:9}" font-family="Inter" font-weight="800" font-size="${big?32:23}" fill="#F4F1EA">${p[0]}</text>${big?'<text text-anchor="middle" y="32" font-family="Inter" font-weight="600" font-size="15" letter-spacing="2" fill="#FFC061">RECORDS</text>':''}</g>`;});
+nh+=`<g id="hub" opacity="0" transform="translate(${C[0]},${C[1]})"><circle r="150" fill="#3DDBB4" opacity=".08" id="hubr"/><circle r="112" fill="#0F1B24" stroke="#3DDBB4" stroke-width="3"/><text text-anchor="middle" y="-10" font-family="Inter" font-weight="900" font-size="36" fill="#F4F1EA">ChatGPT</text><text text-anchor="middle" y="28" font-family="Inter" font-weight="700" font-size="20" fill="#3DDBB4">+ simplify·med</text></g>`;
+net.innerHTML=nh;
+
+/* ---- S10 timeline ---- */
+const ev=[['Visit','#FF6B57'],['Lab','#FFC061'],['Rx','#3DDBB4'],['Symptom','#FF6B57'],['Imaging','#FFC061'],['Visit','#3DDBB4'],['Lab','#FFC061'],['Rx','#3DDBB4'],['Visit','#FF6B57']];
+let th=`<line x1="160" y1="170" x2="1760" y2="170" stroke="#22303F" stroke-width="3"/><line id="tll" x1="160" y1="170" x2="160" y2="170" stroke="url(#tg)" stroke-width="5" stroke-linecap="round"/><defs><linearGradient id="tg" x1="0" x2="1"><stop offset="0" stop-color="#FF6B57"/><stop offset=".5" stop-color="#FFC061"/><stop offset="1" stop-color="#3DDBB4"/></linearGradient></defs>`;
+ev.forEach((e,i)=>{const x=160+i*200;const up=i%2===0;th+=`<g id="te${i}" opacity="0"><line x1="${x}" y1="170" x2="${x}" y2="${up?92:248}" stroke="${e[1]}" stroke-width="2" opacity=".5"/><circle cx="${x}" cy="170" r="11" fill="${e[1]}"/><rect x="${x-70}" y="${up?40:236}" width="140" height="52" rx="26" fill="#111827" stroke="${e[1]}" stroke-width="1.5"/><text x="${x}" y="${up?73:269}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="21" fill="#F4F1EA">${e[0]}</text></g>`;});
+$('tl').innerHTML=th;
+
+/* ================= RENDER ================= */
+function render(t){
+ // background tint crossfade: coral during pain, teal during solution
+ const sol=eio(P(t,27.2,29.5));
+ const drift=t*9;
+ $('bgA').style.background=`radial-gradient(900px 700px at ${30+Math.sin(t*.25)*8}% ${25+Math.cos(t*.2)*6}%, rgba(255,107,87,.16), transparent 70%), radial-gradient(800px 700px at ${78+Math.cos(t*.22)*6}% ${80+Math.sin(t*.18)*6}%, rgba(255,192,97,.08), transparent 70%)`;
+ $('bgA').style.opacity=1-sol;
+ $('bgB').style.background=`radial-gradient(1000px 800px at ${70+Math.sin(t*.2)*8}% ${25+Math.cos(t*.23)*6}%, rgba(61,219,180,.15), transparent 70%), radial-gradient(900px 700px at ${22+Math.cos(t*.17)*7}% ${82+Math.sin(t*.21)*6}%, rgba(90,120,255,.10), transparent 70%)`;
+ $('bgB').style.opacity=sol;
+ $('prog').style.width=(t/60*1920)+'px';
+
+ for(const k in T){if(k==='END')continue;const [a,b]=T[k];$(k).style.opacity=win(t,a,b);$(k).style.display=(t>=a-.05&&t<=b+.05)?'block':'none';}
+
+ /* S1 */
+ if(t<6.3){
+  const full='“I kind of go dumb when they start talking.”';
+  const n=Math.floor(clamp((t-.35)/2.1)*full.length);
+  $('q1t').textContent=full.slice(0,n);
+  $('caret').style.opacity=(n<full.length||Math.floor(t*2.2)%2===0)?1:0;
+  const out=eo(P(t,3.3,3.9));
+  S('q1',{o:1-out,y:-out*60,blur:out*10});
+  rise($('q1a'),t,2.55,.5,16);$('q1a').style.opacity=Math.min(+$('q1a').style.opacity,1-out);
+  rise($('h1'),t,3.7,.7,40);
+  [...$('rs').children].forEach((c,i)=>rise(c,t,4.6+i*.2,.55,30));
+  $('ul').style.width=(eo(P(t,4.5,5.1))*100)+'%';
+ }
+ /* S2 */
+ if(t>6&&t<11.2){
+  rise($('s2t'),t,6.35,.6,30);
+  [[ 'c1',200,6.9],['c2',50,7.35],['c3',30,7.8]].forEach(([id,v,at])=>{rise($(id),t,at,.6,50);{const f=eo(P(t,at,at+1.3));$(id+'n').textContent=Math.round(f*v)+(id==='c1'&&f>=1?'+':'');}});
+  rise($('s2f'),t,9.0,.6,14);
+ }
+ /* S3 */
+ if(t>10.8&&t<21.6){
+  rise($('s3h'),t,11.2,.5,20);
+  const outT=eo(P(t,16.9,17.5));
+  tiles.forEach((d,i)=>{const at=11.5+i*1.05;const el=$('t'+i);const k=eo(P(t,at,at+.6));
+    S(el,{o:k*(1-outT),y:(1-k)*50-outT*30,s:1-outT*.04,blur:outT*6});
+    const f=eo(P(t,at+.2,at+1.4));const on=Math.round(f*d.p);
+    el.querySelector('.pv').textContent=on;
+    const dots=el.querySelectorAll('.waffle b');dots.forEach((b,j)=>b.classList.toggle('on',j<on));});
+  S('s3h',{o:Math.min(eo(P(t,11.2,11.7)),1-outT)});
+  bubbles.forEach((b,i)=>{const at=17.6+i*1.05;const x=P(t,at,at+.55);const k=back(x);S($('b'+i),{o:clamp(x*2.5),s:lerp(.8,1,k),y:(1-k)*30});});
+ }
+ /* S4 */
+ if(t>21&&t<27.8){
+  rise($('s4h'),t,21.7,.5,20);rise($('s4q'),t,22.0,.8,40);rise($('s4qa'),t,22.6,.5,14);
+  rise($('s4big'),t,24.6,.6,30);$('s4n').textContent=Math.round(eo(P(t,24.6,25.8))*95)+'%';
+  $('bars').style.opacity=eo(P(t,22.6,23.1));
+  bars.forEach((b,i)=>{const at=22.9+i*.35;const el=$('bar'+i);rise(el,t,at,.5,20);const f=eo(P(t,at+.1,at+1.1));el.querySelector('.fl').style.width=(f*b[1])+'%';el.querySelector('.bv').textContent=Math.round(f*b[1])+'%';});
+ }
+ /* S5 */
+ if(t>27.2&&t<31){
+  pop($('chip'),t,27.8,.5);
+  const x=P(t,28.0,28.8);const k=back(x);S('logo',{o:clamp(x*2),s:lerp(1.25,1,eo(x)),blur:(1-eo(x))*16});
+  rise($('tag'),t,28.7,.6,24);
+ }
+ /* S6 */
+ if(t>30.4&&t<38.8){
+  rise($('s6h'),t,31.0,.5,20);rise($('s6syn'),t,31.2,.5,10);
+  rise($('doc'),t,31.1,.6,40);
+  document.querySelectorAll('#doc mark').forEach((m,i)=>{m.classList.toggle('hot',t>31.8+i*.16);});
+  const ak=eo(P(t,33.0,33.5));$('arrow').style.opacity=ak;S('arrow',{o:ak,x:(1-ak)*-20});
+  rise($('plan'),t,33.2,.6,40);
+  for(let i=0;i<4;i++)rise($('p'+i),t,33.6+i*.45,.5,18);
+  swaps.forEach((s,i)=>{const at=35.4+i*.28;const el=$('sw'+i);rise(el,t,at,.45,20);const f=eio(P(t,at+.5,at+.9));el.querySelector('.a').style.transform=`translateY(${-f*74}px)`;el.querySelector('.b').style.transform=`translateY(${(1-f)*74}px)`;});
+  rise($('swapcap'),t,36.4,.5,10);
+ }
+ /* S7 */
+ if(t>38.2&&t<46){
+  rise($('s7h'),t,38.9,.6,30);rise($('s7s'),t,39.3,.5,14);
+  const pt=P(t,39.8,43.0);const px=100+eio(pt)*NX(6);
+  $('pl').setAttribute('x2',px);$('pdot').setAttribute('cx',px);$('pglow').setAttribute('cx',px);
+  $('pdot').setAttribute('opacity',P(t,39.7,39.9)*(1-P(t,43.1,43.4)));$('pglow').setAttribute('opacity',.25*P(t,39.7,39.9)*(1-P(t,43.1,43.4)));
+  nodes.forEach((n,i)=>{const at=39.5+i*.08;rise($('n'+i),t,at,.5,20);$('n'+i).classList.toggle('on',px>=NX(i)+60);});
+  for(let i=0;i<3;i++)rise($('g'+i),t,43.2+i*.35,.55,30);
+ }
+ /* S8 */
+ if(t>45.4&&t<52){
+  rise($('s8h'),t,46.1,.6,24);rise($('s8s'),t,46.5,.5,12);
+  for(let i=0;i<3;i++){const at=46.8+i*.35;rise($('k'+i),t,at,.6,50);
+   $('k'+i).querySelectorAll('.fl').forEach((f,j)=>{const v=+f.dataset.v;f.style.width=(eo(P(t,at+.8+j*.15,at+1.9+j*.15))*v)+'%';f.style.background=j?'#FFC061':'#3DDBB4';});}
+ }
+ /* S9 */
+ if(t>51.4&&t<56.8){
+  rise($('s9h'),t,52.0,.6,24);rise($('s9s'),t,52.5,.6,16);rise($('s9stat'),t,53.6,.6,20);
+  $('s9n').textContent=Math.round(eo(P(t,53.6,54.8))*80)+'%';
+  const hk=P(t,52.2,52.9);const h=$('hub');h.setAttribute('opacity',clamp(hk*2));h.setAttribute('transform',`translate(${C[0]},${C[1]}) scale(${lerp(.6,1,back(hk))})`);
+  $('hubr').setAttribute('r',150+Math.sin(t*3)*10);
+  peers.forEach((p,i)=>{const at=52.7+i*.22;const k=eo(P(t,at,at+.5));const a=(p[1]-90)*Math.PI/180,R=340;const x=C[0]+R*Math.cos(a),y=C[1]+R*Math.sin(a);
+   $('nl'+i).setAttribute('opacity',k*.7);$('nl'+i).setAttribute('stroke-dashoffset',-t*40);
+   $('nn'+i).setAttribute('opacity',k);$('nn'+i).setAttribute('transform',`translate(${x},${y}) scale(${lerp(.5,1,back(P(t,at,at+.5)))})`);
+   const ph=((t*.7+i*.37)%1);const dp=$('np'+i);dp.setAttribute('opacity',k*(ph<.9?1:0));dp.setAttribute('cx',lerp(x,C[0],ph));dp.setAttribute('cy',lerp(y,C[1],ph));});
+ }
+ /* S10 + END */
+ if(t>56.2){
+  const endk=P(t,58.3,58.9);
+  rise($('s10h'),t,56.9,.5,14);rise($('s10t'),t,57.1,.7,30);
+  const tk=eio(P(t,57.3,58.4));$('tll').setAttribute('x2',160+tk*1600);
+  ev.forEach((e,i)=>{const at=57.3+i*.11;const k=eo(P(t,at,at+.35));$('te'+i).setAttribute('opacity',k);$('te'+i).setAttribute('transform',`translate(0 ${(1-k)*(i%2?-20:20)})`);});
+  $('S10').style.opacity=Math.min(win(t,56.6,70),1-eo(endk));
+  $('END').style.display=t>58.2?'block':'none';$('END').style.opacity=eo(endk);
+  const lk=eo(P(t,58.4,59.1));S('endlogo',{o:lk,s:lerp(.92,1,lk),blur:(1-lk)*10});
+  rise($('endtag'),t,58.8,.6,20);rise($('endsub'),t,59.2,.5,10);
+ } else {$('END').style.display='none';}
+}
+window.render=render;
+render(+(new URLSearchParams(location.search).get('t')||0));
+</script>
+</body></html>
