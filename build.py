@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         repo_root=_ROOT,
         mcp_url=args.mcp_url,
         release=args.release,
-        include_mcp=not args.no_mcp,
+        no_mcp=args.no_mcp,
         app_id=args.app_id,
     )
     return 0

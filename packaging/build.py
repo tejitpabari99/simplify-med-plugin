@@ -311,7 +311,13 @@ def _strip_yaml_top_level_key(text: str, key: str) -> str:
     return "".join(out)
 
 
-_NO_MCP_FORBIDDEN_STRINGS = (_URL_TOKEN, "ngrok", "PLUGIN_DOMAIN.example", "mcpServers")
+_NO_MCP_FORBIDDEN_STRINGS = (
+    _URL_TOKEN,
+    "ngrok",
+    "PLUGIN_DOMAIN.example",
+    "mcpServers",
+    "render_simplify_med_report",
+)
 _APP_ID_RE = re.compile(r"^plugin_asdk_app_[0-9a-f]{32}$")
 
 
@@ -348,11 +354,15 @@ def _stage_openai(
     skill_destination = os.path.join(plugin_stage, "skills", "simplify-med")
     files = sorted(iter_included_files(repo_root, os.path.join("skills", "simplify-med"), patterns))
     _copy_files(files, skill_source, skill_destination)
-    _copy_default_custom_files(repo_root, skill_destination)
+    if include_mcp:
+        _copy_default_custom_files(repo_root, skill_destination)
 
     overlay = os.path.join(repo_root, "packaging", "openai")
-    for filename in ("custom_start.md", "custom_end.md"):
-        _copy_if_present(os.path.join(overlay, filename), os.path.join(skill_destination, filename))
+    if include_mcp:
+        for filename in ("custom_start.md", "custom_end.md"):
+            _copy_if_present(
+                os.path.join(overlay, filename), os.path.join(skill_destination, filename)
+            )
     _copy_if_present(os.path.join(overlay, "agents"), os.path.join(skill_destination, "agents"))
     _copy_if_present(os.path.join(overlay, "assets"), os.path.join(plugin_stage, "assets"))
     _copy_if_present(
@@ -363,7 +373,10 @@ def _stage_openai(
         os.path.join(overlay, ".codex-plugin"),
         os.path.join(plugin_stage, ".codex-plugin"),
     )
-    shutil.copy2(os.path.join(overlay, "plugin.json"), os.path.join(plugin_stage, "plugin.json"))
+    if include_mcp:
+        shutil.copy2(
+            os.path.join(overlay, "plugin.json"), os.path.join(plugin_stage, "plugin.json")
+        )
 
     yaml_path = os.path.join(skill_destination, "agents", "openai.yaml")
 
@@ -375,6 +388,7 @@ def _stage_openai(
         # staged skill's agent file, keeping interface/policy intact.
         compat_manifest_path = os.path.join(plugin_stage, ".codex-plugin", "plugin.json")
         compat_manifest = _read_json(compat_manifest_path)
+        compat_manifest["interface"]["capabilities"] = ["Read", "Write"]
         compat_manifest.pop("mcpServers", None)
         if app_id:
             # EXPERIMENTAL: reference an existing ChatGPT dev-mode app by ID
@@ -405,6 +419,14 @@ def _stage_openai(
             with open(app_manifest_path, "w", encoding="utf-8") as f:
                 json.dump(app_document, f, indent=2)
                 f.write("\n")
+
+        no_mcp_skill_md = os.path.join(overlay, "skills", "simplify-med", "SKILL.md")
+        if not os.path.isfile(no_mcp_skill_md):
+            raise SystemExit(
+                "Missing OpenAI skills-only SKILL.md: "
+                "packaging/openai/skills/simplify-med/SKILL.md"
+            )
+        shutil.copy2(no_mcp_skill_md, os.path.join(skill_destination, "SKILL.md"))
 
         _assert_no_mcp_traces(plugin_stage)
         return
@@ -467,7 +489,7 @@ def build(
     repo_root=_REPO_ROOT,
     mcp_url=None,
     release=False,
-    include_mcp=True,
+    no_mcp: bool = False,
     app_id=None,
 ):
     if platform not in PLATFORMS:
@@ -487,7 +509,10 @@ def build(
                 "--app-id must match ^plugin_asdk_app_[0-9a-f]{32}$ "
                 f"(32 lowercase hex characters after the prefix); got {app_id!r}"
             )
-        include_mcp = False
+        if no_mcp:
+            raise SystemExit("--app-id cannot be combined with --no-mcp")
+        no_mcp = True  # --app-id implies no-mcp staging, same as today
+    include_mcp = not no_mcp
     if not include_mcp and mcp_url:
         raise SystemExit("--no-mcp cannot be combined with --mcp-url")
     version = check_versions(repo_root)
@@ -553,7 +578,7 @@ def main(argv=None):
         args.out,
         mcp_url=args.mcp_url,
         release=args.release,
-        include_mcp=not args.no_mcp,
+        no_mcp=args.no_mcp,
         app_id=args.app_id,
     )
     return 0
