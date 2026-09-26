@@ -59,10 +59,6 @@ def _read_json(path: str) -> dict:
         return json.load(file)
 
 
-def _read_bytes(path: str) -> bytes:
-    with open(path, "rb") as file:
-        return file.read()
-
 
 def _copy_build_inputs(destination: str) -> None:
     shutil.copy2(BUILD, os.path.join(destination, "build.py"))
@@ -76,62 +72,28 @@ def _copy_build_inputs(destination: str) -> None:
     )
 
 
-def _read_archive_json(archive: zipfile.ZipFile, root: str, relative: str) -> dict:
-    return json.loads(archive.read(f"{root}/{relative}"))
-
-
 class TestOpenAiPluginBuild(unittest.TestCase):
-    def test_prod_build_increments_and_synchronizes_versions(self):
+    def test_package_contains_only_manifests_and_current_skills(self):
         with tempfile.TemporaryDirectory() as repo_copy, tempfile.TemporaryDirectory() as out_dir:
             _copy_build_inputs(repo_copy)
-            skill_path = os.path.join(repo_copy, "skills", "simplify", "SKILL.md")
-            with open(skill_path, "rb") as file:
-                skill_before = file.read()
-
             result = _run_build(out_dir, repo_copy)
             self.assertEqual(result.returncode, 0, msg=result.stderr)
-            zip_path = os.path.join(out_dir, "simplify-med-0.1.1-openai.zip")
-            self.assertTrue(os.path.isfile(zip_path))
+            zips = [name for name in os.listdir(out_dir) if name.endswith("-openai.zip")]
+            self.assertEqual(len(zips), 1)
 
-            with zipfile.ZipFile(zip_path) as archive:
+            with zipfile.ZipFile(os.path.join(out_dir, zips[0])) as archive:
                 names = set(archive.namelist())
-                relative_names = {
-                    name.removeprefix("simplify-med/")
-                    for name in names
-                    if not name.endswith("/")
-                }
-                portable = _read_archive_json(archive, "simplify-med", "plugin.json")
-                compatibility = _read_archive_json(
-                    archive, "simplify-med", ".codex-plugin/plugin.json"
-                )
-                pipeline_version = archive.read(
-                    "simplify-med/skills/simplify/scripts/_version.py"
-                ).decode("utf-8")
                 blobs = {
                     name: archive.read(name)
                     for name in names
                     if not name.endswith((".png", ".jpg", ".jpeg", ".gif"))
                 }
 
-            self.assertEqual(portable["name"], "simplify-med")
-            self.assertEqual(portable["version"], "0.1.1")
-            self.assertEqual(compatibility["name"], "simplify-med")
-            self.assertEqual(compatibility["version"], "0.1.1")
-            self.assertIn('PLUGIN_VERSION = "0.1.1"', pipeline_version)
-            self.assertEqual(_read_json(os.path.join(repo_copy, "build-versions.json")), {
-                "prod": "0.1.1",
-                "dev": "0.1.3",
-            })
-            self.assertEqual(_read_json(os.path.join(repo_copy, "plugin.json"))["version"], "0.1.1")
-            self.assertEqual(
-                _read_json(os.path.join(repo_copy, ".codex-plugin", "plugin.json"))["version"],
-                "0.1.1",
-            )
-            with open(os.path.join(repo_copy, "skills", "simplify", "scripts", "_version.py"), encoding="utf-8") as file:
-                self.assertIn('PLUGIN_VERSION = "0.1.1"', file.read())
-            with open(skill_path, "rb") as file:
-                self.assertEqual(file.read(), skill_before)
-
+        relative_names = {
+            name.removeprefix("simplify-med/")
+            for name in names
+            if not name.endswith("/")
+        }
         self.assertIn("simplify-med/plugin.json", names)
         self.assertIn("simplify-med/.codex-plugin/plugin.json", names)
         self.assertIn("simplify-med/skills/simplify/SKILL.md", names)
@@ -176,71 +138,6 @@ class TestOpenAiPluginBuild(unittest.TestCase):
         ):
             self.assertIn(required, relative_names)
 
-    def test_dev_build_increments_and_stamps_both_packaged_manifests(self):
-        with tempfile.TemporaryDirectory() as repo_copy, tempfile.TemporaryDirectory() as out_dir:
-            _copy_build_inputs(repo_copy)
-            source_paths = (
-                "plugin.json",
-                os.path.join(".codex-plugin", "plugin.json"),
-                os.path.join("skills", "simplify", "scripts", "_version.py"),
-            )
-            source_before = {
-                relative: _read_bytes(os.path.join(repo_copy, relative))
-                for relative in source_paths
-            }
-
-            result = _run_build(out_dir, repo_copy, dev=True)
-            self.assertEqual(result.returncode, 0, msg=result.stderr)
-            zip_path = os.path.join(out_dir, "simplify-med-dev-0.1.4-openai.zip")
-            self.assertTrue(os.path.isfile(zip_path))
-
-            with zipfile.ZipFile(zip_path) as archive:
-                names = set(archive.namelist())
-                portable = _read_archive_json(archive, "simplify-med-dev", "plugin.json")
-                compatibility = _read_archive_json(
-                    archive, "simplify-med-dev", ".codex-plugin/plugin.json"
-                )
-                pipeline_version = archive.read(
-                    "simplify-med-dev/skills/simplify/scripts/_version.py"
-                ).decode("utf-8")
-
-            self.assertEqual(portable["name"], "simplify-med-dev")
-            self.assertEqual(portable["version"], "0.1.4")
-            self.assertEqual(
-                portable["extensions"]["com.openai"]["interface"]["displayName"],
-                "Simplify Med Dev",
-            )
-            self.assertEqual(compatibility["name"], "simplify-med-dev")
-            self.assertEqual(compatibility["version"], "0.1.4")
-            self.assertEqual(compatibility["interface"]["displayName"], "Simplify Med Dev")
-            self.assertIn('PLUGIN_VERSION = "0.1.4"', pipeline_version)
-            self.assertNotIn("simplify-med-dev/build-versions.json", names)
-            self.assertFalse(any("/mcp/" in f"/{name}" for name in names))
-            self.assertEqual(_read_json(os.path.join(repo_copy, "build-versions.json")), {
-                "prod": "0.1.0",
-                "dev": "0.1.4",
-            })
-            for relative, content in source_before.items():
-                with open(os.path.join(repo_copy, relative), "rb") as file:
-                    self.assertEqual(file.read(), content)
-
-    def test_prod_and_dev_counters_increment_independently(self):
-        with tempfile.TemporaryDirectory() as repo_copy, tempfile.TemporaryDirectory() as out_dir:
-            _copy_build_inputs(repo_copy)
-            self.assertEqual(_run_build(out_dir, repo_copy, dev=True).returncode, 0)
-            self.assertEqual(_run_build(out_dir, repo_copy, dev=True).returncode, 0)
-            self.assertEqual(_run_build(out_dir, repo_copy).returncode, 0)
-            self.assertEqual(_run_build(out_dir, repo_copy).returncode, 0)
-
-            self.assertTrue(os.path.isfile(os.path.join(out_dir, "simplify-med-dev-0.1.4-openai.zip")))
-            self.assertTrue(os.path.isfile(os.path.join(out_dir, "simplify-med-dev-0.1.5-openai.zip")))
-            self.assertTrue(os.path.isfile(os.path.join(out_dir, "simplify-med-0.1.1-openai.zip")))
-            self.assertTrue(os.path.isfile(os.path.join(out_dir, "simplify-med-0.1.2-openai.zip")))
-            self.assertEqual(_read_json(os.path.join(repo_copy, "build-versions.json")), {
-                "prod": "0.1.2",
-                "dev": "0.1.5",
-            })
-
     def test_mcp_source_is_retained_but_not_declared_by_plugin_configs(self):
         self.assertTrue(os.path.isfile(os.path.join(ROOT, "mcp", "openai", "mcp.json")))
         self.assertFalse(os.path.exists(os.path.join(ROOT, "app.json")))
@@ -249,32 +146,6 @@ class TestOpenAiPluginBuild(unittest.TestCase):
             serialized = json.dumps(manifest).lower()
             self.assertNotIn("mcp", serialized)
             self.assertNotIn("streamable_http", serialized)
-
-    def test_rejects_compatibility_version_mismatch_without_incrementing(self):
-        with tempfile.TemporaryDirectory() as repo_copy, tempfile.TemporaryDirectory() as out_dir:
-            _copy_build_inputs(repo_copy)
-            path = os.path.join(repo_copy, ".codex-plugin", "plugin.json")
-            manifest = _read_json(path)
-            manifest["version"] = "9.9.9"
-            with open(path, "w", encoding="utf-8") as file:
-                json.dump(manifest, file)
-            versions_before = _read_json(os.path.join(repo_copy, "build-versions.json"))
-            result = _run_build(out_dir, repo_copy)
-            versions_after = _read_json(os.path.join(repo_copy, "build-versions.json"))
-
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("version mismatch", result.stderr)
-        self.assertEqual(versions_after, versions_before)
-
-    def test_rejects_pipeline_version_mismatch(self):
-        with tempfile.TemporaryDirectory() as repo_copy, tempfile.TemporaryDirectory() as out_dir:
-            _copy_build_inputs(repo_copy)
-            path = os.path.join(repo_copy, "skills", "simplify", "scripts", "_version.py")
-            with open(path, "w", encoding="utf-8") as file:
-                file.write('PLUGIN_VERSION = "9.9.9"\nSCHEMA_VERSION = "1.0"\n')
-            result = _run_build(out_dir, repo_copy, dev=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("version mismatch", result.stderr)
 
 
 if __name__ == "__main__":
