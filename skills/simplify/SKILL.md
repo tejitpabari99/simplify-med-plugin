@@ -1,6 +1,6 @@
 ---
 name: simplify
-description: Simplify visit notes, discharge summaries, lab reports, imaging reports, and other clinical documents into a short, plain-language report in which every statement is checked against the source. Use when a user wants help understanding supplied medical paperwork. Do not use to diagnose, prescribe, or replace urgent medical care.
+description: Simplify visit notes, discharge summaries, lab reports, imaging reports, and other clinical documents into a short, plain-language report in which every statement is checked against the source. Use when a user wants help understanding supplied medical paperwork. Do not use to diagnose, prescribe, or replace urgent medical care. Works only from what the user supplies: never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.
 ---
 
 # Simplify Medical Documents

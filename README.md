@@ -128,6 +128,7 @@ Runs started under an earlier schema version cannot be resumed; start a fresh ru
 - The plugin explains supplied records and helps patients prepare; it does not diagnose, prescribe, or triage.
 - **No medical images (all skills).** The plugin never opens or interprets X-ray, CT, MRI, ultrasound, ECG-tracing, pathology, or body/skin images; `unitize.py` refuses image, DICOM, PDF, and binary inputs. Written reports and photos or scans of text documents (transcribed as text) are fine.
 - **No outside sources (all skills).** The plugin never searches the web, opens links, or uses GitHub, websites, online references, or connectors; it uses only what the patient supplied and the files bundled with each skill. Each `SKILL.md` carries the same `Hard Boundaries` block, checked by `tests/test_boundaries.py`.
+- The plugin cannot switch off the host's web search itself. For the strongest guarantee in Codex, set `web_search = "disabled"` in `~/.codex/config.toml` (admins: `allowed_web_search_modes = ["disabled"]`); see `docs/openai-plugin.md`.
 - `prep` uses only patient statements and supplied appointment materials; `med-lit` scores only the patient's answers to the screen.
 - Every medical statement must be supported by the source documents.
 - Missing information stays missing rather than being guessed.

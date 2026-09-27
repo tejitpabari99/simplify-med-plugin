@@ -1,6 +1,6 @@
 ---
 name: med-lit
-description: Run a short, opt-in health-literacy screen for an individual patient and return a basic profile of their self-reported support needs and communication preferences. Use only when a patient or caregiver explicitly asks to assess their own health literacy or reading-support needs. Do not use to grade a document's readability, judge intelligence or education, diagnose, or adapt other skills' output.
+description: Run a short, opt-in health-literacy screen for an individual patient and return a basic profile of their self-reported support needs and communication preferences. Use only when a patient or caregiver explicitly asks to assess their own health literacy or reading-support needs. Do not use to grade a document's readability, judge intelligence or education, diagnose, or adapt other skills' output. Works only from what the user supplies: never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.
 ---
 
 # Personal Health-Literacy Profile

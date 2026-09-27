@@ -139,6 +139,16 @@ The model owns language judgment: writing the short report from the numbered sou
 - Completed legacy reports may remain renderable, but an in-progress run must not cross a schema boundary.
 - Source documents and run artifacts remain local to the skill run unless the user explicitly moves or shares them.
 
+### Enforcing "no web search" (host settings)
+
+The plugin cannot switch off web search by itself; the rules in each skill are the plugin's only lever. Verified against the Codex source (openai/codex, 2026-09):
+
+- Codex web search is a hosted tool that hooks never see, so a plugin `PreToolUse` hook cannot block it. A plugin manifest has no config or permissions field.
+- To turn web search off, the user sets `web_search = "disabled"` in `~/.codex/config.toml`; a workspace admin can require it with `allowed_web_search_modes = ["disabled"]` in `requirements.toml`.
+- Shell network access stays off with the default `[sandbox_workspace_write] network_access = false`.
+- Plugin hooks run only after the user trusts them and then apply to every session, not just these skills, so this plugin ships none.
+- In ChatGPT chat there are no plugin hooks; the user's own search and connector toggles apply.
+
 ## Adding a skill
 
 1. Define one user outcome, trigger, and non-trigger boundary.

@@ -1,6 +1,6 @@
 ---
 name: prep
-description: Prepare a patient or caregiver for an upcoming medical appointment by capturing the appointment's stated requirements, the patient's prioritized concerns, a things-to-bring checklist, and a short list of questions to ask. Use before a visit. Do not use to diagnose, recommend treatment, triage symptoms, or explain a document the patient already received (use simplify for that).
+description: Prepare a patient or caregiver for an upcoming medical appointment by capturing the appointment's stated requirements, the patient's prioritized concerns, a things-to-bring checklist, and a short list of questions to ask. Use before a visit. Do not use to diagnose, recommend treatment, triage symptoms, or explain a document the patient already received (use simplify for that). Works only from what the user supplies: never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.
 ---
 
 # Prep for an Appointment

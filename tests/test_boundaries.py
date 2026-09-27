@@ -69,6 +69,15 @@ class TestSkillBoundaries(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, block)
 
+    def test_every_description_states_the_boundaries(self):
+        # The description is the part of a skill that is always loaded.
+        for skill in SKILLS:
+            with self.subTest(skill=skill):
+                text = _read("skills", skill, "SKILL.md")
+                description = re.search(r"^description: (.*)$", text, re.MULTILINE).group(1)
+                self.assertIn("never searches the web or any outside source", description)
+                self.assertIn("never reads or interprets medical images", description)
+
     def test_simplify_model_stages_repeat_the_boundaries(self):
         self.assertIn("SOURCES --", _read("skills", "simplify", "reference", "style_rules.md"))
         for stage in ("write.md", "verify.md", "glossary.md"):
