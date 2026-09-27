@@ -27,13 +27,13 @@ try:
     from _version import PLUGIN_VERSION, SCHEMA_VERSION
 except ImportError:  # pragma: no cover - defensive, mirrors validate.py style
     PLUGIN_VERSION = "0.1.0"
-    SCHEMA_VERSION = "2.0"
+    SCHEMA_VERSION = "3.0"
 
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-_CORE_STAGES = frozenset({
-    "unitize", "ground", "assemble", "plan_check", "numeric_parity",
-    "review", "settle_review", "finalize",
-})
+_CORE_STAGES = frozenset({"unitize", "write", "check", "verify", "settle", "finalize"})
+# `settle` may also end a round by requesting the one repair round.
+_CORE_STATUSES = {"ok", "failed"}
+_SETTLE_STATUSES = _CORE_STATUSES | {"repair_requested"}
 _OPTIONAL_STAGES = frozenset({"glossary", "render_md", "render_html", "render_audit"})
 _THREAD_LOCKS: dict[str, threading.Lock] = {}
 _THREAD_LOCKS_GUARD = threading.Lock()
@@ -141,7 +141,7 @@ def _ensure_run_json_unlocked(run_dir: str) -> dict:
 
 
 def initialize(run_dir: str, run_id: str, inputs_list: list) -> dict:
-    """Create a fresh schema-v2 run log, replacing any prior run identity."""
+    """Create a fresh run log, replacing any prior run identity."""
     if not isinstance(run_id, str) or not run_id:
         raise ValueError("run_id must be a non-empty string")
     data = {
@@ -175,7 +175,9 @@ def _normalize_artifacts(artifacts: list | None) -> list[dict]:
 def _validate_stage(stage: str, status: str, skip_reason: str | None) -> None:
     if stage not in _CORE_STAGES | _OPTIONAL_STAGES:
         raise ValueError(f"unrecognized stage: {stage}")
-    if stage in _CORE_STAGES and status not in {"ok", "failed"}:
+    if stage == "settle" and status not in _SETTLE_STATUSES:
+        raise ValueError("stage settle requires status ok, failed, or repair_requested")
+    if stage in _CORE_STAGES and stage != "settle" and status not in _CORE_STATUSES:
         raise ValueError(f"core stage {stage} requires status ok or failed")
     if stage in _OPTIONAL_STAGES and status not in {"ok", "degraded", "failed", "skipped"}:
         raise ValueError(f"invalid optional stage status: {status}")
@@ -281,7 +283,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--status",
         required=True,
-        choices=["ok", "degraded", "failed", "skipped"],
+        choices=["ok", "degraded", "failed", "skipped", "repair_requested"],
         help="Stage status",
     )
     parser.add_argument("--checks", default=None, help="JSON object of checks to merge in")

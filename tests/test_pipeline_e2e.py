@@ -1,11 +1,15 @@
-"""Schema-v2 integration tests for the fail-closed K+2 workflow."""
+"""End-to-end run on the synthetic ER fixture with hand-authored model outputs.
+
+unitize -> WRITE (hand-authored) -> check_draft -> VERIFY (hand-authored)
+-> settle -> finalize, plus the repair round and a terminal failure path.
+The hand-authored draft follows the PRD section 3 target report.
+"""
 
 from __future__ import annotations
 
 import copy
-import json
 import os
-import shutil
+import re
 import subprocess
 import sys
 import tempfile
@@ -15,498 +19,297 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _paths  # noqa: E402
 import _runfix  # noqa: E402
 
+import plan_paths  # noqa: E402
 import runlog  # noqa: E402
 import validate  # noqa: E402
-from _version import SCHEMA_VERSION  # noqa: E402
+
+ER_FIXTURE = os.path.join(_paths.FIXTURE_DOCUMENTS_DIR, "synthetic-er-visit.txt")
+NOISE = (
+    "Iopamidol",
+    "Sodium",
+    "155/99",
+    "ordering provider",
+    "No current outpatient medications",
+)
+_WORD_RE = re.compile(r"[A-Za-z0-9]")
 
 
-def _script(name: str) -> str:
-    return os.path.join(_paths.SCRIPTS_DIR, name)
-
-
-def _run(name: str, *args: str) -> subprocess.CompletedProcess:
+def _script(name: str, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, _script(name), *args], capture_output=True, text=True,
+        [sys.executable, os.path.join(_paths.SCRIPTS_DIR, name), *args],
+        capture_output=True, text=True,
     )
 
 
-def _run_ok(name: str, *args: str) -> subprocess.CompletedProcess:
-    result = _run(name, *args)
-    if result.returncode != 0:
-        raise AssertionError(
-            f"{name} {' '.join(args)} exited {result.returncode}\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
-    return result
+class ERRun:
+    """One run directory for the ER fixture, with unit lookup by source text."""
+
+    def __init__(self, root: str):
+        result = _script("unitize.py", "--runs-dir", root, "--input", f"{ER_FIXTURE}:native")
+        if result.returncode != 0:
+            raise AssertionError(f"unitize failed:\n{result.stdout}{result.stderr}")
+        self.run_dir = result.stdout.strip().splitlines()[-1]
+        with open(os.path.join(self.run_dir, "01_source.txt"), encoding="utf-8") as handle:
+            self.source = {
+                int(match.group(1)): match.group(2)
+                for match in (re.match(r"^\[(\d+)\] (.*)$", line.rstrip("\n")) for line in handle)
+                if match
+            }
+        self.model_calls: list[str] = []
+
+    def uid(self, prefix: str) -> int:
+        """The id of the one source unit whose text starts with `prefix`."""
+        matches = [unit_id for unit_id, text in self.source.items() if text.startswith(prefix)]
+        if len(matches) != 1:
+            raise AssertionError(f"expected one unit starting with {prefix!r}, found {matches}")
+        return matches[0]
+
+    def path(self, name: str) -> str:
+        return os.path.join(self.run_dir, name)
+
+    def write(self, draft: dict, round_no: int = 1) -> subprocess.CompletedProcess:
+        self.model_calls.append(f"write-r{round_no}")
+        _runfix.write_draft(self.run_dir, draft, round_no)
+        return _script("check_draft.py", "--run-dir", self.run_dir, "--round", str(round_no))
+
+    def verify(self, build, round_no: int = 1) -> subprocess.CompletedProcess:
+        """`build(draft, check) -> verify_raw`, written as the VERIFY output."""
+        self.model_calls.append(f"verify-r{round_no}")
+        draft, check = _runfix.checked(self.run_dir, round_no)
+        _runfix.write_verify(self.run_dir, build(draft, check), round_no)
+        return _script("settle.py", "--run-dir", self.run_dir, "--round", str(round_no))
+
+    def finalize(self) -> subprocess.CompletedProcess:
+        return _script("finalize.py", "--run-dir", self.run_dir)
 
 
-def _root_files(run_dir: str) -> set[str]:
+def target_draft(run: ERRun) -> dict:
+    """The PRD section 3 target report, citing the fixture's units."""
+    u = run.uid
     return {
-        name for name in os.listdir(run_dir)
-        if os.path.isfile(os.path.join(run_dir, name))
+        "visit_type": "er_visit",
+        "why_you_went": {
+            "text": "You went to the ER because you had a headache for several days, neck pain, "
+                    "tingling in your left hand, and an abnormal heart tracing at urgent care.",
+            "unit_ids": [u("Patient was sent from urgent care"), u("Reports headache and neck pain"),
+                         u("Headaches have been waxing")],
+        },
+        "findings_lead": {
+            "text": "The important tests were reassuring:",
+            "unit_ids": [u("No emergent cause of symptoms"), u("Labs unremarkable")],
+        },
+        "findings": [
+            {"name": "Brain MRI", "result": "Normal. No stroke was seen.",
+             "unit_ids": [u("IMPRESSION: Normal noncontrast brain MRI")]},
+            {"name": "CT and CT angiogram of your head and neck",
+             "result": "Normal. No blocked blood vessels, aneurysm, or artery tear was found.",
+             "unit_ids": [u("IMPRESSION: Normal CT angiogram")]},
+            {"name": "Neurologic exam",
+             "result": "Normal except for slightly different sensation in your left palm.",
+             "unit_ids": [u("Neuro: Slightly altered")]},
+            {"name": "Blood tests", "result": "The ER doctor described them as unremarkable.",
+             "unit_ids": [u("Labs unremarkable")]},
+            {"name": "Heart tracing",
+             "result": "It showed a right bundle branch block and first-degree AV block, but the ER "
+                       "doctor did not think it showed a heart attack or other acute loss of blood "
+                       "flow to the heart.",
+             "unit_ids": [u("ECG reviewed")]},
+        ],
+        "diagnoses": [
+            {"name": "Acute headache", "unit_ids": [u("Clinical Impression")]},
+            {"name": "Left upper extremity paresthesias", "plain_name": "Tingling in your left arm/hand",
+             "unit_ids": [u("Clinical Impression")]},
+        ],
+        "disposition": {
+            "text": "They did not find an emergency cause for your symptoms, and you were discharged "
+                    "in stable condition.",
+            "unit_ids": [u("No emergent cause of symptoms"), u("Disposition:")],
+        },
+        "next_steps": [
+            {"text": "Schedule a primary-care appointment to follow up on the headache, hand "
+                     "tingling, and abnormal heart tracing.",
+             "unit_ids": [u("Follow-up:")]},
+        ],
+        "medicines": {
+            "items": [],
+            "none_statement": {"text": "You were not prescribed any new medicines.",
+                               "unit_ids": [u("No new medications prescribed")]},
+        },
+        "return_precautions": [
+            {"text": "Return to the ER if you develop any new or worsening symptoms.",
+             "unit_ids": [u("Return to the emergency department")]},
+        ],
+        "questions": [],
+        "coverage": {
+            "medication_changes": {"status": "shown", "unit_ids": [u("No new medications prescribed")]},
+            "follow_up": {"status": "shown", "unit_ids": [u("Follow-up:")]},
+            "return_precautions": {"status": "shown", "unit_ids": [u("Return to the emergency department")]},
+            "diagnoses": {"status": "shown", "unit_ids": [u("Clinical Impression")]},
+            "disposition": {"status": "shown", "unit_ids": [u("Disposition:")]},
+            "abnormal_or_pending_results": {
+                "status": "shown", "unit_ids": [u("Patient was sent from urgent care"), u("ECG reviewed")],
+            },
+        },
     }
 
 
-def _visible_fact_ids(plan: dict) -> set[int]:
-    visible = set(plan["summary_fact_ids"])
-    visible.update(plan["diagnosis"]["changed_since_last_visit_fact_ids"])
-    for item in plan["diagnosis"]["details"]:
-        visible.update(item["source_fact_ids"])
-    for key in (
-        "reason_for_visit", "medications", "tests", "procedures", "other",
-        "follow_up", "warning_signs", "questions",
-    ):
-        for item in plan[key]:
-            visible.update(item["source_fact_ids"])
-    return visible
-
-
-class PipelineHarness:
-    def __init__(
-        self,
-        root: str,
-        *,
-        chunk_size: int = 150,
-        support_text: str = _runfix.OMITTED_MARKER,
-        omission_reason: str = "generic_not_patient_specific",
-    ):
-        self.root = root
-        runs_dir = os.path.join(root, "runs")
-        self.source = os.path.join(root, "source.txt")
-        self.lines = list(_runfix.NOTE_LINES[:-1]) + [support_text]
-        self.omission_reason = omission_reason
-        self.assembly_calls = 0
-        self.reassembly_payload: dict | None = None
-        with open(self.source, "w", encoding="utf-8") as handle:
-            handle.write("\n".join(self.lines) + "\n")
-        result = _run_ok(
-            "unitize.py", "--runs-dir", runs_dir,
-            "--input", f"{self.source}:native", "--chunk-size", str(chunk_size),
-        )
-        self.run_dir = result.stdout.strip().splitlines()[-1]
-        self.model_calls: list[str] = []
-
-    @property
-    def run_id(self) -> str:
-        return os.path.basename(self.run_dir)
-
-    def ground(self, *, retry_first_chunk: bool = False) -> dict:
-        units_document = _runfix.read_json(os.path.join(self.run_dir, "01_units.json"))
-        for chunk in units_document["chunks"]:
-            units = [
-                unit for unit in units_document["units"]
-                if chunk["first_id"] <= unit["id"] <= chunk["last_id"]
-            ]
-            raw_path = os.path.join(self.run_dir, f"02_facts.{chunk['k']}.raw.json")
-            if retry_first_chunk and chunk["k"] == 1:
-                invalid = _runfix.facts_raw_for_units(units)
-                invalid["facts"][0]["quote"] = "fabricated quote"
-                _runfix.write_json(raw_path, invalid)
-                self.model_calls.append(f"ground[{chunk['k']}]-attempt1")
-                failed = _run("anchor_check.py", "--run-dir", self.run_dir, "--chunk", str(chunk["k"]))
-                if failed.returncode == 0:
-                    raise AssertionError("invalid grounding attempt unexpectedly passed")
-                shutil.copy2(raw_path, raw_path.replace(".raw.json", ".attempt1.raw.json"))
-            _runfix.write_json(raw_path, _runfix.facts_raw_for_units(units))
-            self.model_calls.append(f"ground[{chunk['k']}]")
-            _run_ok("anchor_check.py", "--run-dir", self.run_dir, "--chunk", str(chunk["k"]))
-        _run_ok("merge_facts.py", "--run-dir", self.run_dir)
-        if retry_first_chunk:
-            runlog.record(
-                self.run_dir, "ground", "ok", attempts=2,
-                artifacts=["02_facts.1.attempt1.raw.json"], run_id=self.run_id,
-            )
-        return _runfix.read_json(os.path.join(self.run_dir, "02_facts.json"))
-
-    def assemble(
-        self,
-        *,
-        include_supporting: bool = False,
-        relevant_fact_ids: list[int] | None = None,
-        retry: bool = False,
-    ) -> dict:
-        self.assembly_calls += 1
-        facts_document = _runfix.read_json(os.path.join(self.run_dir, "02_facts.json"))
-        if relevant_fact_ids is None:
-            raw = _runfix.plan_raw(
-                facts_document["facts"], include_supporting=include_supporting,
-                omission_reason=self.omission_reason,
-            )
+def resolve_protected(run: ERRun, check: dict, *, missing: tuple[int, ...] = ()) -> list[dict]:
+    """The verifier's decision for each uncited protected candidate."""
+    u = run.uid
+    covered = {u("Chief Complaint"), u("Sodium 142")}
+    out = []
+    for entry in check["uncited_protected"]:
+        unit_id = entry["unit_id"]
+        if unit_id in missing:
+            out.append({"unit_id": unit_id, "result": "missing", "category": entry["categories"][0]})
+        elif unit_id in covered:
+            out.append({"unit_id": unit_id, "result": "covered"})
         else:
-            accepted = _runfix.read_json(os.path.join(self.run_dir, "03_plan.draft.json"))
-            relevant = [
-                fact for fact in facts_document["facts"]
-                if fact["id"] in set(relevant_fact_ids)
-            ]
-            self.reassembly_payload = {
-                "accepted_draft": copy.deepcopy(accepted),
-                "facts": copy.deepcopy(relevant),
-                "required_fact_ids": list(relevant_fact_ids),
-            }
-            raw = copy.deepcopy(accepted)
-            for key in ("schema_version", "plugin_version", "meta", "score", "notices"):
-                raw.pop(key, None)
-            raw["omitted_facts"] = [
-                item for item in raw["omitted_facts"]
-                if item["fact_id"] not in set(relevant_fact_ids)
-            ]
-            raw["other"].extend({
-                "title": "Additional information",
-                "why": None,
-                "steps": [],
-                "description": fact["text"],
-                "frequency": "",
-                "duration": "",
-                "status": "to_do",
-                "source_fact_ids": [fact["id"]],
-            } for fact in relevant)
-        raw_path = os.path.join(self.run_dir, "03_plan.raw.json")
-        if retry:
-            invalid = copy.deepcopy(raw)
-            invalid.pop("omitted_facts")
-            _runfix.write_json(raw_path, invalid)
-            self.model_calls.append("assemble-attempt1")
-            failed = _run("cite_check.py", "--run-dir", self.run_dir)
-            if failed.returncode == 0:
-                raise AssertionError("invalid assembly attempt unexpectedly passed")
-            shutil.copy2(raw_path, os.path.join(self.run_dir, "03_plan.attempt1.raw.json"))
-        _runfix.write_json(raw_path, raw)
-        self.model_calls.append("assemble")
-        runlog.record(
-            self.run_dir, "assemble", "ok",
-            attempts=self.assembly_calls + (1 if retry else 0),
-            artifacts=["03_plan.raw.json"] + (["03_plan.attempt1.raw.json"] if retry else []),
-            run_id=self.run_id,
-        )
-        _run_ok("cite_check.py", "--run-dir", self.run_dir)
-        plan_attempts = runlog.read(self.run_dir)["stages"]["plan_check"]["attempts"]
-        runlog.record(
-            self.run_dir, "plan_check", "ok", attempts=plan_attempts,
-            artifacts=["03_plan.draft.json"], run_id=self.run_id,
-        )
-        _run_ok("numeric_parity.py", "--run-dir", self.run_dir)
-        numeric_attempts = runlog.read(self.run_dir)["stages"]["numeric_parity"]["attempts"]
-        runlog.record(
-            self.run_dir, "numeric_parity", "ok", attempts=numeric_attempts,
-            artifacts=["03_flags.json"], run_id=self.run_id,
-        )
-        return _runfix.read_json(os.path.join(self.run_dir, "03_plan.draft.json"))
-
-    def review(self, *, reassemble_ids=(), retry: bool = False) -> subprocess.CompletedProcess:
-        draft = _runfix.read_json(os.path.join(self.run_dir, "03_plan.draft.json"))
-        facts = _runfix.read_json(os.path.join(self.run_dir, "02_facts.json"))["facts"]
-        flags = _runfix.read_json(os.path.join(self.run_dir, "03_flags.json"))
-        raw = _runfix.review_raw(draft, facts, flags, reassemble_ids=reassemble_ids)
-        raw_path = os.path.join(self.run_dir, "04_review.raw.json")
-        if retry:
-            invalid = copy.deepcopy(raw)
-            invalid["reviewed_fact_ids"] = invalid["reviewed_fact_ids"][:-1]
-            _runfix.write_json(raw_path, invalid)
-            self.model_calls.append("review-attempt1")
-            failed = _run("settle_review.py", "--run-dir", self.run_dir)
-            if failed.returncode == 0:
-                raise AssertionError("invalid review attempt unexpectedly passed")
-            shutil.copy2(raw_path, os.path.join(self.run_dir, "04_review.attempt1.raw.json"))
-        _runfix.write_json(raw_path, raw)
-        self.model_calls.append("review")
-        runlog.record(
-            self.run_dir, "review", "ok", attempts=2 if retry else None,
-            started=True, finished=False,
-            artifacts=["04_review.raw.json"] + (["04_review.attempt1.raw.json"] if retry else []),
-            run_id=self.run_id,
-        )
-        return _run("settle_review.py", "--run-dir", self.run_dir)
-
-    def finalize(self) -> subprocess.CompletedProcess:
-        return _run("finalize.py", "--run-dir", self.run_dir)
+            out.append({"unit_id": unit_id, "result": "not_needed", "reason": "false_positive"})
+    return out
 
 
-class TestCleanPipeline(unittest.TestCase):
-    def test_plan_and_numeric_checks_record_their_required_artifacts(self):
+def clean_verify(run: ERRun, *, missing: tuple[int, ...] = ()):
+    def build(draft: dict, check: dict) -> dict:
+        return {
+            "claims": [{"path": path, "result": "supported"} for path, _item in plan_paths.visible_items(draft)],
+            "operations": [],
+            "numeric_resolutions": [
+                {"flag_id": flag["flag_id"], "resolution": "equivalent"} for flag in check["numeric_flags"]
+            ],
+            "protected_units": resolve_protected(run, check, missing=missing),
+        }
+    return build
+
+
+def report_words(text: str) -> int:
+    return sum(1 for token in text.split() if _WORD_RE.search(token))
+
+
+class TestERVisitCleanPath(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temporary = tempfile.TemporaryDirectory()
+        cls.er = ERRun(cls.temporary.name)
+        cls.check_result = cls.er.write(target_draft(cls.er))
+        cls.settle_result = cls.er.verify(clean_verify(cls.er))
+        cls.finalize_result = cls.er.finalize()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temporary.cleanup()
+
+    def report(self) -> str:
+        with open(self.er.path("report.md"), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_each_script_succeeds(self):
+        for name, result in (
+            ("check_draft", self.check_result), ("settle", self.settle_result), ("finalize", self.finalize_result),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_clean_path_uses_two_model_calls_and_the_expected_artifacts(self):
+        self.assertEqual(self.er.model_calls, ["write-r1", "verify-r1"])
+        expected = {
+            "run.json", "00_input", "01_units.json", "01_source.txt", "01_protected.json",
+            "02_draft.raw.json", "02_draft.json", "02_check.json", "03_verify.raw.json",
+            "03_verify.json", "04_plan.settled.json", "05_plan.final.json", "report.md",
+        }
+        self.assertEqual(set(os.listdir(self.er.run_dir)), expected)
+
+    def test_check_found_nothing_to_flag_but_the_uncited_candidates(self):
+        _draft, check = _runfix.checked(self.er.run_dir)
+        self.assertEqual(check["numeric_flags"], [])
+        self.assertFalse(check["over_budget"])
+        self.assertLessEqual(check["word_count"], 300)
+        uncited = {entry["unit_id"] for entry in check["uncited_protected"]}
+        self.assertIn(self.er.uid("Sodium 142"), uncited)
+
+    def test_report_is_short_and_has_the_target_sections(self):
+        report = self.report()
+        self.assertLessEqual(report_words(report), 300, report)
+        for text in (
+            "# Your ER visit, simplified",
+            "What did they find?",
+            "What should you do now?",
+            "When should you go back to the ER?",
+            "The ER diagnosed you with:",
+            "**Brain MRI:** Normal. No stroke was seen.",
+            "You were not prescribed any new medicines.",
+            "Return to the ER if you develop any new or worsening symptoms.",
+        ):
+            with self.subTest(text=text):
+                self.assertIn(text, report)
+
+    def test_report_excludes_noise(self):
+        report = self.report()
+        for text in NOISE:
+            with self.subTest(text=text):
+                self.assertNotIn(text, report)
+        for text in ("Already done", "more details", "unit_ids", "coverage"):
+            with self.subTest(text=text):
+                self.assertNotIn(text, report)
+
+    def test_final_plan_and_run_log(self):
+        plan = _runfix.read_json(self.er.path("05_plan.final.json"))
+        self.assertEqual(validate.validate(plan, validate.load_schema("plan")), [])
+        self.assertLessEqual(plan["word_count"], 300)
+        run_log = runlog.read(self.er.run_dir)
+        self.assertEqual(validate.validate(run_log, validate.load_schema("run")), [])
+        for stage in ("unitize", "write", "check", "verify", "settle", "finalize"):
+            with self.subTest(stage=stage):
+                self.assertEqual(run_log["stages"][stage]["status"], "ok")
+                self.assertEqual(run_log["stages"][stage]["attempts"], 1)
+
+
+class TestERVisitRepairRound(unittest.TestCase):
+    def test_missing_return_precautions_trigger_one_repair_round(self):
         with tempfile.TemporaryDirectory() as root:
-            pipeline = PipelineHarness(root)
-            facts = pipeline.ground()["facts"]
-            _runfix.write_json(
-                os.path.join(pipeline.run_dir, "03_plan.raw.json"),
-                _runfix.plan_raw(facts),
-            )
-            runlog.record(
-                pipeline.run_dir, "assemble", "ok", attempts=1,
-                artifacts=["03_plan.raw.json"], run_id=pipeline.run_id,
-            )
-            _run_ok("cite_check.py", "--run-dir", pipeline.run_dir)
-            _run_ok("numeric_parity.py", "--run-dir", pipeline.run_dir)
-            stages = runlog.read(pipeline.run_dir)["stages"]
-            artifacts = {
-                stage: {item["path"] for item in stages[stage]["artifacts"]}
-                for stage in ("plan_check", "numeric_parity")
-            }
-            missing = {
-                stage: expected
-                for stage, expected in (
-                    ("plan_check", "03_plan.draft.json"),
-                    ("numeric_parity", "03_flags.json"),
-                )
-                if expected not in artifacts[stage]
-            }
-            self.assertEqual(missing, {})
+            run = ERRun(root)
+            first = target_draft(run)
+            first["return_precautions"] = []
+            first["coverage"]["return_precautions"] = {"status": "none_in_source", "unit_ids": []}
+            self.assertEqual(run.write(first).returncode, 0)
+            return_unit = run.uid("Return to the emergency department")
+            result = run.verify(clean_verify(run, missing=(return_unit,)))
+            self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+            repair = _runfix.read_json(run.path("04_repair.json"))
+            self.assertEqual(repair["missing"], [{"unit_id": return_unit, "category": "return_precautions"}])
+            self.assertFalse(os.path.exists(run.path("report.md")))
 
-    def test_one_chunk_is_three_model_calls_and_exact_core_artifacts(self):
-        with tempfile.TemporaryDirectory() as root:
-            pipeline = PipelineHarness(root)
-            facts = pipeline.ground()
-            draft = pipeline.assemble()
-            review_result = pipeline.review()
-            self.assertEqual(review_result.returncode, 0, review_result.stdout + review_result.stderr)
-            final_result = pipeline.finalize()
-            self.assertEqual(final_result.returncode, 0, final_result.stdout + final_result.stderr)
-
-            self.assertEqual(pipeline.model_calls, ["ground[1]", "assemble", "review"])
-            self.assertEqual(_root_files(pipeline.run_dir), set(_runfix.CORE_ARTIFACTS_ONE_CHUNK))
-            run_log = _runfix.read_json(os.path.join(pipeline.run_dir, "run.json"))
-            for stage in (*_runfix.REQUIRED_CORE_STAGES, "finalize"):
-                self.assertEqual(run_log["stages"][stage]["status"], "ok", stage)
-                self.assertTrue(run_log["stages"][stage]["artifacts"], stage)
-            self.assertEqual(run_log["stages"]["ground"]["checks"]["chunks_expected"], 1)
-            self.assertEqual(run_log["stages"]["ground"]["checks"]["chunks_found"], 1)
-            self.assertEqual(run_log["stages"]["ground"]["checks"]["missing_chunks"], [])
-
-            omitted = {entry["fact_id"] for entry in draft["omitted_facts"]}
-            visible = _visible_fact_ids(draft)
-            all_ids = {fact["id"] for fact in facts["facts"]}
-            self.assertFalse(visible & omitted)
-            self.assertEqual(visible | omitted, all_ids)
-
-            flags = _runfix.read_json(os.path.join(pipeline.run_dir, "03_flags.json"))
-            review = _runfix.read_json(os.path.join(pipeline.run_dir, "04_review.json"))
-            self.assertEqual(set(review["reviewed_fact_ids"]), all_ids)
-            self.assertEqual(
-                {item["flag_id"] for item in review["numeric_resolutions"]},
-                {item["flag_id"] for item in flags["numeric_parity"]},
-            )
-            self.assertEqual(review["verdict"], "pass")
-            self.assertEqual(
-                _runfix.read_json(os.path.join(pipeline.run_dir, "05_plan.settled.json")),
-                draft,
-            )
-            final_plan = _runfix.read_json(os.path.join(pipeline.run_dir, "06_plan.final.json"))
-            self.assertEqual(final_plan["schema_version"], SCHEMA_VERSION)
-            self.assertEqual(final_plan["meta"]["run_id"], pipeline.run_id)
-            self.assertNotIn(_runfix.PII_NAME, json.dumps(final_plan))
-
-    def test_settlement_applies_only_the_named_exact_operation(self):
-        with tempfile.TemporaryDirectory() as root:
-            pipeline = PipelineHarness(root)
-            facts = pipeline.ground()["facts"]
-            draft = pipeline.assemble()
-            flags = _runfix.read_json(os.path.join(pipeline.run_dir, "03_flags.json"))
-            raw_review = _runfix.review_raw(draft, facts, flags)
-            medication_id = draft["medications"][0]["source_fact_ids"][0]
-            for fact_review in raw_review["fact_reviews"]:
-                if fact_review["fact_id"] == medication_id:
-                    fact_review["result"] = "visible_needs_correction"
-            raw_review["corrections"] = [{"op": "clear", "path": "medications[0].why"}]
-            _runfix.write_json(os.path.join(pipeline.run_dir, "04_review.raw.json"), raw_review)
-            runlog.record(
-                pipeline.run_dir, "review", "ok", attempts=1, started=True, finished=False,
-                artifacts=["04_review.raw.json"], run_id=pipeline.run_id,
-            )
-            result = _run("settle_review.py", "--run-dir", pipeline.run_dir)
+            second = copy.deepcopy(repair["settled_draft"])
+            for key in ("schema_version", "run_id"):
+                del second[key]
+            second["return_precautions"] = target_draft(run)["return_precautions"]
+            second["coverage"]["return_precautions"] = {"status": "shown", "unit_ids": [return_unit]}
+            result = run.write(second, round_no=2)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            settled = _runfix.read_json(os.path.join(pipeline.run_dir, "05_plan.settled.json"))
-            expected = copy.deepcopy(draft)
-            expected["medications"][0]["why"] = None
-            self.assertEqual(settled, expected)
-            review = _runfix.read_json(os.path.join(pipeline.run_dir, "04_review.json"))
-            self.assertEqual(review["corrections"], raw_review["corrections"])
-            self.assertEqual(review["counts"]["corrections"], 1)
-
-    def test_k_chunks_use_k_plus_two_model_calls(self):
-        with tempfile.TemporaryDirectory() as root:
-            pipeline = PipelineHarness(root, chunk_size=2)
-            units = _runfix.read_json(os.path.join(pipeline.run_dir, "01_units.json"))
-            chunk_count = len(units["chunks"])
-            pipeline.ground()
-            pipeline.assemble()
-            result = pipeline.review()
+            result = run.verify(clean_verify(run), round_no=2)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual(len(pipeline.model_calls), chunk_count + 2)
-            self.assertEqual(
-                pipeline.model_calls,
-                [f"ground[{index}]" for index in range(1, chunk_count + 1)] + ["assemble", "review"],
-            )
-            run_log = _runfix.read_json(os.path.join(pipeline.run_dir, "run.json"))
-            self.assertEqual(run_log["stages"]["ground"]["checks"]["chunks_expected"], chunk_count)
-            self.assertEqual(run_log["stages"]["ground"]["checks"]["chunks_found"], chunk_count)
-            self.assertEqual(run_log["stages"]["ground"]["checks"]["missing_chunks"], [])
-
-
-class TestRetryAndReassembly(unittest.TestCase):
-    def test_each_model_stage_allows_one_retry_and_retains_failed_raw_output(self):
-        with tempfile.TemporaryDirectory() as root:
-            pipeline = PipelineHarness(root)
-            pipeline.ground(retry_first_chunk=True)
-            pipeline.assemble(retry=True)
-            result = pipeline.review(retry=True)
+            result = run.finalize()
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            run_log = _runfix.read_json(os.path.join(pipeline.run_dir, "run.json"))
-            for stage in ("ground", "assemble", "plan_check", "review"):
-                self.assertEqual(run_log["stages"][stage]["attempts"], 2, stage)
-            for name in (
-                "02_facts.1.attempt1.raw.json",
-                "03_plan.attempt1.raw.json",
-                "04_review.attempt1.raw.json",
-            ):
-                self.assertTrue(os.path.isfile(os.path.join(pipeline.run_dir, name)), name)
-            self.assertNotIn("attempt3", " ".join(_root_files(pipeline.run_dir)))
+            self.assertEqual(run.model_calls, ["write-r1", "verify-r1", "write-r2", "verify-r2"])
+            with open(run.path("report.md"), encoding="utf-8") as handle:
+                self.assertIn("When should you go back to the ER?", handle.read())
 
-    def test_reassembly_runs_checks_again_and_requires_a_fresh_review(self):
+
+class TestERVisitFailurePath(unittest.TestCase):
+    def test_write_fails_twice_and_no_report_is_produced(self):
         with tempfile.TemporaryDirectory() as root:
-            pipeline = PipelineHarness(
-                root,
-                support_text="Routine administrative coding was completed.",
-                omission_reason="routine_non_actionable",
-            )
-            facts = pipeline.ground()["facts"]
-            support_id = next(fact["id"] for fact in facts if fact["category"] == "other")
-            pipeline.assemble()
-            first = pipeline.review(reassemble_ids=[support_id])
-            self.assertNotEqual(first.returncode, 0)
-            self.assertFalse(os.path.exists(os.path.join(pipeline.run_dir, "05_plan.settled.json")))
-            shutil.copy2(
-                os.path.join(pipeline.run_dir, "04_review.raw.json"),
-                os.path.join(pipeline.run_dir, "04_review.attempt1.raw.json"),
-            )
-
-            pipeline.assemble(include_supporting=True, relevant_fact_ids=[support_id])
-            second = pipeline.review()
-            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-            final = pipeline.finalize()
-            self.assertEqual(final.returncode, 0, final.stdout + final.stderr)
-            run_log = _runfix.read_json(os.path.join(pipeline.run_dir, "run.json"))
-            self.assertEqual(run_log["stages"]["assemble"]["attempts"], 2)
-            self.assertEqual(run_log["stages"]["plan_check"]["attempts"], 2)
-            self.assertEqual(run_log["stages"]["numeric_parity"]["attempts"], 2)
-            self.assertEqual(run_log["stages"]["review"]["attempts"], 2)
-            self.assertEqual(run_log["stages"]["settle_review"]["attempts"], 2)
-            review = _runfix.read_json(os.path.join(pipeline.run_dir, "04_review.json"))
-            result_by_id = {item["fact_id"]: item["result"] for item in review["fact_reviews"]}
-            self.assertEqual(result_by_id[support_id], "visible_accurate")
-            self.assertEqual(pipeline.reassembly_payload["required_fact_ids"], [support_id])
-            self.assertEqual(
-                [fact["id"] for fact in pipeline.reassembly_payload["facts"]],
-                [support_id],
-            )
-            settled = _runfix.read_json(os.path.join(pipeline.run_dir, "05_plan.settled.json"))
-            self.assertIn(support_id, _visible_fact_ids(settled))
-            self.assertEqual(len(pipeline.model_calls), 5)
-
-    def test_second_review_reassembly_request_fails_closed(self):
-        with tempfile.TemporaryDirectory() as root:
-            pipeline = PipelineHarness(
-                root,
-                support_text="Routine administrative coding was completed.",
-                omission_reason="routine_non_actionable",
-            )
-            facts = pipeline.ground()["facts"]
-            support_id = next(fact["id"] for fact in facts if fact["category"] == "other")
-            pipeline.assemble()
-            self.assertNotEqual(pipeline.review(reassemble_ids=[support_id]).returncode, 0)
-            pipeline.assemble()
-            self.assertNotEqual(pipeline.review(reassemble_ids=[support_id]).returncode, 0)
-            final = pipeline.finalize()
-            self.assertNotEqual(final.returncode, 0)
-            self.assertFalse(os.path.exists(os.path.join(pipeline.run_dir, "06_plan.final.json")))
-            self.assertFalse(os.path.exists(os.path.join(pipeline.run_dir, "report.md")))
-
-
-class TestFailClosedPublication(unittest.TestCase):
-    def test_prepublication_failures_never_create_clinical_outputs(self):
-        for failure in ("ground", "assemble", "review"):
-            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as root:
-                pipeline = PipelineHarness(root)
-                if failure == "ground":
-                    units = _runfix.read_json(os.path.join(pipeline.run_dir, "01_units.json"))["units"]
-                    raw = _runfix.facts_raw_for_units(units)
-                    raw["facts"][0]["quote"] = "fabricated quote"
-                    _runfix.write_json(os.path.join(pipeline.run_dir, "02_facts.1.raw.json"), raw)
-                    result = _run("merge_facts.py", "--run-dir", pipeline.run_dir)
-                else:
-                    facts = pipeline.ground()["facts"]
-                    if failure == "assemble":
-                        raw = _runfix.plan_raw(facts)
-                        raw.pop("omitted_facts")
-                        _runfix.write_json(os.path.join(pipeline.run_dir, "03_plan.raw.json"), raw)
-                        result = _run("cite_check.py", "--run-dir", pipeline.run_dir)
-                    else:
-                        draft = pipeline.assemble()
-                        flags = _runfix.read_json(os.path.join(pipeline.run_dir, "03_flags.json"))
-                        raw_review = _runfix.review_raw(draft, facts, flags)
-                        raw_review["reviewed_fact_ids"] = raw_review["reviewed_fact_ids"][:-1]
-                        _runfix.write_json(os.path.join(pipeline.run_dir, "04_review.raw.json"), raw_review)
-                        result = _run("settle_review.py", "--run-dir", pipeline.run_dir)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertFalse(os.path.exists(os.path.join(pipeline.run_dir, "06_plan.final.json")))
-                self.assertFalse(os.path.exists(os.path.join(pipeline.run_dir, "report.md")))
-
-    def test_every_core_gate_failure_removes_publication(self):
-        cases = (
-            "missing_stage",
-            "failed_stage",
-            "degraded_stage",
-            "skipped_stage",
-            "missing_artifact",
-            "stale_identity",
-        )
-        for case in cases:
-            with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
-                run_dir = os.path.join(root, "run")
-                _runfix.make_run_dir(run_dir)
-                run_log_path = os.path.join(run_dir, "run.json")
-                run_log = _runfix.read_json(run_log_path)
-                if case == "missing_stage":
-                    del run_log["stages"]["review"]
-                elif case in {"failed_stage", "degraded_stage", "skipped_stage"}:
-                    run_log["stages"]["review"]["status"] = case.removesuffix("_stage")
-                elif case == "missing_artifact":
-                    os.remove(os.path.join(run_dir, "04_review.json"))
-                elif case == "stale_identity":
-                    settled = _runfix.read_json(os.path.join(run_dir, "05_plan.settled.json"))
-                    settled["meta"]["run_id"] = "stale-run"
-                    _runfix.write_json(os.path.join(run_dir, "05_plan.settled.json"), settled)
-                if case in {"missing_stage", "failed_stage", "degraded_stage", "skipped_stage"}:
-                    _runfix.write_json(run_log_path, run_log)
-                _runfix.write_json(os.path.join(run_dir, "06_plan.final.json"), {"stale": True})
-                with open(os.path.join(run_dir, "report.md"), "w", encoding="utf-8") as handle:
-                    handle.write("stale clinical content")
-                result = _run("finalize.py", "--run-dir", run_dir)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("no clinical report was produced", result.stderr)
-                self.assertFalse(os.path.exists(os.path.join(run_dir, "06_plan.final.json")))
-                self.assertFalse(os.path.exists(os.path.join(run_dir, "report.md")))
-
-    def test_all_current_artifacts_validate_against_schema_v2(self):
-        with tempfile.TemporaryDirectory() as root:
-            run_dir = os.path.join(root, "run")
-            _runfix.make_run_dir(run_dir)
-            _run_ok("finalize.py", "--run-dir", run_dir)
-            schema_by_artifact = {
-                "run.json": "run",
-                "01_units.json": "units",
-                "02_facts.json": "facts",
-                "03_plan.raw.json": "care_plan_agent",
-                "03_plan.draft.json": "care_plan",
-                "03_flags.json": "flags",
-                "04_review.raw.json": "review_raw",
-                "04_review.json": "review",
-                "05_plan.settled.json": "care_plan",
-                "06_plan.final.json": "care_plan",
-            }
-            for artifact, schema in schema_by_artifact.items():
-                document = _runfix.read_json(os.path.join(run_dir, artifact))
-                self.assertEqual(validate.validate(document, validate.load_schema(schema)), [], artifact)
-                if "schema_version" in document:
-                    self.assertEqual(document["schema_version"], SCHEMA_VERSION, artifact)
+            run = ERRun(root)
+            bad = target_draft(run)
+            bad["findings"][0]["unit_ids"] = [run.uid("Technique:") + 1000]
+            first = run.write(bad)
+            self.assertEqual(first.returncode, 1)
+            self.assertIn("retry=allowed", first.stdout)
+            second = run.write(bad)
+            self.assertEqual(second.returncode, 1)
+            self.assertIn("retry=exhausted", second.stdout)
+            self.assertEqual(run.finalize().returncode, 1)
+            self.assertFalse(os.path.exists(run.path("report.md")))
+            self.assertFalse(os.path.exists(run.path("05_plan.final.json")))
 
 
 if __name__ == "__main__":

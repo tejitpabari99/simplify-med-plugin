@@ -24,7 +24,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _SCHEMA_DIR = os.path.normpath(os.path.join(_SCRIPTS_DIR, "..", "schema"))
 
 def load_schema(name: str) -> dict:
-    """Resolve a bare schema name (e.g. "care_plan") to its file under
+    """Resolve a bare schema name (e.g. "plan") to its file under
     schema/ and return the parsed schema. A path ending in .json is used
     as-is (relative paths are resolved against the cwd)."""
     if name.endswith(".json"):

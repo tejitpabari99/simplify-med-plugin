@@ -4,7 +4,7 @@ This is optional post-finalization enrichment. It is not a core model stage and 
 
 ## Preconditions and inputs
 
-Run this stage only when a glossary is explicitly requested and finalization has already succeeded. Read only patient-visible finalized content from `06_plan.final.json` and `report.md`. Do not read the source note, raw facts, omissions, reviews, or intermediate drafts to introduce terms the patient will not see.
+Run this stage only when a glossary is explicitly requested and finalization has already succeeded. Read only patient-visible finalized content: the visible text of `05_plan.final.json` and `report.md`. Do not read the source, `01_source.txt`, drafts, the verification record, or any other intermediate artifact to introduce terms the patient will not see.
 
 ## Output
 
@@ -14,25 +14,27 @@ Write only `07_glossary.raw.json` as one JSON object:
 {"terms": [{"term": "...", "matched_term": "...", "definition": "...", "source": "llm_proposed"}]}
 ```
 
-The deterministic glossary check validates this proposal and may write `07_glossary.json`. Neither glossary artifact may modify `06_plan.final.json` or the default `report.md`.
+The deterministic glossary check (`scripts/glossary_check.py`) validates this proposal and may write `07_glossary.json`. Neither glossary artifact may modify `05_plan.final.json` or the default `report.md`.
 
 ## Rules
 
 **Visible terms only.** Propose a term only when `matched_term` appears exactly in patient-visible finalized content and a general adult reader may not understand its medical meaning. Prefer explaining the term in context; omit the glossary entirely when the report is already clear.
 
-**Small and relevant.** Propose no more than five terms. Include only terms needed to understand the visible summary, diagnoses, medication changes, actions, or warning instructions. Do not define technical details that were intentionally omitted.
+**Small and relevant.** Propose no more than five terms. Include only terms needed to understand the visible findings, diagnoses, medicine changes, next steps, or return precautions. Do not define details the report left out.
 
 **Exact match.** Copy `matched_term` exactly as it appears in the finalized patient content. `term` may be a canonical singular or expanded form.
+
+**No lookup.** Do not search the web, open links, or use outside tools or sources to write a definition.
 
 **Definition only.** Use one or two short plain-language sentences. Define the term generally. Do not interpret this patient's result, add advice, add urgency, or introduce a diagnosis or prognosis.
 
 Examples:
 
+- `aneurysm` -> `A bulge in the wall of a blood vessel.`
+- `bundle branch block` -> `A delay in the electrical signal along one of the pathways that make the heart's lower chambers beat.`
 - `calcified` -> `Hardened by a buildup of calcium, which can happen in blood vessels or tissue over time.`
-- `contrast` -> `A dye used during some scans so certain areas show more clearly.`
-- `circumflex artery` -> `One branch of the arteries that supply blood to the heart.`
 
-The optional glossary must not change the finalized plan, default report, facts, actions, or safety wording. Emit JSON only, with no markdown or commentary.
+The optional glossary must not change the finalized plan, default report, actions, or safety wording. Emit JSON only, with no markdown or commentary.
 
 ## Retry
 

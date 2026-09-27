@@ -143,8 +143,8 @@ class TestValidateFunction(unittest.TestCase):
 
 class TestLoadSchema(unittest.TestCase):
     def test_load_schema_bare_name(self):
-        schema = validate.load_schema("care_plan")
-        self.assertEqual(schema.get("title"), "care_plan")
+        schema = validate.load_schema("check")
+        self.assertEqual(schema.get("title"), "check")
 
     def test_load_schema_path(self):
         path = os.path.join(_paths.SCHEMA_DIR, "run.schema.json")
@@ -166,15 +166,18 @@ class TestValidateCLI(unittest.TestCase):
             with open(instance_path, "w", encoding="utf-8") as f:
                 json.dump(
                     {
-                        "schema_version": "2.0",
-                        "plugin_version": "0.1.0",
+                        "schema_version": "3.0",
                         "run_id": "r1",
-                        "numeric_parity": [],
-                        "thin_fields": [],
+                        "round": 1,
+                        "word_count": 0,
+                        "budget": {"target": 300, "warn": 350, "max": 500},
+                        "over_budget": False,
+                        "numeric_flags": [],
+                        "uncited_protected": [],
                     },
                     f,
                 )
-            result = self._run(["--schema", "flags", "--file", instance_path])
+            result = self._run(["--schema", "check", "--file", instance_path])
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout.strip(), "OK")
 
@@ -182,8 +185,8 @@ class TestValidateCLI(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             instance_path = os.path.join(d, "instance.json")
             with open(instance_path, "w", encoding="utf-8") as f:
-                json.dump({"schema_version": "2.0"}, f)
-            result = self._run(["--schema", "flags", "--file", instance_path])
+                json.dump({"schema_version": "3.0"}, f)
+            result = self._run(["--schema", "check", "--file", instance_path])
             self.assertEqual(result.returncode, 1)
             self.assertNotIn("Traceback", result.stdout)
             self.assertNotIn("Traceback", result.stderr)
@@ -193,7 +196,7 @@ class TestValidateCLI(unittest.TestCase):
             instance_path = os.path.join(d, "instance.json")
             with open(instance_path, "w", encoding="utf-8") as f:
                 f.write("{not valid json")
-            result = self._run(["--schema", "flags", "--file", instance_path])
+            result = self._run(["--schema", "check", "--file", instance_path])
             self.assertEqual(result.returncode, 1)
             self.assertNotIn("Traceback", result.stdout)
             self.assertNotIn("Traceback", result.stderr)

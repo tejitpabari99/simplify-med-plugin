@@ -15,24 +15,36 @@ import _paths  # noqa: E402
 ROOT = _paths.REPO_ROOT
 BUILD = os.path.join(ROOT, "build.py")
 
-EXPECTED_STAGE_FILES = {
-    "assemble.md", "glossary.md", "ground.md", "review.md",
-}
+EXPECTED_STAGE_FILES = {"glossary.md", "verify.md", "write.md"}
 EXPECTED_SCRIPT_FILES = {
-    "_version.py", "anchor_check.py", "cite_check.py", "finalize.py",
-    "glossary_check.py", "merge_facts.py", "numeric_parity.py",
-    "plan_view.py", "readability.py", "render_audit.py", "render_html.py",
-    "render_md.py", "runlog.py", "settle_review.py", "textnorm.py",
-    "unitize.py", "validate.py",
+    "_version.py", "check_draft.py", "finalize.py", "glossary_check.py",
+    "numtokens.py", "plan_paths.py", "plan_view.py", "protected.py",
+    "readability.py", "render_audit.py", "render_html.py", "render_md.py",
+    "runlog.py", "settle.py", "textnorm.py", "unitize.py", "validate.py",
 }
 EXPECTED_SCHEMA_FILES = {
-    "care_plan.schema.json", "care_plan_agent.schema.json",
-    "facts.schema.json", "facts_raw.schema.json", "flags.schema.json",
-    "glossary.schema.json", "glossary_raw.schema.json",
-    "review.schema.json", "review_raw.schema.json", "run.schema.json",
-    "units.schema.json",
+    "check.schema.json", "draft.schema.json", "draft_checked.schema.json",
+    "glossary.schema.json", "glossary_raw.schema.json", "plan.schema.json",
+    "protected.schema.json", "run.schema.json", "units.schema.json",
+    "verify.schema.json", "verify_raw.schema.json",
 }
 OBSOLETE_PIPELINE_FILES = {
+    "skills/simplify/stages/assemble.md",
+    "skills/simplify/stages/ground.md",
+    "skills/simplify/stages/review.md",
+    "skills/simplify/reference/categories.md",
+    "skills/simplify/scripts/anchor_check.py",
+    "skills/simplify/scripts/cite_check.py",
+    "skills/simplify/scripts/merge_facts.py",
+    "skills/simplify/scripts/numeric_parity.py",
+    "skills/simplify/scripts/settle_review.py",
+    "skills/simplify/schema/care_plan.schema.json",
+    "skills/simplify/schema/care_plan_agent.schema.json",
+    "skills/simplify/schema/facts.schema.json",
+    "skills/simplify/schema/facts_raw.schema.json",
+    "skills/simplify/schema/flags.schema.json",
+    "skills/simplify/schema/review.schema.json",
+    "skills/simplify/schema/review_raw.schema.json",
     "skills/simplify/stages/assemble_missing.md",
     "skills/simplify/stages/correct.md",
     "skills/simplify/stages/review_coverage.md",
@@ -131,10 +143,10 @@ class TestOpenAiPluginBuild(unittest.TestCase):
         )
         self.assertTrue(OBSOLETE_PIPELINE_FILES.isdisjoint(relative_names))
         for required in (
-            "skills/simplify/stages/review.md",
-            "skills/simplify/scripts/settle_review.py",
-            "skills/simplify/schema/review.schema.json",
-            "skills/simplify/schema/review_raw.schema.json",
+            "skills/simplify/stages/write.md",
+            "skills/simplify/stages/verify.md",
+            "skills/simplify/scripts/settle.py",
+            "skills/simplify/schema/verify_raw.schema.json",
         ):
             self.assertIn(required, relative_names)
 

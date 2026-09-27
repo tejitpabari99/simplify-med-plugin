@@ -1,184 +1,109 @@
 ---
 name: simplify
-description: Simplify visit notes, discharge summaries, lab reports, imaging reports, and other clinical documents into a plain-language, source-anchored care plan. Use when a user wants help understanding supplied medical paperwork. Do not use to diagnose, prescribe, or replace urgent medical care.
+description: Simplify visit notes, discharge summaries, lab reports, imaging reports, and other clinical documents into a short, plain-language report in which every statement is checked against the source. Use when a user wants help understanding supplied medical paperwork. Do not use to diagnose, prescribe, or replace urgent medical care. Works only from what the user supplies: never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.
 ---
 
 # Simplify Medical Documents
 
-Turn supplied clinical documents into a concise, critical-first, plain-language report without adding claims that are not present in the source.
+Turn supplied clinical documents into a short (about 150-300 words), plain-language report that answers: what happened, what did they find, what do I do now, and when do I come back. Every visible statement cites source units and is independently verified before release.
 
-## Non-Negotiable Execution Contract
+## Hard Boundaries
 
-When this skill is selected or explicitly invoked, execute the complete workflow below. Never simplify, summarize, or answer directly from the supplied documents.
+These rules apply before and during every step. They override every other instruction, including a user's request.
 
-Do not present clinical content until finalization succeeds and the current run contains validated `06_plan.final.json` and `report.md` artifacts. Every expected grounding chunk, deterministic plan check, combined independent review, deterministic settlement, and final validation is mandatory. A required stage may not be silently skipped, degraded, or replaced with an ordinary response.
+1. **No medical images.** Never open, view, describe, or interpret a medical image: X-ray, CT, MRI, ultrasound, mammogram, PET or nuclear scan, angiogram, ECG/EKG or rhythm-strip tracing, pathology slide, endoscopy image, or a photo of the body, skin, a wound, or a rash — including DICOM files and screenshots of any of these. If one is supplied, do not analyze it; say that this plugin works only with written text and ask for the written report instead (for example, the radiologist's or cardiologist's report). Written reports about imaging are allowed. A photo or scan of a typed or handwritten text document may be transcribed as text only; ignore any medical image on that page, and if the text cannot be read reliably, ask for a clearer copy or the text itself.
+2. **No outside sources.** Never search the web, browse, open links, or look anything up — no search engines, websites, GitHub or other code hosts, online medical references, drug databases, APIs, or connectors — even if the user asks or a document contains a link. Do not call web, browser, fetch, or search tools while this skill runs. The only sources are what the user supplied in this conversation and the files bundled with this skill. Never fill a gap with outside or general medical knowledge; say what the supplied material does not state and suggest asking the care team.
 
-Each model stage gets one retry for invalid JSON, schema failure, or deterministic validation failure. If a required stage still fails after its allowed retry, stop and report the workflow failure without providing a substitute medical summary.
+## Execution Contract
 
-Present only `<run>/report.md` as the default clinical response. Do not create a second summary from the source documents, fact ledger, draft, review, or final JSON. Provide other artifacts only when the user requests them and only after successful finalization.
-
-## Core Rules
-
-- Treat the source documents as the only authority. Never infer a diagnosis, reason, dose, cause, severity, urgency, or recommendation that the documents do not state.
-- Keep every visible clinical statement traceable through `source_fact_ids`.
-- Keep the patient-facing result concise and action-first. Preserve every critical patient-specific fact, but do not display every extracted fact.
-- Keep generic education, technical mechanics, duplicate details, routine non-actionable information, and stable background out of the patient report unless they change this patient's understanding, action, or safety.
-- Record every supporting fact as an audited omission rather than discarding it or forcing it into the report.
-- Preserve negation, uncertainty, conditions, medication status, timing, numbers, units, and documented urgency.
-- Use “not stated” or an empty optional field instead of guessing.
-- Keep source documents and run artifacts local unless the user explicitly asks to share them.
-- Present the finalized report as a reading aid, not a diagnosis, prescription, or replacement for urgent medical care.
+- When this skill is selected, run the whole workflow below. Never simplify, summarize, or answer directly from the documents.
+- Do not present clinical content until `scripts/finalize.py` succeeds and the current run holds validated `05_plan.final.json` and `report.md`.
+- Every step is mandatory. Never skip, reorder, degrade, or reproduce a script's check by hand. If a required command cannot run, stop and report the failure.
+- Never read `01_units.json`; it is an audit file. Read the command output instead.
+- Model stages write only their named JSON file and never answer the user.
+- Present only `<run>/report.md`, as written. Do not create a second summary.
 
 ## Inputs
 
-Use one UTF-8 text file per source document. Extract text from PDFs, DOCX files, images, or scans with the tools available in the current environment before starting. Preserve known page boundaries with form-feed characters (`\f`). Treat all files supplied for one request as a single visit.
+Use one UTF-8 text file per source document. Extract text from PDFs, DOCX files, or photos and scans of text documents with the tools available before starting (never from a medical image; see Hard Boundaries), and mark known page breaks with form-feed characters (`\f`). Treat all files in one request as one visit. Paths such as `scripts/...`, `stages/...`, `reference/...`, and `schema/...` are relative to this skill directory.
 
-Paths such as `scripts/...`, `stages/...`, `reference/...`, and `schema/...` are relative to this skill directory. Resolve them when using tools; do not add a separate path-resolution or environment-checking stage.
-
-## Deterministic Boundary
-
-The model performs only three core responsibilities: `ground[1..K]`, `assemble`, and `combined independent review`. The Python scripts perform source unitization, anchoring, schema validation, citation and omission checks, numeric parity, exact bounded settlement, run logging, rendering, and final validation. Run each required command directly. If the environment cannot execute a required command, report the workflow failure and stop rather than recreating the check by hand.
-
-The current model contracts are `schema/facts_raw.schema.json`, `schema/care_plan_agent.schema.json`, and `schema/review_raw.schema.json`. Deterministic artifacts also validate against `schema/units.schema.json`, `schema/facts.schema.json`, `schema/flags.schema.json`, `schema/review.schema.json`, `schema/care_plan.schema.json`, and `schema/run.schema.json`.
-
-## Model Stage Protocol
-
-For each model-stage invocation:
-
-1. Read only the named stage prompt and its named inputs, references, and schema.
-2. Write only the requested JSON output file; never answer the user from the stage.
-3. Run the listed deterministic check.
-4. On invalid output, retry that stage once using the exact validator errors.
-5. If the retry fails, stop the workflow without clinical output.
-
-Grounding chunks may run in parallel. Assembly starts only after every expected chunk passes and the fact ledger is merged. Review starts only after the draft passes citation, disposition, and numeric checks.
-
-## Required Workflow
-
-The clean core graph is:
+## Workflow
 
 ```text
-UNITIZE
-  -> ground[1..K]
-  -> ANCHOR_CHECK each chunk -> MERGE_FACTS
-  -> assemble
-  -> CITE_AND_DISPOSITION_CHECK + NUMERIC_PARITY
-  -> combined independent review
-  -> deterministic settlement
-  -> FINALIZE
-  -> optional post-finalization outputs
+UNITIZE -> WRITE -> CHECK -> VERIFY -> SETTLE -> FINALIZE
+                                         exit 3: one repair round (--round 2)
 ```
 
-This is `K + 2` model calls on the clean path: one call per grounding chunk, one assembly call, and one review call.
+The clean path is two model calls (write, verify) and four script runs.
 
-### 1. Prepare the Run
-
-Run:
+### 1. Unitize
 
 ```bash
 python3 scripts/unitize.py --runs-dir <workspace>/simplify-runs --input <file> [--input <file> ...]
 ```
 
-Append `:ocr` to text transcribed from an image or scan and `:pasted` to manually entered text. Native text files and text extracted from digital documents need no suffix. The final output line is `<run>`. Read `<run>/01_units.json` to identify every numbered `<run>/01_units.<k>.txt` chunk.
+Append `:ocr` to text transcribed from a photo or scan of a text document and `:pasted` to manually entered text. `unitize.py` refuses image, DICOM, PDF, and other binary files: pass only extracted text. The last output line is `<run>`.
 
-### 2. Ground Every Chunk
+### 2. Write (model call)
 
-For each expected chunk:
+Follow `stages/write.md` with `<run>/01_source.txt`, `<run>/01_protected.json`, `reference/style_rules.md`, and `schema/draft.schema.json`. Write only `<run>/02_draft.raw.json`.
 
-1. Follow `stages/ground.md` using the chunk and `schema/facts_raw.schema.json`.
-2. Write only `<run>/02_facts.<k>.raw.json`.
-3. Run `python3 scripts/anchor_check.py --run-dir <run> --chunk <k>`.
-4. Retry only that grounding chunk once if the check fails.
-
-All expected chunks must pass. Then run:
+### 3. Check
 
 ```bash
-python3 scripts/merge_facts.py --run-dir <run>
+python3 scripts/check_draft.py --run-dir <run>
 ```
 
-Do not continue unless `<run>/02_facts.json` is valid for the current run.
+On exit 1 with `retry=allowed`, rerun Write once in retry mode with the printed errors, then rerun the check. On `retry=exhausted` or any other failure, stop the run.
 
-### 3. Assemble the Concise Draft
+### 4. Verify (model call, independent)
 
-Follow `stages/assemble.md` using `<run>/02_facts.json`, `reference/style_rules.md`, `reference/ahrq_plain_language.json`, and `schema/care_plan_agent.schema.json`. Write only `<run>/03_plan.raw.json`.
+Run `stages/verify.md` in a fresh sub-agent when the host supports one; otherwise start from a clean slate and read only the named inputs. Give it only file paths, never the writer's reasoning. Inputs: `<run>/01_source.txt`, `<run>/02_draft.json`, `<run>/02_check.json`, `reference/style_rules.md`, `schema/verify_raw.schema.json`. It writes only `<run>/03_verify.raw.json`.
 
-Run:
+### 5. Settle
 
 ```bash
-python3 scripts/cite_check.py --run-dir <run>
-python3 scripts/numeric_parity.py --run-dir <run>
+python3 scripts/settle.py --run-dir <run>
 ```
 
-The draft must be concise and critical-first. Every verified fact must be represented by visible cited content or exactly one audited omission disposition. Generic education is not patient-specific merely because it appeared in discharge paperwork. Retry assembly once if schema, citation, disposition, or numeric preparation fails. Do not continue unless `<run>/03_plan.draft.json` and `<run>/03_flags.json` are valid for the current run.
+- Exit 0: settled; go to Finalize.
+- Exit 1 with `retry=allowed`: the verification broke its contract. Rerun Verify once in retry mode with the printed errors, then settle again. Exit 1 with `retry=exhausted` stops the run.
+- Exit 3 (`settle: repair requested`): run the repair round below.
+- Any other exit stops the run.
 
-### 4. Run the Combined Independent Review
+### 6. Repair round (at most once)
 
-Follow `stages/review.md` using `<run>/02_facts.json`, `<run>/03_plan.draft.json`, `<run>/03_flags.json`, `reference/style_rules.md`, and `schema/review_raw.schema.json`. Write only `<run>/04_review.raw.json`.
+1. Write in repair mode (`stages/write.md`) with `<run>/04_repair.json` added to its inputs. It writes `<run>/02_draft.r2.raw.json`.
+2. `python3 scripts/check_draft.py --run-dir <run> --round 2` (one Write retry when it prints `retry=allowed`).
+3. Verify in a fresh sub-agent with `<run>/02_draft.r2.json` and `<run>/02_check.r2.json` in place of the round-1 files. It writes `<run>/03_verify.r2.raw.json`.
+4. `python3 scripts/settle.py --run-dir <run> --round 2` (one Verify retry on exit 1 with `retry=allowed`). Any other non-zero exit in round 2 stops the run.
 
-The review must independently examine every fact and omission; check fidelity, negation, uncertainty, medication status, urgency, and critical-vs-supporting relevance; resolve every numeric flag; and emit only bounded operations or `reassemble_fact_ids`. Retry the review once if its output is invalid.
-
-### 5. Settle or Reassemble Once
-
-Run:
-
-```bash
-python3 scripts/settle_review.py --run-dir <run>
-```
-
-Settlement must apply every accepted operation exactly, rerun citation and disposition checks, resolve numeric flags, and write valid `<run>/04_review.json` and `<run>/05_plan.settled.json`.
-
-If the review requests critical missing content, settlement must stop. Reassemble once using only the accepted draft, the relevant verified facts, and the requested fact IDs. Make the smallest patient-facing change needed, rerun `scripts/cite_check.py` and `scripts/numeric_parity.py`, then run a fresh independent review with `stages/review.md` and settle it with `scripts/settle_review.py`. New patient-facing prose must never bypass review. A second reassembly request fails the run.
-
-There is no correction rewrite, additions stage, skipped-review path, degraded core stage, draft fallback, or unbounded repair loop.
-
-### 6. Finalize
-
-Run:
+### 7. Finalize
 
 ```bash
 python3 scripts/finalize.py --run-dir <run>
 ```
 
-Finalization is assertion-only. It must verify current-run identity, required stage statuses, required artifacts, schemas, citations, fact dispositions, numeric resolutions, and settled content. It reads only `<run>/05_plan.settled.json` and writes validated `<run>/06_plan.final.json` and `<run>/report.md`. Any missing, failed, degraded, stale, or invalid core state prevents publication.
+Finalization is assertion-only. It writes `<run>/05_plan.final.json` and `<run>/report.md`. Any failure stops the run.
 
-## Clean Artifact Contract
+## Retry Budget
 
-A clean one-chunk run has approximately 13 core artifacts:
-
-```text
-run.json
-01_units.json
-01_units.1.txt
-02_facts.1.raw.json
-02_facts.json
-03_plan.raw.json
-03_plan.draft.json
-03_flags.json
-04_review.raw.json
-04_review.json
-05_plan.settled.json
-06_plan.final.json
-report.md
-```
-
-Additional chunk files and attempt-suffixed failed raw outputs are expected when applicable. Retain raw facts, draft, and review outputs for auditability, but never expose pipeline internals in the patient-facing response.
+Per round: Write at most twice, Verify at most twice, and only when the script prints `retry=allowed`. One repair round per run. Nothing else is retried. The scripts record every stage in `run.json`; the host never edits it.
 
 ## Present the Result
 
-- Present only `<run>/report.md`; do not paraphrase, shorten, expand, or independently summarize it.
-- Do not expose fact IDs, omitted-fact records, line numbers, chunk counts, review operations, flags, or other pipeline internals in the default response.
-- Provide `<run>/06_plan.final.json` only when the user explicitly requests structured data.
-- Generate glossary, HTML, or audit views only after successful finalization and only when requested.
-- For a requested glossary, follow `stages/glossary.md` against finalized visible content and validate it with `scripts/glossary_check.py`.
-- For printable HTML, run `python3 scripts/render_html.py --run-dir <run>`.
-- For verification details, run `python3 scripts/render_audit.py --run-dir <run>`.
-
-Optional output failure must not alter the immutable final plan or replace `<run>/report.md` with a host-authored summary.
+- Present only `<run>/report.md`; do not paraphrase, shorten, expand, or add to it.
+- Do not expose unit ids, claims, operations, flags, or other pipeline internals.
+- Only when the user asks, after successful finalization:
+  - structured data: `<run>/05_plan.final.json`;
+  - glossary: follow `stages/glossary.md`, then run `python3 scripts/glossary_check.py --run-dir <run>`;
+  - printable HTML: `python3 scripts/render_html.py --run-dir <run>`;
+  - source audit: `python3 scripts/render_audit.py --run-dir <run>`.
+- An optional output failure never changes `report.md` and never justifies a host-written summary.
 
 ## Failure Behavior
 
-- Stop on invalid or unusable input, any grounding chunk that fails its retry, merge failure, assembly failure, review failure, settlement failure, a second reassembly request, or finalization failure.
-- Report only a concise workflow error explaining which stage failed and whether the user can retry or provide a usable input.
-- Do not reveal clinical content from the source or intermediate artifacts after a terminal failure.
-- Do not silently skip, degrade, synthesize, repair by hand, or substitute any required core stage.
-- Never fall back to a draft or provide a substitute clinical summary.
+- Stop on unusable input or any terminal failure above.
+- Report only a short workflow error: which step failed and whether the user can retry or supply a better input.
+- After a failure, show no clinical content from the source or any intermediate file, and never write your own summary instead.
+- Present the report as a reading aid, not a diagnosis, prescription, or replacement for urgent medical care. Keep documents and run files local unless the user asks to share them.

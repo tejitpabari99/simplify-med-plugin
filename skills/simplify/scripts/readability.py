@@ -4,7 +4,8 @@
 This is a reading-level estimate only, not a measure of quality, clarity,
 or medical accuracy. It counts words, sentences, and syllables and applies
 a fixed formula; it says nothing about whether the text is correct or
-well organized.
+well organized. For a final plan, score `plan_view.visible_text(plan)`:
+the patient-visible strings only, without headings or metadata.
 
 Stdlib only. Importable as `readability` (`fk_grade(text) -> float | None`)
 and runnable as `python3 readability.py <file>`.

@@ -1,30 +1,30 @@
 # simplify-med — architecture
 
-This document describes the implemented schema-v2 pipeline: its execution
-contract, three model responsibilities, deterministic safeguards, run
-artifacts, rendering behavior, and compatibility boundary. Read
-[overview.md](overview.md) first for the patient-facing behavior.
+This document describes the implemented schema-3.0 pipeline: its execution
+contract, two model calls, deterministic safeguards, run artifacts, and
+rendering. Read [overview.md](overview.md) first for the patient-facing
+behavior. The design rationale and evidence are in
+`agent_files/claude-busy-gauss-okyysq-2026-09-26/` (`PRD.md`, `research.md`).
 
 ## Principles
 
 - **Explicit invocation.** The `simplify` skill is not implicitly invoked.
-  Once selected, it must run the complete workflow rather than answer with
-  an ad hoc summary.
-- **Fact-first.** Patient-facing claims originate as atomic facts anchored
-  to complete source clauses.
-- **Critical-first.** The report preserves what changes understanding,
-  action, or safety without displaying every extracted detail.
-- **Audited omissions.** Every verified fact is either cited by visible
-  content or assigned exactly one structured omission reason.
-- **Three model responsibilities.** The model grounds source chunks,
-  assembles the concise draft, and performs one independent semantic review.
-- **Deterministic enforcement.** Python owns source anchoring, schemas,
-  citations, omission accounting, numeric parity, exact settlement, run
-  identity, rendering, and final publication gates.
-- **Fail closed.** A missing, failed, degraded, stale, or invalid core stage
-  prevents clinical output. There is no draft fallback.
+  Once selected, it runs the complete workflow rather than answering with an
+  ad hoc summary.
+- **Write the short report, then verify what is shown.** The writer works
+  directly from the numbered source; the work scales with the report, not with
+  the chart. There is no fact ledger.
+- **Cite units, not quotes.** Every visible item carries source unit ids;
+  scripts check the ids and numbers, and the verifier checks the meaning.
+- **Protected content is never silently dropped.** A high-recall keyword scan
+  finds candidate units for six protected categories; each uncited candidate
+  must be dismissed by the verifier with a reason or shown after one repair.
+- **Independent verification.** A second model call, ideally in a fresh
+  sub-agent, checks every visible item against the original source.
+- **Fail closed.** A missing, failed, stale, or invalid core step prevents
+  clinical output. There is no draft fallback and no host-written summary.
 - **Immutable default output.** The default clinical response is the
-  finalized `report.md`; the host does not create a second summary.
+  finalized `report.md`.
 
 ## Repository layout
 
@@ -36,12 +36,13 @@ skills/simplify/
   SKILL.md                     invocation contract and workflow
   agents/openai.yaml           UI metadata and explicit-invocation policy
   assets/                      skill icons
-  stages/                      ground, assemble, review, optional glossary
+  stages/                      write, verify, optional glossary
   scripts/                     deterministic pipeline and renderers
-  schema/                      schema-v2 data contracts
-  reference/                   relevance, language, and lookup guidance
+  schema/                      schema-3.0 data contracts
+  reference/                   style rules and optional lookups
   templates/                   optional HTML report template
-mcp/openai/                    retained future source; excluded from ZIP
+mcp/openai/                    parked widget; excluded from ZIP; not yet
+                               updated to the current plan shape
 tests/                         deterministic, integration, and package tests
 docs/                          documentation and design history
 simplify-runs/                 gitignored run folders
@@ -50,338 +51,174 @@ simplify-runs/                 gitignored run folders
 The distributable ZIP contains only `plugin.json`,
 `.codex-plugin/plugin.json`, and `skills/`.
 
-## Invocation contract
-
-`skills/simplify/agents/openai.yaml` sets
-`allow_implicit_invocation: false`. The user or host must explicitly select
-the skill. The metadata prompt and both plugin manifests direct the host to
-run the complete workflow and not summarize the documents directly.
-
-After invocation:
-
-1. No model stage may answer the user.
-2. No clinical content may be presented before finalization succeeds.
-3. Every required stage receives at most one retry for invalid model output.
-4. A terminal core failure produces only a concise workflow error.
-5. The host presents the finalized `report.md` without rewriting it.
-
-This instruction contract is reinforced by deterministic finalization. It
-is not merely a preferred prompting style.
-
-## Model and Python boundary
-
-The clean path has three model responsibilities:
-
-1. **Ground `K` chunks.** Extract atomic facts with complete-clause quotes,
-   preserving negation, uncertainty, conditions, numbers, units, status,
-   timing, and urgency.
-2. **Assemble once.** Create concise, cited patient content and assign every
-   non-visible fact an omission disposition.
-3. **Review once.** Independently evaluate every visible fact, every
-   omission, and every numeric flag; return bounded operations or request
-   reassembly for critical missing content.
-
-Python does not decide medical meaning or write the explanation. It verifies
-and constrains model output through deterministic algorithms. This preserves
-the authoring rule in [openai-plugin.md](openai-plugin.md): language judgment
-belongs in instructions; repeatable safety checks belong in scripts.
-
 ## Stage graph
 
 ```text
-UNITIZE
-  -> ground[1..K] in parallel
-  -> ANCHOR_CHECK each chunk -> MERGE_FACTS
-  -> assemble
-  -> CITE_AND_DISPOSITION_CHECK + NUMERIC_PARITY
-  -> combined independent review
-  -> SETTLE_REVIEW
-       -> exact bounded operations
-       -> citation/disposition recheck
-       -> numeric-resolution recheck
-  -> FINALIZE
+UNITIZE      scripts/unitize.py            (script)
+  -> WRITE   stages/write.md               (model call 1)
+  -> CHECK   scripts/check_draft.py        (script)
+  -> VERIFY  stages/verify.md              (model call 2, independent)
+  -> SETTLE  scripts/settle.py             (script)
+       exit 3 = repair requested -> one repair round
+                (WRITE -> CHECK -> VERIFY -> SETTLE, --round 2)
+  -> FINALIZE scripts/finalize.py          (script) -> 05_plan.final.json + report.md
   -> optional glossary / HTML / audit
 ```
 
-For `K` source chunks, the clean workflow uses `K + 2` model calls: one per
-grounding chunk, one assembly call, and one review call. A one-chunk clean
-run therefore uses three model calls.
+Clean path: two model calls and four script runs. Write may be retried once
+per round when the check fails; verify may be retried once per round when
+settlement rejects its contract. One repair round at most. Any second failure
+stops the run without clinical output.
 
-The graph has three clean model latency waves: parallel grounding, assembly,
-and review. Fewer calls and less repeated context are implemented properties;
-wall-clock and token improvements are hypotheses until measured on
-representative documents and hosts.
+## Steps
 
-## Core workflow
+### Unitize
 
-### 1. Unitize
+`unitize.py` creates a fresh run identity, copies inputs under `00_input/`,
+records SHA-256 input metadata in `run.json`, and numbers every non-blank line
+as a unit in `01_units.json`. Lines that are only a URL, page counters, and
+exact repeats (portal headers, footers, duplicated pages) are marked `skip`
+and are never valid citations; a repeated line that matches a protected-content
+pattern is never skipped. `01_source.txt` lists every non-skipped unit as
+`[<id>] <text>` with file/page header lines. `protected.py` scans the units
+and writes `01_protected.json`: candidate unit ids for `medication_changes`,
+`follow_up`, `return_precautions`, `diagnoses`, `disposition`, and
+`abnormal_or_pending_results`. The host never reads `01_units.json`.
 
-`unitize.py` creates a fresh run identity, copies source text under
-`00_input/`, records SHA-256 input metadata in `run.json`, preserves page and
-line locations, and writes numbered chunks. Starting an explicit run folder
-clears stale downstream artifacts so results cannot cross run identities.
+### Write
 
-The pipeline accepts one UTF-8 text file per source document. Extraction
-methods are `native`, `ocr`, or `pasted`; form-feed characters preserve known
-page boundaries.
+`stages/write.md` reads `01_source.txt`, `01_protected.json`,
+`reference/style_rules.md`, and `schema/draft.schema.json`, and writes
+`02_draft.raw.json`. The draft has fixed slots: `visit_type`, `why_you_went`,
+`findings_lead`, `findings[]` (one bottom-line bullet per test or exam area),
+`diagnoses[]`, `disposition`, `next_steps[]`, `medicines` (changes or a
+source-stated none-statement), `return_precautions[]`, `questions[]`, and a
+`coverage` entry per protected category (`shown` or `none_in_source`). Every
+visible item cites at least one unit. The prompt carries the SHOW/SKIP
+selection rules and the anti-patterns seen in real runs.
 
-### 2. Ground and anchor
+### Check
 
-The host runs `stages/ground.md` once for every expected chunk and writes
-`02_facts.<k>.raw.json`. `anchor_check.py` validates the raw schema and
-requires each quote to match a complete clause in the numbered chunk.
+`check_draft.py` validates the draft schema, that every cited unit exists and
+is not skipped, that each `shown` coverage category is backed by a visible
+item, and that visible text has no empty brackets or clinician names. It writes
+`02_draft.json` and `02_check.json`: the visible word count against the budget
+(target 300, warn 350, max 500; above max fails), numeric flags for number
+tokens not found in an item's cited units, and protected candidates no visible
+item cites.
 
-Grounding chunks may run in parallel. Each failing chunk may be retried once.
-`merge_facts.py` refuses missing chunks, invalid chunks, rejected facts, or
-artifacts from another run. It writes the verified `02_facts.json` ledger;
-assembly and review use that JSON ledger directly.
+### Verify
 
-### 3. Assemble a concise draft
+`stages/verify.md` reads `01_source.txt`, `02_draft.json`, `02_check.json`,
+`reference/style_rules.md`, and `schema/verify_raw.schema.json`, and writes
+`03_verify.raw.json` with four parts:
 
-`stages/assemble.md` reads only the verified fact ledger plus the language
-and relevance references. It writes `03_plan.raw.json` against the
-agent-facing care-plan schema.
+- **claims**: one per visible item path (`findings[2]`, `why_you_went`,
+  `medicines.none_statement`, ...) — `supported`, `needs_correction`, or
+  `unsupported`;
+- **operations**: `replace` (a visible string field), `clear` (an optional
+  item or `plain_name`), or `remove` (an array item, reason `unsupported`,
+  `noise`, or `duplicate`), including trimming when the draft is over budget;
+- **numeric resolutions**: each flag `equivalent`, `corrected`, or `removed`;
+- **protected units**: each uncited candidate `covered`, `not_needed` with a
+  reason, or `missing`.
 
-`cite_check.py` then:
+The verifier adds no items; missing content goes only through `missing`.
 
-- validates every patient-facing citation;
-- rejects unsupported summary or changed-since text;
-- requires every verified fact to be visible or omitted exactly once;
-- rejects unknown, duplicate, or conflicting fact dispositions; and
-- writes the system-owned `03_plan.draft.json`.
+### Settle
 
-`numeric_parity.py` writes `03_flags.json` with stable flag IDs, preserving
-numeric multiplicity so the reviewer can resolve each mismatch explicitly.
-Assembly may be retried once if schema, citation, disposition, or numeric
-preparation fails.
+`settle.py` validates the verification contract (every visible path claimed
+once, every flag and uncited candidate resolved once, operations on existing
+paths, non-supported claims edited) and applies operations exactly, removals
+from the highest index down. It re-asserts schema validity, protected
+coverage, numeric parity, and the word maximum. Exit codes: `0` settled
+(`03_verify.json`, `04_plan.settled.json`); `1` contract errors for the one
+verify retry; `3` repair requested (round 1 only, `04_repair.json`). A
+`missing` result in round 2 fails the run.
 
-### 4. Combined independent review
+### Repair round
 
-`stages/review.md` replaces the former separate fidelity and coverage
-reviews. It reads the verified ledger, checked draft, numeric flags, and
-relevance rules, then writes `04_review.raw.json`.
+The writer receives `04_repair.json` (the missing units and the settled
+draft), keeps the settled draft, adds only what is missing, and writes
+`02_draft.r2.raw.json`. Check, a fresh verification of the whole repaired
+draft, and settlement then run with `--round 2`.
 
-The review must:
+### Finalize
 
-- enumerate every verified fact exactly once;
-- mark visible facts `visible_accurate` or `visible_needs_correction`;
-- mark omitted facts `omission_acceptable` or `must_include`;
-- check fidelity, negation, uncertainty, medication status, urgency, and
-  critical-versus-supporting relevance;
-- resolve every numeric flag as equivalent, corrected, or removed; and
-- emit only `replace`, `clear`, or `remove` operations on allowed paths.
+`finalize.py` is assertion-only: current run identity everywhere, core stages
+`unitize`, `write`, `check`, `verify`, and `settle` ok for the final round,
+schema-valid artifacts, and a PII sweep. It writes `05_plan.final.json`
+(settled plan plus versions, run id, timestamp, word count, and readability
+score) and `report.md`.
 
-Aggregate verdicts and counts are derived deterministically rather than
-trusted from model-authored totals.
+## Visible paths
 
-### 5. Settle exactly
-
-`settle_review.py` validates the exhaustive review contract. It rejects
-unknown paths, protected system fields, partial operation application,
-unsupported replacement values, unresolved numeric flags, and review output
-that belongs to another run.
-
-Accepted operations apply exactly once. Settlement then reruns citation,
-fact-disposition, and numeric assertions before writing:
-
-- `04_review.json`, the sanitized review and derived counts; and
-- `05_plan.settled.json`, the only clinical input accepted by finalization.
-
-There is no model-authored whole-plan correction stage and no separate
-additions artifact.
-
-### 6. Bounded reassembly
-
-When the independent reviewer marks an omitted fact `must_include`, it lists
-the same fact ID in `reassemble_fact_ids`. Settlement stops instead of adding
-unreviewed prose.
-
-The host may reassemble once, using the accepted draft and only the verified
-facts needed for the smallest patient-facing change. It reruns citation and
-numeric checks, invokes a fresh independent review over the complete revised
-draft, and settles again. A second reassembly request fails the run.
-
-This boundary preserves speed on the clean path while ensuring every new
-patient-facing sentence receives independent semantic review.
-
-### 7. Fail-closed finalization
-
-`finalize.py` is assertion-only for clinical content. It reads only
-`05_plan.settled.json` and verifies:
-
-- current schema, plugin, and run identities;
-- required core stage records and `ok` statuses;
-- required artifact declarations and files;
-- structured schemas;
-- exhaustive citations and omission dispositions;
-- complete numeric resolutions; and
-- settled content integrity.
-
-It applies only the pipeline's bounded clinician-name substitution, computes
-readability telemetry, and atomically writes `06_plan.final.json` and
-`report.md`. It does not merge additions, silently drop content, repair a
-draft, or publish a degraded result.
-
-Core run stages are `unitize`, `ground`, `assemble`, `plan_check`,
-`numeric_parity`, `review`, `settle_review`, and `finalize`. Core stages have
-only `ok` or `failed` states. Optional stages may be skipped or degraded
-without changing an already finalized plan.
-
-## Critical-versus-supporting policy
-
-The complete ledger is an audit resource, not a mandate to display every
-fact. The report leads with the main outcome and next action.
-
-Critical content normally remains visible:
-
-- the reason for the visit and main clinician conclusion;
-- documented diagnoses or important unresolved findings;
-- medication starts, stops, changes, doses, timing, and instructions;
-- pending tests, referrals, monitoring, follow-up timing, and contacts;
-- explicit warning signs with the source's action and urgency;
-- uncertainty, conflicts, declined or conditional treatment; and
-- reassuring results that directly explain disposition or next steps.
-
-Supporting content normally stays out of the patient report:
-
-- technical test mechanics, contrast details, sequences, and metadata;
-- raw normal values or incidental findings that do not change the plan;
-- repeated facts already represented clearly;
-- rejected, non-actionable differential diagnoses;
-- generic education or wellness guidance not applied to this patient; and
-- stable background history or unchanged medicines.
-
-Generic discharge education is not patient-specific merely because it was
-attached to the record. Supporting facts remain in `02_facts.json` and are
-recorded in `omitted_facts` with one of these schema-defined reasons:
-
-- `duplicate_or_already_represented`;
-- `technical_detail`;
-- `routine_non_actionable`;
-- `rejected_non_actionable_differential`;
-- `generic_not_patient_specific`; or
-- `stable_unchanged_background`.
-
-The reviewer examines every omission and can force bounded reassembly when a
-supposedly supporting fact is actually critical.
+`scripts/plan_paths.py` is the single definition of what the patient sees, in
+report order: `why_you_went`, `findings_lead`, `findings[i]`, `diagnoses[i]`,
+`disposition`, `next_steps[i]`, `medicines.items[i]`,
+`medicines.none_statement`, `return_precautions[i]`, `questions[i]`. The
+check, settlement, renderers' word count, and verifier claims all use these
+paths.
 
 ## Clean artifact contract
 
-A clean one-chunk schema-v2 run has approximately 13 core artifacts, excluding
-copied source files:
-
 ```text
 run.json
-01_units.json
-01_units.1.txt
-02_facts.1.raw.json
-02_facts.json
-03_plan.raw.json
-03_plan.draft.json
-03_flags.json
-04_review.raw.json
-04_review.json
-05_plan.settled.json
-06_plan.final.json
+00_input/<files>
+01_units.json          all units incl. skipped (audit)
+01_source.txt          numbered source the models read
+01_protected.json      protected candidate units
+02_draft.raw.json      WRITE output
+02_draft.json          checked draft
+02_check.json          budget, numeric flags, uncited protected units
+03_verify.raw.json     VERIFY output
+03_verify.json         settled verification record
+04_plan.settled.json
+05_plan.final.json
 report.md
 ```
 
-Additional chunks add one numbered units file and one raw-facts file each.
-Failed model attempts may leave attempt-suffixed raw artifacts for audit.
-The raw fact, draft, and review files remain local pipeline evidence and are
-not part of the default patient response.
+A repair round adds `04_repair.json`, `02_draft.r2.raw.json`,
+`02_draft.r2.json`, `02_check.r2.json`, `03_verify.r2.raw.json`, and
+`03_verify.r2.json`. Failed attempts keep an `.attempt1` suffix.
 
 ## Data contracts
 
-All schema-v2 JSON uses the current run and plugin identity where applicable.
-The eleven bundled schemas comprise nine core contracts and two optional
-glossary contracts:
-
-- `units`: source locations, extraction methods, and chunk boundaries;
-- `facts_raw` and `facts`: model extraction and verified ledger;
-- `care_plan_agent` and `care_plan`: model-owned draft fields and the
-  system-owned complete plan;
-- `flags`: stable numeric mismatch IDs and thin-field telemetry;
-- `review_raw` and `review`: exhaustive semantic review, exact operations,
-  numeric resolutions, derived counts, and verdict;
-- `run`: constrained core and optional stage records;
-- `glossary_raw` and `glossary`: optional post-finalization terms.
-
-Patient-facing questions are cited objects, not free strings. The plan's
-`omitted_facts` array provides exhaustive non-visible fact dispositions.
-System-owned metadata, notices, readability, source IDs, and omissions are
-hidden from the default patient view.
+Schemas in `skills/simplify/schema/`: `units`, `protected`, `draft` (writer
+contract), `draft_checked` (`02_draft.json` and `04_plan.settled.json`),
+`check`, `verify_raw` (verifier contract), `verify`, `plan` (final plan),
+`run`, and the optional `glossary_raw` and `glossary`. Run-log core stages are
+`unitize`, `write`, `check`, `verify`, `settle`, and `finalize`, with statuses
+`ok` or `failed`, plus `repair_requested` for `settle`.
 
 ## Default and optional outputs
 
-`report.md` is the only default clinical output. `plan_view.py` constructs the
-patient view, and `render_md.py` renders it without another model rewrite.
-The host presents that file as-is.
-
-After successful finalization, the user may request:
+`report.md` is the only default clinical output. `plan_view.py` builds the
+sections from the final plan and `render_md.py` renders them without another
+model rewrite. After successful finalization, the user may request:
 
 - **Glossary:** `stages/glossary.md` works only from visible finalized text;
-  `glossary_check.py` writes `07_glossary.raw.json` and
-  `07_glossary.json`.
-- **HTML:** `render_html.py` writes `report.html` and may consume the optional
-  validated glossary without modifying `06_plan.final.json`.
-- **Audit:** `render_audit.py` writes `report.audit.md` with stage records,
-  omission decisions, reviewer results, source quotes, locations, and
-  extraction methods.
+  `glossary_check.py` validates it.
+- **HTML:** `render_html.py` writes `report.html`.
+- **Audit:** `render_audit.py` writes `report.audit.md`: each visible item
+  followed by its cited source lines with file, page, and line.
 
-Optional output failure never invalidates or mutates a completed final plan.
-It also never authorizes a host-authored substitute summary.
-
-## Schema-v1 compatibility
-
-Completed schema-v1 final reports remain renderable through the Markdown,
-HTML, and audit views. Legacy glossary data is supported for those completed
-reports.
-
-Schema-v1 intermediate artifacts are not resumable. `finalize.py` rejects a
-partial schema-v1 run and directs the user to restart from source through the
-schema-v2 workflow. This avoids mixing stage names, schemas, run identities,
-or safety guarantees across versions.
-
-## Retries, concurrency, and failure
-
-- Grounding chunks may run concurrently.
-- Assembly waits for every expected chunk and a valid merged ledger.
-- Review waits for checked draft and numeric flags.
-- Each model stage receives one retry using deterministic validator errors.
-- Reassembly is allowed once and always requires a fresh complete review.
-- There is no unbounded repair loop, skipped review, degraded core stage, or
-  draft fallback.
-- Required command unavailability is a workflow failure; the host does not
-  reproduce deterministic checks by inspection.
-
-`runlog.py` serializes updates with file and thread locks, records attempts,
-checks, artifacts, timestamps, and run identity, and constrains recognized
-stage names through the schema-v2 run contract.
+Optional output failure never changes the final plan and never authorizes a
+host-authored substitute summary.
 
 ## Testing
-
-The standard-library test suite covers each deterministic boundary plus the
-end-to-end script chain, stage documentation, status lines, fixtures, skill
-consistency, and package contents:
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-Important regression areas include missing chunks, invalid anchors,
-unsupported citations, duplicate or missing fact dispositions, numeric
-multiplicity, exhaustive review, exact settlement, protected paths,
-reassembly refusal, stale run identity, fail-closed finalization, explicit
-invocation metadata, optional renderers, and schema-v1 compatibility.
+The suite covers each deterministic step, an end-to-end run on the synthetic
+ER fixture (hand-written draft and verification), the repair round and failure
+paths, renderers, stage documentation, skill consistency, and package
+contents. Latency and token use are not benchmarked by the suite.
 
-## Performance interpretation
+## Known gaps
 
-The schema-v2 design fixes the clean call count at `K + 2` and targets about
-13 core artifacts for one chunk. Those are architectural counts, not latency
-benchmarks. The removal of a full-source glossary call, a second semantic
-review, whole-plan correction, and additions generation should reduce model
-tokens and scheduling overhead, but p50/p95 latency, retries, token use, fact
-recall, unsupported claims, and omission quality must be measured on
-representative clinical documents before making quantitative speed or quality
-claims.
+- The parked `mcp/openai/` widget still reads the old plan shape.
+- Very long packets that exceed one model call's context need a map pre-pass
+  (not implemented).

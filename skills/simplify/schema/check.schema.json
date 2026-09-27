@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "check",
+  "description": "CHECK output (02_check.json; round 2: 02_check.r2.json): word budget, numeric flags, and uncited protected candidates the verifier must resolve.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "round",
+    "word_count",
+    "budget",
+    "over_budget",
+    "numeric_flags",
+    "uncited_protected"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "category": {
+      "type": "string",
+      "enum": [
+        "medication_changes",
+        "follow_up",
+        "return_precautions",
+        "diagnoses",
+        "disposition",
+        "abnormal_or_pending_results"
+      ]
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string", "enum": ["3.0"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "round": {"type": "integer", "minimum": 1, "maximum": 2},
+    "word_count": {"type": "integer", "minimum": 0},
+    "budget": {
+      "type": "object",
+      "required": ["target", "warn", "max"],
+      "additionalProperties": false,
+      "properties": {
+        "target": {"type": "integer", "minimum": 1},
+        "warn": {"type": "integer", "minimum": 1},
+        "max": {"type": "integer", "minimum": 1}
+      }
+    },
+    "over_budget": {"type": "boolean"},
+    "numeric_flags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["flag_id", "path", "token", "unit_ids"],
+        "additionalProperties": false,
+        "properties": {
+          "flag_id": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "token": {"type": "string", "minLength": 1},
+          "unit_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}}
+        }
+      }
+    },
+    "uncited_protected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["unit_id", "categories"],
+        "additionalProperties": false,
+        "properties": {
+          "unit_id": {"type": "integer", "minimum": 1},
+          "categories": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"$ref": "#/definitions/category"}
+          }
+        }
+      }
+    }
+  }
+}

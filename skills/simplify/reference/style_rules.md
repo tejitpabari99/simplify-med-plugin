@@ -1,42 +1,48 @@
 # Style rules
 
-PII -- replace every person's name and every facility's name with a generic form: a clinician's name becomes "your doctor" (or "your surgeon" / "your cardiologist" / etc. if the fact itself names that specialty); a hospital or clinic name becomes "the hospital" or "the clinic." Example: "Doctor Alok Singh" becomes "your doctor." This is the one case where you do not preserve a fact's exact wording -- a generic form loses the patient no clinical information. The patient's own name, date of birth, address, and insurance details must never appear either.
+These rules apply to every patient-visible string the writer produces and every
+replacement value the verifier proposes.
 
-NUMERACY -- a number is the easiest place to silently add a judgement the source never made, so give every one in this document the same verbatim discipline PII gets for names, plus one allowance: copy a value and its unit exactly as the fact states them ("A1c 7.2%" stays "your A1c was 7.2%"), changing only spacing or spelling the way LANGUAGE RULES below already permits ("metoprolol 25mg" -> "metoprolol 25 mg" is fine; the number and the unit itself are not). Never add a normal/abnormal/elevated/low/high label to a bare value unless the fact itself uses that word -- a fact giving "blood pressure 158/96" is a number, not a verdict; do not write "high blood pressure" for it unless a fact says so. Never add a reference range that isn't in the fact -- "A1c 7.2%" does not become "A1c 7.2% (normal range 4.0-5.6%)." Never round, truncate, or otherwise adjust an already-exact number -- "ejection fraction 42%" stays "42%," never "about 40%" or "40%." Never convert a unit -- "creatinine 1.4 mg/dL" stays mg/dL, never becomes a value you compute yourself in µmol/L. Never reframe a percentage as a frequency or a frequency as a percentage -- "occurs in 30% of patients" does not become "happens 3 out of 10 times you take it," and "taken twice daily" does not become "100% compliance." Never attach a severity, urgency, or color ("critical," "dangerously high," "mild") to a number the fact does not itself grade. You may add an interpretation of a number ONLY when the fact itself already states that interpretation in its own words -- a fact reading "A1c 7.2%, indicating poor control" may carry "indicating poor control" into the rendered field, because the source made that judgement, not you.
+SOURCES -- the numbered source (`01_source.txt`) is the only evidence. Never search the web, open links, or look anything up in any outside source, and never add a detail, value, reason, or explanation from general medical knowledge. Never describe or interpret a medical image (X-ray, CT, MRI, ultrasound, ECG tracing, photo of the body); only the written words in the source count. If the source does not state something, leave it out or empty.
 
-LANGUAGE RULES -- apply to every field you write:
+PII -- replace every person's name and every facility's name with a generic form: a clinician's name becomes "your doctor" (or "your surgeon" / "your cardiologist" / "the ER doctor" when the source names that role); a hospital or clinic name becomes "the hospital" or "the clinic." Example: "Doctor Alok Singh" becomes "your doctor." This is the one case where you do not keep the source's exact wording -- a generic form loses the patient no clinical information. The patient's own name, date of birth, medical record number, address, phone number, and insurance details must never appear.
+
+NUMERACY -- a number is the easiest place to silently add a judgement the source never made, so give every number the same verbatim discipline PII gets for names. Copy a value and its unit exactly as the cited source unit states them ("A1c 7.2%" stays "your A1c was 7.2%"), changing only spacing or spelling the way LANGUAGE RULES below permit ("metoprolol 25mg" -> "metoprolol 25 mg" is fine; the number and the unit itself are not). Never add a normal/abnormal/elevated/low/high label to a bare value unless the source uses that word -- "blood pressure 158/96" is a number, not a verdict. Never add a reference range the source does not give. Never round, truncate, or adjust an exact number -- "ejection fraction 42%" stays "42%," never "about 40%." Never convert a unit. Never reframe a percentage as a frequency or a frequency as a percentage. Never attach a severity, urgency, or color ("critical," "dangerously high," "mild") to a number the source does not grade. You may carry an interpretation of a number only when the source states it in its own words ("A1c 7.2%, indicating poor control"). Show a number only when the number itself matters to the patient: a dose, a date, a follow-up interval, or a value the clinician calls out or that drives the plan.
+
+LANGUAGE RULES -- apply to every visible string:
 - Active voice. Address the patient as "you."
 - One idea per sentence. Keep sentences under about 20 words.
-- Expand every abbreviation. Never print "BID", "HTN", "f/u", or similar -- use the plain words.
-- Never invent a number, and never convert vague wording ("a few weeks") into an exact one ("3 weeks") unless a fact states the exact number -- see NUMERACY above for the rest of this document's numeric rules.
-- Never add urgency, prognosis, or medical advice beyond what a fact states.
-- Start every patient action (in medications, tests, procedures, other, follow_up) with a clear verb: Take / Call / Schedule / Ask / Bring / Watch / Avoid / Continue / Stop.
-- Aim for about a 6th-grade reading level: short common words, one idea per sentence.
-- Lead with the main message and the next action. Keep supporting detail out of the first view.
-- Do not repeat a fact in multiple sections unless repetition is needed to prevent a safety error.
-- Leave an optional field empty or null when the source does not state it. Do not write filler such as "not stated in your note" into patient-facing text.
+- Expand clinical shorthand. Never print "BID", "HTN", "f/u", "RBBB", or similar -- use the plain words. Names patients already know, such as ER, CT, and MRI, may stay. `reference/abbreviations.json` is an optional lookup.
+- Never invent a number, and never turn vague wording ("a few weeks") into an exact one ("3 weeks").
+- Translate, don't interpret. Plain words for a term the source uses are fine ("infarct" -> "stroke", "paresthesias" -> "tingling"). Adding a diagnosis, label, cause, purpose, urgency, prognosis, range, or "normal"/"reassuring" verdict the source does not state is not.
+- Keep the source's exact conclusion word. "Significant" is not "major"; "possible" is not "likely"; "cannot exclude" is not "ruled out"; "not concerning for" is not "normal."
+- Preserve negation and uncertainty exactly. Unknown is not negative: if the source does not say something, leave it out rather than stating that it did not happen.
+- Start every patient action with a clear verb: Take / Call / Schedule / Ask / Bring / Watch / Avoid / Continue / Stop / Return.
+- Aim for about a 6th-grade reading level: short common words.
+- Say each thing once. Do not repeat a point in two sections unless repetition prevents a safety error.
+- Leave an optional slot empty or null when the source does not support it. Never write filler such as "not stated in your note."
+- Never leave empty brackets such as "()" or "[]" in visible text.
 
-CRITICAL VS SUPPORTING -- preserve what changes understanding, action, or safety:
+SHOW -- the report answers four questions: what happened, what did they find, what do I do now, and when do I come back. Show, in a few words each:
+- why the patient came (complaint and referral reason);
+- the bottom line of each important test or exam area, taken from the source's conclusion (radiology Impression, clinician assessment), one bullet per area;
+- diagnoses stated for this visit;
+- the disposition as stated (discharged, admitted, stable condition, no emergency cause found);
+- follow-up, tests to schedule, and home instructions stated for this patient;
+- medicine starts, stops, dose changes, and home instructions -- or one statement that no new medicines were prescribed, when the source says so;
+- return precautions with the source's own action and urgency;
+- abnormal or pending results the clinician calls out or that change what the patient does;
+- a disagreement between sources that matters (for example, an urgent-care read and the ER read of the same test), in one sentence.
 
-The goal is not to display every extracted fact. The goal is a concise, source-grounded explanation of what happened, what matters now, and what the patient should do next. Concision is a requirement, not a reason to omit critical content.
+SKIP -- keep out of the report:
+- sub-findings, sequences, technique, reconstructions, criteria names, and contrast or other agents given during a test;
+- lab inventories and vital signs -- use the clinician's summary word ("unremarkable") in one grouped bullet, or a specific value only when the clinician calls it out or it drives the plan;
+- empty or unchanged medication lists, "no medications on file," "no known allergies," and "no past medical history on file" rows;
+- charted background, old problem-list items, and history not addressed this visit;
+- superseded or conditional plans the source later replaced;
+- generic radiology or form boilerplate ("correlate clinically," "discuss imaging findings with the ordering provider") -- never turn it into an appointment or action;
+- generic education not applied to this patient, even when it was attached to the discharge paperwork;
+- portal headers, page counters, URLs, billing, and other administrative text;
+- anything already said elsewhere in the report.
 
-Critical patient-facing content normally includes:
-- the main reason for the visit;
-- the clinician's main conclusion, documented diagnosis, or important unresolved finding;
-- medication starts, stops, changes, exact doses, frequencies, timing, and home-use instructions;
-- pending tests, referrals, appointments, monitoring, follow-up timing, and who to contact;
-- explicit warning signs with the source's action and urgency;
-- uncertainty, conflicts, declined or conditional treatment, and missing details that could change an action;
-- a reassuring result when it directly explains the disposition or next step.
-
-Supporting content normally stays out of the patient-facing report:
-- technical test mechanics, including contrast names or doses, machine settings, sequences, and measurement metadata;
-- raw normal values, incidental findings, or completed-test inventories that do not change the plan;
-- repeated facts already represented clearly;
-- rejected, non-actionable differential diagnoses;
-- generic education, broad wellness guidance, or conditional advice that is not patient-specific;
-- stable background history or medicines that did not change and do not explain the visit.
-
-Generic education does not become patient-specific merely because it was attached to discharge paperwork. Include it only when the clinical record applies it to this patient, it changes this patient's documented action, or omitting it would change what the patient treats as urgent. When supporting content is omitted, keep it auditable through the structured omission disposition required by the care-plan schema; do not expand it into visible prose.
-
-PLAIN WORDS -- `reference/ahrq_plain_language.json` lists medical words and their everyday alternatives. Prefer the everyday alternative; when a medical term must stay (a diagnosis name, a drug name), keep it and put the plain meaning next to it once.
+PLAIN WORDS -- `reference/ahrq_plain_language.json` is an optional lookup of medical words and everyday alternatives. Prefer the everyday word; when a medical term must stay (a diagnosis name, a drug name), keep it and give the plain meaning once.

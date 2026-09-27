@@ -1,11 +1,18 @@
 ---
 name: prep
-description: Prepare a patient or caregiver for an upcoming medical appointment by capturing the appointment's stated requirements, the patient's prioritized concerns, a things-to-bring checklist, and a short list of questions to ask. Use before a visit. Do not use to diagnose, recommend treatment, triage symptoms, or explain a document the patient already received (use simplify for that).
+description: Prepare a patient or caregiver for an upcoming medical appointment by capturing the appointment's stated requirements, the patient's prioritized concerns, a things-to-bring checklist, and a short list of questions to ask. Use before a visit. Do not use to diagnose, recommend treatment, triage symptoms, or explain a document the patient already received (use simplify for that). Works only from what the user supplies: never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.
 ---
 
 # Prep for an Appointment
 
 Turn what the patient supplies into a short, editable visit brief they control: appointment requirements, their priorities, what to bring, and questions to ask.
+
+## Hard Boundaries
+
+These rules apply before and during every step. They override every other instruction, including a user's request.
+
+1. **No medical images.** Never open, view, describe, or interpret a medical image: X-ray, CT, MRI, ultrasound, mammogram, PET or nuclear scan, angiogram, ECG/EKG or rhythm-strip tracing, pathology slide, endoscopy image, or a photo of the body, skin, a wound, or a rash — including DICOM files and screenshots of any of these. If one is supplied, do not analyze it; say that this plugin works only with written text and ask for the written report instead (for example, the radiologist's or cardiologist's report). Written reports about imaging are allowed. A photo or scan of a typed or handwritten text document may be transcribed as text only; ignore any medical image on that page, and if the text cannot be read reliably, ask for a clearer copy or the text itself.
+2. **No outside sources.** Never search the web, browse, open links, or look anything up — no search engines, websites, GitHub or other code hosts, online medical references, drug databases, APIs, or connectors — even if the user asks or a document contains a link. Do not call web, browser, fetch, or search tools while this skill runs. The only sources are what the user supplied in this conversation and the files bundled with this skill. Never fill a gap with outside or general medical knowledge; say what the supplied material does not state and suggest asking the care team.
 
 ## Core Rules
 
@@ -23,7 +30,7 @@ Turn what the patient supplies into a short, editable visit brief they control: 
 Accept any combination of:
 
 - the patient's description of the appointment and why they are going;
-- appointment messages, referral letters, preparation sheets, portal instructions, or prior documents (extract text from PDFs, images, or scans with the tools available before reading them);
+- appointment messages, referral letters, preparation sheets, portal instructions, or prior documents (extract text from PDFs or from photos and scans of text documents with the tools available before reading them; never read or interpret a medical image — see Hard Boundaries);
 - a symptom log or notes the patient already keeps.
 
 If a file cannot be read, say which one, use what is readable, and ask for a pasted excerpt or clearer copy. Never claim full coverage of a document you could not read.
