@@ -1,321 +1,261 @@
+"""The one schema `simplify` ships: `schema/plan.schema.json` (contract C1).
+
+The schema is used only when the user asks for structured output. These tests
+check its shape and behavior with the small test-only validator in
+`_minischema.py`; they do not depend on how the schema factors its
+definitions.
+"""
+
+from __future__ import annotations
+
 import copy
-import glob
 import json
 import os
 import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _minischema  # noqa: E402
 import _paths  # noqa: E402
-import _runfix  # noqa: E402
 
-import _version  # noqa: E402
-import validate  # noqa: E402
+PLAN_SCHEMA_PATH = os.path.join(_paths.SCHEMA_DIR, "plan.schema.json")
 
-
-CORE_SCHEMAS = {
-    "units",
-    "protected",
-    "draft",
-    "draft_checked",
-    "check",
-    "verify_raw",
-    "verify",
-    "plan",
-    "run",
-}
-OPTIONAL_SCHEMAS = {"glossary", "glossary_raw"}
-RETIRED_SCHEMAS = {
-    "facts_raw", "facts", "care_plan_agent", "care_plan", "flags", "review_raw", "review",
-}
-
-IDENTITY = {"schema_version": "3.0", "run_id": "run-1"}
-
-
-def _draft():
-    return _runfix.draft_raw()
-
-
-def _checked():
-    return {**IDENTITY, **_draft()}
+TOP_LEVEL_KEYS = [
+    "schema_version",
+    "visit_type",
+    "why_you_went",
+    "findings_lead",
+    "findings",
+    "diagnoses",
+    "disposition",
+    "next_steps",
+    "medicines",
+    "return_precautions",
+    "questions",
+    "must_keep",
+]
+VISIT_TYPES = ["er_visit", "urgent_care", "hospital_stay", "clinic_visit", "test_results", "procedure", "other"]
+MEDICINE_CHANGES = ["start", "stop", "change", "continue", "instruction"]
+MUST_KEEP = [
+    "medication_changes",
+    "follow_up",
+    "return_precautions",
+    "diagnoses",
+    "disposition",
+    "abnormal_or_pending_results",
+]
+RETIRED_KEYS = {"unit_ids", "run_id", "created_at", "plugin_version", "word_count", "score", "notices", "coverage"}
 
 
-def _plan():
+def _load() -> dict:
+    with open(PLAN_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _statement(text: str = "You had a cough.") -> dict:
+    return {"text": text, "evidence": ["cough for 5 days"]}
+
+
+def _minimal() -> dict:
     return {
-        **IDENTITY,
-        "plugin_version": "0.1.0",
-        "created_at": "2026-09-26T12:00:00+00:00",
-        "word_count": 60,
-        "score": {"before_grade": 9.1, "after_grade": 5.2},
-        "notices": [],
-        **_draft(),
+        "schema_version": "4.0",
+        "visit_type": "urgent_care",
+        "why_you_went": _statement(),
+        "findings_lead": None,
+        "findings": [],
+        "diagnoses": [],
+        "disposition": None,
+        "next_steps": [],
+        "medicines": {"items": [], "none_statement": None},
+        "return_precautions": [],
+        "questions": [],
+        "must_keep": {key: "none_in_source" for key in MUST_KEEP},
     }
 
 
-def _check():
-    return {
-        **IDENTITY,
-        "round": 1,
-        "word_count": 60,
-        "budget": {"target": 300, "warn": 350, "max": 500},
-        "over_budget": False,
-        "numeric_flags": [{"flag_id": "n1", "path": "findings[0].result", "token": "5 mg", "unit_ids": [3]}],
-        "uncited_protected": [{"unit_id": 9, "categories": ["abnormal_or_pending_results"]}],
-    }
-
-
-def _verify_raw():
-    return {
-        "claims": [{"path": "why_you_went", "result": "supported"},
-                   {"path": "findings[0]", "result": "needs_correction", "note": "wrong dose"}],
-        "operations": [
-            {"op": "replace", "path": "findings[0].result", "value": "Normal.", "unit_ids": [3]},
-            {"op": "clear", "path": "findings_lead"},
-            {"op": "remove", "path": "next_steps[1]", "reason": "noise"},
+def _full() -> dict:
+    plan = _minimal()
+    plan.update({
+        "findings_lead": _statement("The doctor found a lung infection."),
+        "findings": [{"name": "Chest X-ray", "result": "Pneumonia.", "evidence": ["right lower lobe pneumonia"]}],
+        "diagnoses": [
+            {"name": "Pneumonia", "plain_name": "a lung infection", "evidence": ["Pneumonia"]},
+            {"name": "Asthma", "plain_name": "", "evidence": ["asthma"]},
         ],
-        "numeric_resolutions": [
-            {"flag_id": "n1", "resolution": "corrected", "correction_path": "findings[0].result"},
-        ],
-        "protected_units": [
-            {"unit_id": 9, "result": "not_needed", "reason": "false_positive"},
-            {"unit_id": 10, "result": "missing", "category": "follow_up"},
-        ],
-    }
-
-
-def _verify():
-    raw = _verify_raw()
-    return {
-        **IDENTITY,
-        "round": 1,
-        "outcome": "repair_requested",
-        **raw,
-        "accepted_numeric": [{"path": "findings[0].result", "token": "5 mg"}],
-        "missing": [{"unit_id": 10, "category": "follow_up"}],
-        "counts": {
-            "claims": 2, "supported": 1, "needs_correction": 1, "unsupported": 0,
-            "operations": 3, "numeric_flags": 1, "protected_units": 2, "missing": 1,
-            "word_count_before": 60, "word_count_after": 55,
+        "disposition": _statement("You went home."),
+        "next_steps": [_statement("See your doctor in 2 days.")],
+        "medicines": {
+            "items": [{"name": "Amoxicillin", "change": "start", "text": "Take it.", "evidence": ["amoxicillin"]}],
+            "none_statement": _statement("No new medicines."),
         },
-    }
+        "return_precautions": [_statement("Call 911 if you cannot breathe.")],
+        "questions": [{"question": "When is my X-ray?", "evidence": ["repeat chest X-ray"]}],
+        "must_keep": {key: "shown" for key in MUST_KEEP},
+    })
+    return plan
 
 
-class TestSchemaInventory(unittest.TestCase):
-    def test_exact_schema_inventory(self):
-        schema_files = sorted(glob.glob(os.path.join(_paths.SCHEMA_DIR, "*.schema.json")))
-        names = {os.path.basename(path).removesuffix(".schema.json") for path in schema_files}
-        self.assertEqual(names, CORE_SCHEMAS | OPTIONAL_SCHEMAS)
-        self.assertFalse(names & RETIRED_SCHEMAS)
-        for path in schema_files:
-            with self.subTest(path=path):
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                self.assertEqual(data.get("title"), os.path.basename(path).removesuffix(".schema.json"))
-
-    def test_schema_version_is_v3_without_changing_plugin_version(self):
-        self.assertEqual(_version.SCHEMA_VERSION, "3.0")
-        with open(os.path.join(_paths.REPO_ROOT, "build-versions.json"), "r", encoding="utf-8") as f:
-            self.assertEqual(_version.PLUGIN_VERSION, json.load(f)["prod"])
-
-    def test_versioned_schemas_accept_only_the_current_version(self):
-        for name in CORE_SCHEMAS | OPTIONAL_SCHEMAS:
-            schema = validate.load_schema(name)
-            version = schema.get("properties", {}).get("schema_version")
-            if version is not None:
-                with self.subTest(name=name):
-                    self.assertEqual(version.get("enum"), ["3.0"])
+def _walk(node, path: str = "$"):
+    yield path, node
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from _walk(value, f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _walk(value, f"{path}[{index}]")
 
 
-class TestDraftSchemas(unittest.TestCase):
-    def test_minimal_documents_are_valid(self):
-        for name, document in (
-            ("draft", _draft()), ("draft_checked", _checked()), ("plan", _plan()),
-        ):
-            with self.subTest(name=name):
-                self.assertEqual(validate.validate(document, validate.load_schema(name)), [])
-
-    def test_draft_rejects_identity_and_checked_draft_requires_it(self):
-        draft = _draft()
-        draft["run_id"] = "run-1"
-        self.assertTrue(validate.validate(draft, validate.load_schema("draft")))
-        checked = _checked()
-        del checked["run_id"]
-        self.assertTrue(validate.validate(checked, validate.load_schema("draft_checked")))
-
-    def test_visible_items_must_cite_units(self):
-        draft = _draft()
-        draft["findings"][0]["unit_ids"] = []
-        errors = validate.validate(draft, validate.load_schema("draft"))
-        self.assertTrue(any("findings[0].unit_ids" in error for error in errors))
-
-    def test_slot_caps(self):
-        draft = _draft()
-        draft["findings"] = draft["findings"] * 7
-        draft["questions"] = [{"question": "Why?", "unit_ids": [1]}] * 4
-        errors = validate.validate(draft, validate.load_schema("draft"))
-        self.assertTrue(any(error.startswith("findings") for error in errors))
-        self.assertTrue(any(error.startswith("questions") for error in errors))
-
-    def test_plan_requires_score_and_word_count(self):
-        for field in ("score", "word_count", "notices", "created_at"):
-            with self.subTest(field=field):
-                plan = _plan()
-                del plan[field]
-                self.assertTrue(validate.validate(plan, validate.load_schema("plan")))
+class TestSchemaFolder(unittest.TestCase):
+    def test_schema_folder_holds_only_the_plan_schema(self):
+        present = sorted(name for name in os.listdir(_paths.SCHEMA_DIR) if not name.startswith("."))
+        self.assertEqual(present, ["plan.schema.json"])
 
 
-class TestCheckSchema(unittest.TestCase):
+class TestSchemaShape(unittest.TestCase):
     def setUp(self):
-        self.schema = validate.load_schema("check")
+        self.schema = _load()
 
-    def test_valid(self):
-        self.assertEqual(validate.validate(_check(), self.schema), [])
+    def test_is_draft_07(self):
+        self.assertIn("draft-07", self.schema.get("$schema", ""))
 
-    def test_flag_ids_are_strings_and_rounds_are_bounded(self):
-        check = _check()
-        check["numeric_flags"][0]["flag_id"] = 1
-        check["round"] = 3
-        errors = validate.validate(check, self.schema)
-        self.assertTrue(any("flag_id" in error for error in errors))
-        self.assertTrue(any("round" in error for error in errors))
+    def test_description_says_structured_output_only(self):
+        self.assertRegex(self.schema.get("description", ""), r"(?i)structured output")
 
-    def test_unknown_protected_category(self):
-        check = _check()
-        check["uncited_protected"][0]["categories"] = ["labs"]
-        self.assertTrue(validate.validate(check, self.schema))
+    def test_top_level_keys_in_contract_order(self):
+        self.assertEqual(self.schema["type"], "object")
+        self.assertEqual(self.schema["required"], TOP_LEVEL_KEYS)
+        self.assertEqual(sorted(self.schema["properties"]), sorted(TOP_LEVEL_KEYS))
 
+    def test_every_object_forbids_additional_properties(self):
+        for path, node in _walk(self.schema):
+            if isinstance(node, dict) and ("properties" in node or node.get("type") == "object"):
+                with self.subTest(path=path):
+                    self.assertIs(node.get("additionalProperties"), False)
 
-class TestVerifySchemas(unittest.TestCase):
-    def test_valid(self):
-        self.assertEqual(validate.validate(_verify_raw(), validate.load_schema("verify_raw")), [])
-        self.assertEqual(validate.validate(_verify(), validate.load_schema("verify")), [])
+    def test_no_retired_keys_anywhere(self):
+        for path, node in _walk(self.schema):
+            if isinstance(node, dict) and isinstance(node.get("properties"), dict):
+                with self.subTest(path=path):
+                    self.assertFalse(RETIRED_KEYS & set(node["properties"]))
 
-    def test_raw_rejects_unknown_operation_and_verdicts(self):
-        schema = validate.load_schema("verify_raw")
-        raw = _verify_raw()
-        raw["operations"].append({"op": "rewrite", "path": "why_you_went.text", "value": "x"})
-        self.assertTrue(validate.validate(raw, schema))
-        raw = _verify_raw()
-        raw["verdict"] = "pass"
-        self.assertTrue(validate.validate(raw, schema))
-
-    def test_remove_requires_a_reason(self):
-        raw = _verify_raw()
-        del raw["operations"][2]["reason"]
-        self.assertTrue(validate.validate(raw, validate.load_schema("verify_raw")))
-
-    def test_record_outcome_is_closed(self):
-        record = _verify()
-        record["outcome"] = "pass"
-        self.assertTrue(validate.validate(record, validate.load_schema("verify")))
+    def test_validator_supports_every_keyword_used(self):
+        # Raises _minischema.UnsupportedKeyword if the schema grows a keyword
+        # the test validator would silently ignore.
+        _minischema.validate(_full(), self.schema)
 
 
-class TestRunSchema(unittest.TestCase):
+class TestSchemaBehavior(unittest.TestCase):
     def setUp(self):
-        self.schema = validate.load_schema("run")
-        stage = {
-            "status": "ok",
-            "attempts": 1,
-            "started_at": "2026-09-26T12:00:00+00:00",
-            "finished_at": "2026-09-26T12:00:01+00:00",
-            "checks": {},
-            "artifacts": [{"path": "01_units.json"}],
+        self.schema = _load()
+
+    def assertValid(self, plan):
+        self.assertEqual(_minischema.validate(plan, self.schema), [])
+
+    def assertInvalid(self, plan):
+        self.assertNotEqual(_minischema.validate(plan, self.schema), [], "instance should be rejected")
+
+    def _variant(self, mutate) -> dict:
+        plan = copy.deepcopy(_full())
+        mutate(plan)
+        return plan
+
+    def test_minimal_and_full_instances_pass(self):
+        self.assertValid(_minimal())
+        self.assertValid(_full())
+
+    def test_schema_version_is_4_0(self):
+        self.assertInvalid(self._variant(lambda p: p.update(schema_version="3.0")))
+
+    def test_visit_types(self):
+        for visit_type in VISIT_TYPES:
+            with self.subTest(visit_type=visit_type):
+                self.assertValid(self._variant(lambda p: p.update(visit_type=visit_type)))
+        self.assertInvalid(self._variant(lambda p: p.update(visit_type="telehealth")))
+
+    def test_every_top_level_key_is_required(self):
+        for key in TOP_LEVEL_KEYS:
+            with self.subTest(key=key):
+                self.assertInvalid(self._variant(lambda p: p.pop(key)))
+
+    def test_why_you_went_is_a_statement_not_null(self):
+        self.assertInvalid(self._variant(lambda p: p.update(why_you_went=None)))
+        self.assertInvalid(self._variant(lambda p: p.update(why_you_went="You had a cough.")))
+
+    def test_findings_lead_and_disposition_may_be_null(self):
+        self.assertValid(self._variant(lambda p: p.update(findings_lead=None, disposition=None)))
+
+    def test_evidence_is_one_to_three_nonempty_strings(self):
+        self.assertValid(self._variant(lambda p: p["why_you_went"].update(evidence=["a", "b", "c"])))
+        for bad in ([], ["a", "b", "c", "d"], [""], [3], "cough"):
+            with self.subTest(evidence=bad):
+                self.assertInvalid(self._variant(lambda p: p["why_you_went"].update(evidence=bad)))
+
+    def test_every_visible_item_requires_evidence(self):
+        paths = (
+            lambda p: p["why_you_went"],
+            lambda p: p["findings_lead"],
+            lambda p: p["findings"][0],
+            lambda p: p["diagnoses"][0],
+            lambda p: p["disposition"],
+            lambda p: p["next_steps"][0],
+            lambda p: p["medicines"]["items"][0],
+            lambda p: p["medicines"]["none_statement"],
+            lambda p: p["return_precautions"][0],
+            lambda p: p["questions"][0],
+        )
+        for index, get in enumerate(paths):
+            with self.subTest(item=index):
+                self.assertInvalid(self._variant(lambda p: get(p).pop("evidence")))
+                self.assertInvalid(self._variant(lambda p: get(p).update(evidence=[])))
+
+    def test_extra_keys_are_rejected(self):
+        for key in sorted(RETIRED_KEYS):
+            with self.subTest(key=key):
+                self.assertInvalid(self._variant(lambda p: p.update({key: []})))
+        self.assertInvalid(self._variant(lambda p: p["findings"][0].update(unit_ids=[1])))
+        self.assertInvalid(self._variant(lambda p: p["next_steps"][0].update(unit_ids=[1])))
+        self.assertInvalid(self._variant(lambda p: p["medicines"].update(notes="x")))
+
+    def test_item_shapes(self):
+        self.assertInvalid(self._variant(lambda p: p["findings"][0].pop("result")))
+        self.assertInvalid(self._variant(lambda p: p["diagnoses"][0].pop("plain_name")))
+        self.assertInvalid(self._variant(lambda p: p["medicines"]["items"][0].pop("text")))
+        self.assertInvalid(self._variant(lambda p: p["medicines"].pop("none_statement")))
+        self.assertInvalid(self._variant(lambda p: p["questions"][0].pop("question")))
+        self.assertValid(self._variant(lambda p: p["medicines"].update(none_statement=None)))
+
+    def test_medicine_change_values(self):
+        for change in MEDICINE_CHANGES:
+            with self.subTest(change=change):
+                self.assertValid(self._variant(lambda p: p["medicines"]["items"][0].update(change=change)))
+        self.assertInvalid(self._variant(lambda p: p["medicines"]["items"][0].update(change="increase")))
+
+    def test_list_limits(self):
+        limits = {
+            "findings": (lambda p: p["findings"], 6),
+            "diagnoses": (lambda p: p["diagnoses"], 6),
+            "next_steps": (lambda p: p["next_steps"], 6),
+            "return_precautions": (lambda p: p["return_precautions"], 6),
+            "medicines.items": (lambda p: p["medicines"]["items"], 8),
+            "questions": (lambda p: p["questions"], 3),
         }
-        self.instance = {
-            "schema_version": "3.0",
-            "plugin_version": "0.1.0",
-            "run_id": "run-1",
-            "created_at": "2026-09-26T12:00:00+00:00",
-            "level": "standard",
-            "inputs": [
-                {
-                    "file": "visit.txt",
-                    "extraction_method": "native",
-                    "pages": 1,
-                    "sha256": "abc123",
-                }
-            ],
-            "stages": {
-                name: copy.deepcopy(stage)
-                for name in ("unitize", "write", "check", "verify", "settle", "finalize")
-            },
-            "notices": [],
-        }
-        self.instance["stages"]["glossary"] = {
-            "status": "skipped",
-            "attempts": 0,
-            "started_at": None,
-            "finished_at": None,
-            "checks": {},
-            "artifacts": [],
-            "skip_reason": "not requested",
-        }
+        for name, (get, limit) in limits.items():
+            with self.subTest(slot=name):
+                def fill(p, n):
+                    items = get(p)
+                    items[:] = [copy.deepcopy(items[0]) for _ in range(n)]
+                self.assertValid(self._variant(lambda p: fill(p, limit)))
+                self.assertInvalid(self._variant(lambda p: fill(p, limit + 1)))
 
-    def test_recognized_stages_and_artifacts_are_valid(self):
-        self.assertEqual(validate.validate(self.instance, self.schema), [])
-
-    def test_retired_and_unknown_stage_names_are_rejected(self):
-        for name in ("review_fidelity", "ground", "assemble", "settle_review"):
-            with self.subTest(name=name):
-                instance = copy.deepcopy(self.instance)
-                instance["stages"][name] = instance["stages"]["unitize"]
-                errors = validate.validate(instance, self.schema)
-                self.assertTrue(any(name in error for error in errors))
-
-    def test_core_stage_rejects_degraded_skipped_and_repair_requested(self):
-        for status in ("degraded", "skipped", "repair_requested"):
-            with self.subTest(status=status):
-                instance = copy.deepcopy(self.instance)
-                instance["stages"]["verify"]["status"] = status
-                self.assertTrue(validate.validate(instance, self.schema))
-
-    def test_settle_may_request_repair(self):
-        self.instance["stages"]["settle"]["status"] = "repair_requested"
-        self.assertEqual(validate.validate(self.instance, self.schema), [])
-        self.instance["stages"]["settle"]["status"] = "degraded"
-        self.assertTrue(validate.validate(self.instance, self.schema))
-
-    def test_old_schema_version_is_rejected(self):
-        self.instance["schema_version"] = "2.0"
-        self.assertTrue(validate.validate(self.instance, self.schema))
-
-    def test_optional_stage_rejects_unknown_status(self):
-        self.instance["stages"]["glossary"]["status"] = "pending"
-        self.assertTrue(validate.validate(self.instance, self.schema))
-
-    def test_skipped_optional_stage_requires_skip_reason(self):
-        del self.instance["stages"]["glossary"]["skip_reason"]
-        self.assertTrue(validate.validate(self.instance, self.schema))
-
-    def test_core_stage_rejects_skip_reason(self):
-        self.instance["stages"]["unitize"]["skip_reason"] = "not applicable"
-        errors = validate.validate(self.instance, self.schema)
-        self.assertTrue(any("skip_reason" in error for error in errors))
-
-    def test_malformed_artifact_record_is_rejected(self):
-        self.instance["stages"]["unitize"]["artifacts"] = [{"name": "01_units.json"}]
-        errors = validate.validate(self.instance, self.schema)
-        self.assertTrue(any("path" in error for error in errors))
-
-
-class TestOptionalGlossarySchemas(unittest.TestCase):
-    def test_optional_glossary_is_capped_at_five_terms(self):
-        schema = validate.load_schema("glossary")
-        term = {
-            "term": "hypertension",
-            "matched_term": "high blood pressure",
-            "definition": "Blood pressure that stays too high.",
-            "source": "llm_proposed",
-        }
-        instance = {
-            "schema_version": "3.0",
-            "plugin_version": "0.1.0",
-            "run_id": "run-1",
-            "terms": [term] * 5,
-        }
-        self.assertEqual(validate.validate(instance, schema), [])
-        instance["terms"].append(term)
-        self.assertTrue(validate.validate(instance, schema))
+    def test_must_keep_categories_and_values(self):
+        for value in ("shown", "none_in_source"):
+            self.assertValid(self._variant(lambda p: p["must_keep"].update(follow_up=value)))
+        self.assertInvalid(self._variant(lambda p: p["must_keep"].update(follow_up="missing")))
+        self.assertInvalid(self._variant(lambda p: p["must_keep"].update(follow_up=True)))
+        self.assertInvalid(self._variant(lambda p: p["must_keep"].update(allergies="shown")))
+        for key in MUST_KEEP:
+            with self.subTest(category=key):
+                self.assertInvalid(self._variant(lambda p: p["must_keep"].pop(key)))
 
 
 if __name__ == "__main__":
