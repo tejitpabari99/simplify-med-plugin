@@ -19,7 +19,7 @@ These rules apply before and during every step. They override every other instru
 - Read only the files this skill names: this file, `stages/write.md`, `stages/verify.md`, `reference/style_rules.md`, the optional lookup `reference/abbreviations.json`, and — only when the user asks for structured output — `schema/plan.schema.json`. Never open, list, search, download, or unpack any other plugin file.
 - This skill has no scripts. Do not write or run code to simplify, check, count, or render the report. Every step is reading and writing, and works the same in every host.
 - Once selected, run every step below in order. Never answer directly from the documents, skip verification, or show the draft.
-- The user sees only the final Markdown report. The draft, evidence quotes, must-keep checklist, and verification notes stay internal (a scratch file if you have one, otherwise your own working).
+- The user sees only the final Markdown report. The draft, evidence quotes, must-keep checklist, and verification notes stay internal: keep them in your own working, or in a scratch file only if your host can save one without running code.
 - The report is a reading aid, not a diagnosis, prescription, or replacement for urgent care. Keep the user's records in this conversation; do not share them anywhere.
 
 ## Steps
@@ -89,4 +89,5 @@ Title by `visit_type`: `er_visit` "Your ER visit, simplified"; `urgent_care` "Yo
 
 - No usable text, or only medical images: ask for the written text; show nothing else.
 - Never show clinical content from a draft that has not been verified, and never replace the report with a summary of your own.
+- If verification cannot be completed, or the verifier reports that it could not check the draft, tell the user the report could not be checked and show no clinical content.
 - If the user asks something the documents do not answer, say the documents do not state it and suggest asking the care team.

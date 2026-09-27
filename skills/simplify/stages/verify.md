@@ -19,6 +19,12 @@ Either way, read nothing else. Do not search the web, open links, use outside
 tools, or rely on general medical knowledge to accept an item: if the source
 does not state it, it is not supported.
 
+When in doubt, fail closed: if you cannot confirm an item from the source,
+remove it (for must-keep content, rewrite it closely from the source quote
+instead). If the source or the draft is missing or unreadable, do not guess:
+return "verification failed" and no draft, and the host shows no clinical
+content.
+
 ## Checklist -- apply every rule to every visible item
 
 Visible items: `why_you_went`, `findings_lead`, each `findings[i]`, each
@@ -38,6 +44,8 @@ Visible items: `why_you_went`, `findings_lead`, each `findings[i]`, each
    (urgent care versus ER, radiologist versus treating doctor, an earlier
    clinic's advice versus this visit's plan); current, not charted background,
    an old problem-list item, or a superseded plan.
+   If an item says more or other than its evidence, rewrite it to match the
+   evidence or remove it.
 3. **Numbers match.** Every number, unit, dose, frequency, duration, and date
    in the item appears in its evidence exactly. Only formatting may differ
    ("25mg" / "25 mg", "1-2" / "1 to 2"). A changed, rounded, converted, or added
