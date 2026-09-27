@@ -15,19 +15,9 @@ import _paths  # noqa: E402
 ROOT = _paths.REPO_ROOT
 BUILD = os.path.join(ROOT, "build.py")
 
-EXPECTED_STAGE_FILES = {"glossary.md", "verify.md", "write.md"}
-EXPECTED_SCRIPT_FILES = {
-    "_version.py", "check_draft.py", "finalize.py", "glossary_check.py",
-    "numtokens.py", "plan_paths.py", "plan_view.py", "protected.py",
-    "readability.py", "render_audit.py", "render_html.py", "render_md.py",
-    "runlog.py", "settle.py", "textnorm.py", "unitize.py", "validate.py",
-}
-EXPECTED_SCHEMA_FILES = {
-    "check.schema.json", "draft.schema.json", "draft_checked.schema.json",
-    "glossary.schema.json", "glossary_raw.schema.json", "plan.schema.json",
-    "protected.schema.json", "run.schema.json", "units.schema.json",
-    "verify.schema.json", "verify_raw.schema.json",
-}
+EXPECTED_STAGE_FILES = {"verify.md", "write.md"}
+EXPECTED_SCHEMA_FILES = {"plan.schema.json"}
+EXPECTED_REFERENCE_FILES = {"abbreviations.json", "style_rules.md"}
 OBSOLETE_PIPELINE_FILES = {
     "skills/simplify/stages/assemble.md",
     "skills/simplify/stages/ground.md",
@@ -56,6 +46,36 @@ OBSOLETE_PIPELINE_FILES = {
     "skills/simplify/schema/coverage.schema.json",
     "skills/simplify/schema/coverage_raw.schema.json",
     "skills/simplify/schema/manifest.schema.json",
+    "skills/simplify/stages/glossary.md",
+    "skills/simplify/reference/ahrq_plain_language.json",
+    "skills/simplify/templates/report.html",
+    "skills/simplify/scripts/_version.py",
+    "skills/simplify/scripts/check_draft.py",
+    "skills/simplify/scripts/finalize.py",
+    "skills/simplify/scripts/glossary_check.py",
+    "skills/simplify/scripts/numtokens.py",
+    "skills/simplify/scripts/plan_paths.py",
+    "skills/simplify/scripts/plan_view.py",
+    "skills/simplify/scripts/protected.py",
+    "skills/simplify/scripts/readability.py",
+    "skills/simplify/scripts/render_audit.py",
+    "skills/simplify/scripts/render_html.py",
+    "skills/simplify/scripts/render_md.py",
+    "skills/simplify/scripts/runlog.py",
+    "skills/simplify/scripts/settle.py",
+    "skills/simplify/scripts/textnorm.py",
+    "skills/simplify/scripts/unitize.py",
+    "skills/simplify/scripts/validate.py",
+    "skills/simplify/schema/check.schema.json",
+    "skills/simplify/schema/draft.schema.json",
+    "skills/simplify/schema/draft_checked.schema.json",
+    "skills/simplify/schema/glossary.schema.json",
+    "skills/simplify/schema/glossary_raw.schema.json",
+    "skills/simplify/schema/protected.schema.json",
+    "skills/simplify/schema/run.schema.json",
+    "skills/simplify/schema/units.schema.json",
+    "skills/simplify/schema/verify.schema.json",
+    "skills/simplify/schema/verify_raw.schema.json",
 }
 
 
@@ -130,25 +150,39 @@ class TestOpenAiPluginBuild(unittest.TestCase):
         self.assertEqual(
             {
                 os.path.basename(name) for name in relative_names
-                if name.startswith("skills/simplify/scripts/")
-            },
-            EXPECTED_SCRIPT_FILES,
-        )
-        self.assertEqual(
-            {
-                os.path.basename(name) for name in relative_names
                 if name.startswith("skills/simplify/schema/")
             },
             EXPECTED_SCHEMA_FILES,
         )
+        self.assertEqual(
+            {
+                os.path.basename(name) for name in relative_names
+                if name.startswith("skills/simplify/reference/")
+            },
+            EXPECTED_REFERENCE_FILES,
+        )
+        self.assertFalse(any(name.startswith("skills/simplify/scripts/") for name in relative_names))
+        self.assertFalse(any(name.startswith("skills/simplify/templates/") for name in relative_names))
+        self.assertFalse(any(name.endswith(".py") for name in names))
         self.assertTrue(OBSOLETE_PIPELINE_FILES.isdisjoint(relative_names))
         for required in (
             "skills/simplify/stages/write.md",
             "skills/simplify/stages/verify.md",
-            "skills/simplify/scripts/settle.py",
-            "skills/simplify/schema/verify_raw.schema.json",
+            "skills/simplify/reference/style_rules.md",
+            "skills/simplify/schema/plan.schema.json",
+            "skills/simplify/agents/openai.yaml",
         ):
             self.assertIn(required, relative_names)
+
+    def test_simplify_source_tree_has_no_scripts_or_templates(self):
+        simplify = os.path.join(ROOT, "skills", "simplify")
+        self.assertFalse(os.path.exists(os.path.join(simplify, "scripts")))
+        self.assertFalse(os.path.exists(os.path.join(simplify, "templates")))
+        for relative in OBSOLETE_PIPELINE_FILES:
+            self.assertFalse(os.path.exists(os.path.join(ROOT, relative)), msg=relative)
+        with open(BUILD, encoding="utf-8") as file:
+            build_source = file.read()
+        self.assertNotIn("scripts", build_source)
 
     def test_mcp_source_is_retained_but_not_declared_by_plugin_configs(self):
         self.assertTrue(os.path.isfile(os.path.join(ROOT, "mcp", "openai", "mcp.json")))

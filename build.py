@@ -15,13 +15,11 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 VERSIONS_FILE = "build-versions.json"
 PORTABLE_MANIFEST = "plugin.json"
 COMPATIBILITY_MANIFEST = os.path.join(".codex-plugin", "plugin.json")
-PIPELINE_VERSION_FILE = os.path.join("skills", "simplify", "scripts", "_version.py")
 INCLUDED_FILES = (PORTABLE_MANIFEST, COMPATIBILITY_MANIFEST)
 INCLUDED_DIRECTORIES = ("skills",)
 IGNORED_DIRECTORIES = {"__pycache__"}
 IGNORED_SUFFIXES = (".pyc",)
 VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
-PIPELINE_VERSION_PATTERN = re.compile(r'(?m)^PLUGIN_VERSION = "[^"]+"\r?$')
 
 
 def _read_json(path: str) -> dict:
@@ -36,24 +34,6 @@ def _json_bytes(value: dict) -> bytes:
 def _read_bytes(relative: str) -> bytes:
     with open(os.path.join(ROOT, relative), "rb") as file:
         return file.read()
-
-
-def _pipeline_source() -> str:
-    return _read_bytes(PIPELINE_VERSION_FILE).decode("utf-8")
-
-
-def _pipeline_version(source: str) -> str:
-    match = PIPELINE_VERSION_PATTERN.search(source)
-    if not match:
-        raise SystemExit(f"{PIPELINE_VERSION_FILE} must define PLUGIN_VERSION")
-    return match.group(0).split('"', 2)[1]
-
-
-def _set_pipeline_version(source: str, version: str) -> bytes:
-    updated, count = PIPELINE_VERSION_PATTERN.subn(f'PLUGIN_VERSION = "{version}"', source, count=1)
-    if count != 1:
-        raise SystemExit(f"could not update PLUGIN_VERSION in {PIPELINE_VERSION_FILE}")
-    return updated.encode("utf-8")
 
 
 def _validate_version(label: str, version: object) -> str:
@@ -82,11 +62,10 @@ def _display_name(manifest: dict, dev: bool) -> None:
             interface["displayName"] = f"{display_name} Dev"
 
 
-def _build_metadata(dev: bool) -> tuple[str, str, dict, dict, dict, str]:
+def _build_metadata(dev: bool) -> tuple[str, str, dict, dict, dict]:
     portable = _read_json(os.path.join(ROOT, PORTABLE_MANIFEST))
     compatibility = _read_json(os.path.join(ROOT, COMPATIBILITY_MANIFEST))
     versions = _read_json(os.path.join(ROOT, VERSIONS_FILE))
-    pipeline_source = _pipeline_source()
 
     base_name = portable.get("name")
     if not isinstance(base_name, str) or not base_name:
@@ -102,8 +81,6 @@ def _build_metadata(dev: bool) -> tuple[str, str, dict, dict, dict, str]:
         raise SystemExit(
             "production version mismatch between build-versions.json and .codex-plugin/plugin.json"
         )
-    if _pipeline_version(pipeline_source) != prod_version:
-        raise SystemExit("production version mismatch between build-versions.json and scripts/_version.py")
 
     current_version = dev_version if dev else prod_version
     next_version = _bump_patch(current_version)
@@ -118,7 +95,7 @@ def _build_metadata(dev: bool) -> tuple[str, str, dict, dict, dict, str]:
 
     next_versions = dict(versions)
     next_versions["dev" if dev else "prod"] = next_version
-    return package_name, next_version, packaged_portable, packaged_compatibility, next_versions, pipeline_source
+    return package_name, next_version, packaged_portable, packaged_compatibility, next_versions
 
 
 def _included_paths() -> list[tuple[str, str]]:
@@ -153,19 +130,10 @@ def _atomic_write(relative: str, content: bytes) -> None:
 
 
 def build(out_dir: str = "dist", dev: bool = False) -> str:
-    (
-        package_name,
-        version,
-        portable,
-        compatibility,
-        versions,
-        pipeline_source,
-    ) = _build_metadata(dev)
-    pipeline_bytes = _set_pipeline_version(pipeline_source, version)
+    package_name, version, portable, compatibility, versions = _build_metadata(dev)
     generated = {
         PORTABLE_MANIFEST.replace(os.sep, "/"): _json_bytes(portable),
         COMPATIBILITY_MANIFEST.replace(os.sep, "/"): _json_bytes(compatibility),
-        PIPELINE_VERSION_FILE.replace(os.sep, "/"): pipeline_bytes,
     }
 
     output_root = out_dir if os.path.isabs(out_dir) else os.path.join(ROOT, out_dir)
@@ -190,14 +158,12 @@ def build(out_dir: str = "dist", dev: bool = False) -> str:
                 {
                     PORTABLE_MANIFEST: _read_bytes(PORTABLE_MANIFEST),
                     COMPATIBILITY_MANIFEST: _read_bytes(COMPATIBILITY_MANIFEST),
-                    PIPELINE_VERSION_FILE: _read_bytes(PIPELINE_VERSION_FILE),
                 }
             )
             updates.update(
                 {
                     PORTABLE_MANIFEST: generated[PORTABLE_MANIFEST],
                     COMPATIBILITY_MANIFEST: generated[COMPATIBILITY_MANIFEST.replace(os.sep, "/")],
-                    PIPELINE_VERSION_FILE: pipeline_bytes,
                 }
             )
 

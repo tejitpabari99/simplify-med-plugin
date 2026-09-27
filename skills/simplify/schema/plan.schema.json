@@ -1,16 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "plan",
-  "description": "Final validated plan (05_plan.final.json).",
+  "description": "Structured output of the simplify skill. Used only when the user asks for structured output (JSON); never read during writing or verification. Same shape as the internal draft in stages/write.md. Every visible item carries 1-3 short verbatim evidence quotes from the source.",
   "type": "object",
   "required": [
     "schema_version",
-    "plugin_version",
-    "run_id",
-    "created_at",
-    "word_count",
-    "score",
-    "notices",
     "visit_type",
     "why_you_went",
     "findings_lead",
@@ -21,24 +15,24 @@
     "medicines",
     "return_precautions",
     "questions",
-    "coverage"
+    "must_keep"
   ],
   "additionalProperties": false,
   "definitions": {
-    "unit_ids": {
+    "evidence": {
       "type": "array",
       "minItems": 1,
-      "uniqueItems": true,
+      "maxItems": 3,
       "items": {
-        "type": "integer",
-        "minimum": 1
+        "type": "string",
+        "minLength": 1
       }
     },
     "statement": {
       "type": "object",
       "required": [
         "text",
-        "unit_ids"
+        "evidence"
       ],
       "additionalProperties": false,
       "properties": {
@@ -46,8 +40,8 @@
           "type": "string",
           "minLength": 1
         },
-        "unit_ids": {
-          "$ref": "#/definitions/unit_ids"
+        "evidence": {
+          "$ref": "#/definitions/evidence"
         }
       }
     },
@@ -56,7 +50,7 @@
       "required": [
         "name",
         "result",
-        "unit_ids"
+        "evidence"
       ],
       "additionalProperties": false,
       "properties": {
@@ -68,8 +62,8 @@
           "type": "string",
           "minLength": 1
         },
-        "unit_ids": {
-          "$ref": "#/definitions/unit_ids"
+        "evidence": {
+          "$ref": "#/definitions/evidence"
         }
       }
     },
@@ -77,7 +71,8 @@
       "type": "object",
       "required": [
         "name",
-        "unit_ids"
+        "plain_name",
+        "evidence"
       ],
       "additionalProperties": false,
       "properties": {
@@ -88,8 +83,8 @@
         "plain_name": {
           "type": "string"
         },
-        "unit_ids": {
-          "$ref": "#/definitions/unit_ids"
+        "evidence": {
+          "$ref": "#/definitions/evidence"
         }
       }
     },
@@ -99,7 +94,7 @@
         "name",
         "change",
         "text",
-        "unit_ids"
+        "evidence"
       ],
       "additionalProperties": false,
       "properties": {
@@ -121,8 +116,8 @@
           "type": "string",
           "minLength": 1
         },
-        "unit_ids": {
-          "$ref": "#/definitions/unit_ids"
+        "evidence": {
+          "$ref": "#/definitions/evidence"
         }
       }
     },
@@ -130,7 +125,7 @@
       "type": "object",
       "required": [
         "question",
-        "unit_ids"
+        "evidence"
       ],
       "additionalProperties": false,
       "properties": {
@@ -138,100 +133,31 @@
           "type": "string",
           "minLength": 1
         },
-        "unit_ids": {
-          "$ref": "#/definitions/unit_ids"
+        "evidence": {
+          "$ref": "#/definitions/evidence"
         }
       }
     },
-    "coverage_entry": {
-      "type": "object",
-      "required": [
-        "status",
-        "unit_ids"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "status": {
-          "type": "string",
-          "enum": [
-            "shown",
-            "none_in_source"
-          ]
-        },
-        "unit_ids": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "integer",
-            "minimum": 1
-          }
-        }
-      }
+    "must_keep_status": {
+      "type": "string",
+      "enum": [
+        "shown",
+        "none_in_source"
+      ]
     }
   },
   "properties": {
     "schema_version": {
       "type": "string",
       "enum": [
-        "3.0"
+        "4.0"
       ]
-    },
-    "plugin_version": {
-      "type": "string",
-      "minLength": 1
-    },
-    "run_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "created_at": {
-      "type": "string",
-      "minLength": 1
-    },
-    "word_count": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "score": {
-      "type": "object",
-      "required": [
-        "before_grade",
-        "after_grade"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "before_grade": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "after_grade": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      }
-    },
-    "notices": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
     },
     "visit_type": {
       "type": "string",
       "enum": [
         "er_visit",
+        "urgent_care",
         "hospital_stay",
         "clinic_visit",
         "test_results",
@@ -324,7 +250,7 @@
         "$ref": "#/definitions/question"
       }
     },
-    "coverage": {
+    "must_keep": {
       "type": "object",
       "required": [
         "medication_changes",
@@ -337,22 +263,22 @@
       "additionalProperties": false,
       "properties": {
         "medication_changes": {
-          "$ref": "#/definitions/coverage_entry"
+          "$ref": "#/definitions/must_keep_status"
         },
         "follow_up": {
-          "$ref": "#/definitions/coverage_entry"
+          "$ref": "#/definitions/must_keep_status"
         },
         "return_precautions": {
-          "$ref": "#/definitions/coverage_entry"
+          "$ref": "#/definitions/must_keep_status"
         },
         "diagnoses": {
-          "$ref": "#/definitions/coverage_entry"
+          "$ref": "#/definitions/must_keep_status"
         },
         "disposition": {
-          "$ref": "#/definitions/coverage_entry"
+          "$ref": "#/definitions/must_keep_status"
         },
         "abnormal_or_pending_results": {
-          "$ref": "#/definitions/coverage_entry"
+          "$ref": "#/definitions/must_keep_status"
         }
       }
     }
