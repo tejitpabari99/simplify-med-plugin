@@ -3,10 +3,10 @@
 An OpenAI plugin with three patient-facing skills:
 
 - **`prep`** — before a visit: capture the appointment's stated requirements, the patient's prioritized concerns, a things-to-bring checklist, and questions to ask.
-- **`simplify`** — after a visit: turn supplied clinical documents into a short, plain-language report in which every statement cites the source and is independently verified.
+- **`simplify`** — after a visit: turn supplied clinical documents into a short, plain-language report in which every statement is backed by a short quote from the source and checked in a separate verification pass.
 - **`med-lit`** — for each person: an opt-in, brief health-literacy screen (BHLS) plus self-reported support needs, returned as a basic profile.
 
-`prep` and `med-lit` are instruction-only skills (no scripts) with basic Markdown output.
+All three skills are instruction-only: no scripts, no code execution, and no run folders. They behave the same in ChatGPT chat, ChatGPT Work, and Codex.
 
 ## Plugin Structure
 
@@ -30,27 +30,34 @@ skills/simplify/
   SKILL.md                     workflow and safety boundaries
   agents/openai.yaml           OpenAI skill metadata
   assets/                      skill icons
-  stages/                      language-stage instructions
-  scripts/                     deterministic checks and renderers
-  schema/                      structured-data contracts
-  reference/                   medical plain-language rules and dictionaries
-  templates/                   report template
+  stages/                      write.md and verify.md instructions
+  reference/                   style rules and an optional abbreviation list
+  schema/                      plan.schema.json, used only for structured output
 ```
 
 `mcp/openai/` remains in the repository for possible future work. It is parked: not connected to the plugin, not declared by either manifest, not included in the ZIP, and not yet updated to the current plan shape.
 
 ## What `simplify` Does
 
-1. Numbers every source line as a unit, drops portal boilerplate (URL-only lines, page counters, exact repeats), and flags candidate lines for six protected categories: medication changes, follow-up, return precautions, diagnoses, disposition, and abnormal or pending results.
-2. Writes the short report in one model call, directly from the numbered source. Every visible item cites the source units that support it.
-3. Checks the draft with a script: schema, valid citations, word budget, numbers that do not appear in the cited units, and protected candidates that no item cites.
-4. Verifies every visible item in a second, independent model call against the original source, returning only bounded edits (replace, clear, remove), numeric-flag resolutions, and a decision for each uncited protected candidate.
-5. Applies those edits exactly with a script. If the verifier marks protected content as missing, the writer gets one repair round, which is checked and verified again.
-6. Finalizes only after every step passes, then renders `report.md`.
+`simplify` is prompt-only. The host reads only the files `SKILL.md` names (`SKILL.md`, `stages/write.md`, `stages/verify.md`, `reference/style_rules.md`, optionally `reference/abbreviations.json`, and `schema/plan.schema.json` only when structured output is requested) and never opens other plugin files. There are no scripts, run folders, run logs, repair rounds, audit trail, HTML report, or glossary.
 
-The report targets 150-300 words and answers four questions: what happened, what did they find, what do I do now, and when do I come back. It shows one bottom-line bullet per test area, the diagnoses and disposition stated for this visit, next steps, medicine changes (or a source-stated "no new medicines"), and return precautions. Lab inventories, vital signs, test technique, empty medication lists, charted background, and radiology boilerplate stay out.
+```text
+READ     text only: pasted text, uploaded files (their text), or the user's own
+         records retrieved at their request from a connected health-records app
+WRITE    stages/write.md -> internal draft: fixed report slots, 1-3 verbatim
+         evidence quotes per item, and a must-keep checklist
+VERIFY   stages/verify.md, reading only the source and the draft -> corrected draft
+OUTPUT   the short Markdown report; JSON per schema/plan.schema.json only on request
+```
 
-The model has two core responsibilities: writing the draft and independently verifying it. Python owns the deterministic work: unitizing, protected-candidate scanning, schema and citation checks, numeric parity, exact settlement, audit logging, rendering, and fail-closed finalization. See `docs/openai-plugin.md` for the governing authoring rules and the per-script rationale.
+1. **Read.** Only text. If the input is only images or unreadable text, the skill asks for the written text; that is its only stop.
+2. **Write.** One model pass fills the report slots. Every visible item carries 1-3 short verbatim quotes from the source as internal evidence (never shown), and a must-keep checklist records whether each protected category is shown or not in the source: medication changes, follow-up, return precautions, diagnoses, disposition, and abnormal or pending results.
+3. **Verify.** Exactly once, never skipped. Where the host has sub-agents (ChatGPT Work, Codex), a fresh sub-agent gets only `stages/verify.md`, the style rules, the source, and the draft. In ChatGPT regular chat, a separate second pass sets the draft aside and re-checks it against only the source. The verifier checks every quote and number against the source, the must-keep checklist, the 300-word budget, privacy, and wording; it fixes or removes items and may add only missing must-keep content the source states. It never adds content that is not in the source.
+4. **Output.** Only the verified short Markdown report. The draft and the verifier's change list stay internal.
+
+The report targets at most about 300 words and answers four questions: what happened, what did they find, what do I do now, and when do I come back. It shows a title by visit type, why you went (every complaint listed), one bottom-line bullet per test area, the diagnoses and disposition stated for this visit, next steps with their timing and reason, medicine changes (or a source-stated "no new medicines"), return precautions, and up to three questions. Empty sections are hidden. Lab inventories, vital signs, test technique, empty medication lists, charted background, and radiology boilerplate stay out.
+
+Earlier builds (up to 0.1.5) used Python scripts for these checks. They could not run in ChatGPT regular chat, so the checks now live in the verify instructions as explicit rules. See `docs/architecture.md` for the rule list and `docs/openai-plugin.md` for the trade-offs.
 
 ## Build the Plugin ZIP
 
@@ -73,17 +80,17 @@ creating the archive. Failed builds do not consume a version.
 Production builds:
 
 - package `simplify-med`;
-- update `plugin.json`, `.codex-plugin/plugin.json`, and the pipeline version in the source tree;
+- update `plugin.json` and `.codex-plugin/plugin.json` in the source tree;
 - write `dist/simplify-med-<version>-openai.zip`.
 
 Development builds:
 
 - package `simplify-med-dev`;
-- stamp the dev name and version into both packaged manifests and the packaged pipeline version;
+- stamp the dev name and version into both packaged manifests;
 - leave the production manifests in the source tree unchanged;
 - write `dist/simplify-med-dev-<version>-openai.zip`.
 
-The version ledger is repository-only and is never included in either archive.
+The version ledger is repository-only and is never included in either archive. The builder no longer stamps a pipeline version into the skill; the two manifests are the only versioned files.
 
 Use a different output directory with:
 
@@ -114,27 +121,22 @@ Explicitly invoke `med-lit` (implicit invocation is disabled because the screen 
 
 ### `simplify`
 
+Explicitly invoke the `simplify` skill for a visit note, discharge summary, lab report, imaging report, or similar clinical document. Implicit invocation is disabled so this medical workflow does not activate accidentally. Paste the text, upload text documents, or ask the skill to retrieve your own records from a connected health-records app.
 
-Explicitly invoke the `simplify` skill for a visit note, discharge summary, lab report, imaging report, or similar clinical document. Implicit invocation is disabled so this relatively expensive medical workflow does not activate accidentally. Input text should be extracted to UTF-8 `.txt`; page boundaries may be represented with form-feed characters (`\f`).
-
-Explicit invocation requires the complete workflow. The skill must not return a direct, ad hoc simplification or expose clinical content before fail-closed finalization succeeds. The only default clinical output is the validated `report.md`; the host must not rewrite it into a second summary.
-
-Each run writes `simplify-runs/<run-id>/` in the working directory. A clean run has two model calls and about a dozen artifacts: `run.json`, the numbered source and protected candidates, the draft and its check, the verification record, the settled plan, `05_plan.final.json`, and `report.md`. Glossary JSON, `report.html`, and `report.audit.md` are post-finalization outputs created only when requested.
-
-Runs started under an earlier schema version cannot be resumed; start a fresh run.
+Explicit invocation requires the complete workflow: the skill must not answer with a direct summary, skip verification, or show the draft. The default output is the verified Markdown report only. Ask for structured output to get the same report as JSON matching `schema/plan.schema.json`, including each item's evidence quotes.
 
 ## Safety Boundary
 
 - The plugin explains supplied records and helps patients prepare; it does not diagnose, prescribe, or triage.
-- **No medical images (all skills).** The plugin never opens or interprets X-ray, CT, MRI, ultrasound, ECG-tracing, pathology, or body/skin images; `unitize.py` refuses image, DICOM, PDF, and binary inputs. Written reports and photos or scans of text documents (transcribed as text) are fine.
-- **No outside sources (all skills).** The plugin never searches the web, opens links, or uses GitHub, websites, online references, or connectors; it uses only what the patient supplied and the files bundled with each skill. Each `SKILL.md` carries the same `Hard Boundaries` block, checked by `tests/test_boundaries.py`.
+- **No medical images (all skills).** The plugin never opens or interprets X-ray, CT, MRI, ultrasound, ECG-tracing, pathology, or body/skin images. Written reports and photos or scans of text documents (transcribed as text) are fine.
+- **No outside sources (all skills).** The plugin never searches the web, opens links, or uses GitHub, websites, online references, drug databases, APIs, or connectors, even if the user asks. The one exception: when the user asks, it may retrieve the user's own records from a connected health-records app and use their text as input — never to look up general information, and no other connector. Otherwise it uses only what the patient supplied and the files bundled with each skill. Each `SKILL.md` carries the same `Hard Boundaries` block, checked by `tests/test_boundaries.py`.
 - The plugin cannot switch off the host's web search itself. For the strongest guarantee in Codex, set `web_search = "disabled"` in `~/.codex/config.toml` (admins: `allowed_web_search_modes = ["disabled"]`); see `docs/openai-plugin.md`.
 - `prep` uses only patient statements and supplied appointment materials; `med-lit` scores only the patient's answers to the screen.
-- Every medical statement must be supported by the source documents.
-- Missing information stays missing rather than being guessed.
-- Numeric details are checked against the cited source units.
-- Protected content (medication changes, follow-up, return precautions, diagnoses, disposition, abnormal or pending results) is shown or explicitly dismissed by the verifier.
-- Missing, failed, degraded, stale, or invalid core stages prevent publication.
+- Every visible statement carries a verbatim evidence quote from the source, and the verifier checks it.
+- Missing information stays missing rather than being guessed or filled from general medical knowledge.
+- Every number, unit, dose, and date is checked against the item's evidence quote.
+- Protected content (medication changes, follow-up, return precautions, diagnoses, disposition, abnormal or pending results) is shown or confirmed absent from the source.
+- Unverified content is never shown. These are model-enforced rules, not mechanical checks.
 - The result is a reading aid, not a replacement for clinical or emergency care.
 
 ## Validation
@@ -149,7 +151,7 @@ Run `build.py` only when you intend to consume the next production or developmen
 
 ## Documentation
 
-- `docs/openai-plugin.md` — defining rules for manifests, skill creation, resources, scripts, and future skills.
-- `docs/architecture.md` — the medical transformation pipeline and deterministic safeguards.
+- `docs/openai-plugin.md` — defining rules for manifests, skill creation, resources, scripts, and future skills, and the prompt-only decision for `simplify`.
+- `docs/architecture.md` — the prompt-only `simplify` flow and the verification rules.
 - `docs/overview.md` — user-facing behavior, inputs, outputs, and limitations.
 - `docs/openai.md` — the current skills-only OpenAI package and archive boundary.

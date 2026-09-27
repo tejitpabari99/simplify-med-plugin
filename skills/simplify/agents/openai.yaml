@@ -3,6 +3,6 @@ interface:
   short_description: Turn medical paperwork into a fact-checked plain-language report.
   icon_small: ./assets/icon-small.svg
   icon_large: ./assets/icon-large.png
-  default_prompt: Run the complete $simplify workflow on the supplied medical documents. Return only the validated final report and requested artifacts. Do not summarize the documents directly.
+  default_prompt: Run the complete $simplify workflow on the supplied medical documents: write the short report, verify it against the source, and return only the verified report.
 policy:
   allow_implicit_invocation: false
