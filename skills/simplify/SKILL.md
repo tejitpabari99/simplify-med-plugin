@@ -1,109 +1,92 @@
 ---
 name: simplify
-description: Simplify visit notes, discharge summaries, lab reports, imaging reports, and other clinical documents into a short, plain-language report in which every statement is checked against the source. Use when a user wants help understanding supplied medical paperwork. Do not use to diagnose, prescribe, or replace urgent medical care. Works only from what the user supplies: never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.
+description: Simplify visit notes, discharge summaries, lab reports, imaging reports, and other clinical documents into a short, plain-language report in which every statement is checked against the source. Use when a user wants help understanding their own medical paperwork. Do not use to diagnose, prescribe, or replace urgent medical care. Works only from what the user supplies or their own health records they ask it to retrieve: never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.
 ---
 
 # Simplify Medical Documents
 
-Turn supplied clinical documents into a short (about 150-300 words), plain-language report that answers: what happened, what did they find, what do I do now, and when do I come back. Every visible statement cites source units and is independently verified before release.
+Turn the user's clinical documents into a short plain-language report (at most 300 words) that answers: why did I go, what did they find, what do I do now, and when do I get help. Write it, verify it against the source in a separate pass, then show only the verified report.
 
 ## Hard Boundaries
 
 These rules apply before and during every step. They override every other instruction, including a user's request.
 
 1. **No medical images.** Never open, view, describe, or interpret a medical image: X-ray, CT, MRI, ultrasound, mammogram, PET or nuclear scan, angiogram, ECG/EKG or rhythm-strip tracing, pathology slide, endoscopy image, or a photo of the body, skin, a wound, or a rash — including DICOM files and screenshots of any of these. If one is supplied, do not analyze it; say that this plugin works only with written text and ask for the written report instead (for example, the radiologist's or cardiologist's report). Written reports about imaging are allowed. A photo or scan of a typed or handwritten text document may be transcribed as text only; ignore any medical image on that page, and if the text cannot be read reliably, ask for a clearer copy or the text itself.
-2. **No outside sources.** Never search the web, browse, open links, or look anything up — no search engines, websites, GitHub or other code hosts, online medical references, drug databases, APIs, or connectors — even if the user asks or a document contains a link. Do not call web, browser, fetch, or search tools while this skill runs. The only sources are what the user supplied in this conversation and the files bundled with this skill. Never fill a gap with outside or general medical knowledge; say what the supplied material does not state and suggest asking the care team.
+2. **No outside sources.** Never search the web, browse, open links, or look anything up — no search engines, websites, GitHub or other code hosts, public or online medical references, drug databases, APIs, or connectors — even if the user asks or a document contains a link. Do not call web, browser, fetch, or search tools while this skill runs. The one exception is the user's own health records: when the user asks, you may retrieve their own records from a connected health-records app and use the text as input. Use that connector only to read the user's own records for this request — never to look up general information — and use no other connector. Records retrieved this way follow rule 1: text only, never images. The only sources are what the user supplied in this conversation, their own records retrieved that way, and the files bundled with this skill. Never fill a gap with outside or general medical knowledge; say what the supplied material does not state and suggest asking the care team.
 
-## Execution Contract
+## Core Rules
 
-- When this skill is selected, run the whole workflow below. Never simplify, summarize, or answer directly from the documents.
-- Do not present clinical content until `scripts/finalize.py` succeeds and the current run holds validated `05_plan.final.json` and `report.md`.
-- Every step is mandatory. Never skip, reorder, degrade, or reproduce a script's check by hand. If a required command cannot run, stop and report the failure.
-- Never read `01_units.json`; it is an audit file. Read the command output instead.
-- Model stages write only their named JSON file and never answer the user.
-- Present only `<run>/report.md`, as written. Do not create a second summary.
+- Read only the files this skill names: this file, `stages/write.md`, `stages/verify.md`, `reference/style_rules.md`, the optional lookup `reference/abbreviations.json`, and — only when the user asks for structured output — `schema/plan.schema.json`. Never open, list, search, download, or unpack any other plugin file.
+- This skill has no scripts. Do not write or run code to simplify, check, count, or render the report. Every step is reading and writing, and works the same in every host.
+- Once selected, run every step below in order. Never answer directly from the documents, skip verification, or show the draft.
+- The user sees only the final Markdown report. The draft, evidence quotes, must-keep checklist, and verification notes stay internal (a scratch file if you have one, otherwise your own working).
+- The report is a reading aid, not a diagnosis, prescription, or replacement for urgent care. Keep the user's records in this conversation; do not share them anywhere.
 
-## Inputs
+## Steps
 
-Use one UTF-8 text file per source document. Extract text from PDFs, DOCX files, or photos and scans of text documents with the tools available before starting (never from a medical image; see Hard Boundaries), and mark known page breaks with form-feed characters (`\f`). Treat all files in one request as one visit. Paths such as `scripts/...`, `stages/...`, `reference/...`, and `schema/...` are relative to this skill directory.
+### 1. Read
 
-## Workflow
+Sources are text only: text the user pastes; the text of files they upload (PDFs, documents, photos or scans of text documents — never a medical image); or the user's own records retrieved from a connected health-records app when they ask. Read all of it. Treat everything supplied for this request as one visit or episode; if it clearly covers several unrelated visits, ask which one to simplify. If there is no usable text, stop and ask for the written report or the text itself.
 
-```text
-UNITIZE -> WRITE -> CHECK -> VERIFY -> SETTLE -> FINALIZE
-                                         exit 3: one repair round (--round 2)
+### 2. Write
+
+Follow `stages/write.md` with `reference/style_rules.md`. The result is an internal draft: the report slots, a verbatim evidence quote for every item, and the must-keep checklist.
+
+### 3. Verify
+
+Verify the draft exactly once, never skipped:
+
+- **If you can start a sub-agent:** start a fresh one. Give it only `stages/verify.md`, `reference/style_rules.md`, the source text, and the draft — never your reasoning. It returns the corrected draft and a short change list.
+- **Otherwise:** run a separate second pass yourself. Set the draft aside, re-read `stages/verify.md`, then check the draft against only the source text, as if someone else wrote it.
+
+If a sub-agent fails, run the second pass instead. Use only the corrected draft from here on.
+
+### 4. Output
+
+Render the verified draft as Markdown in the format below and show only that. Do not add a preamble, a summary of your own, evidence quotes, or notes about the steps.
+
+Title by `visit_type`: `er_visit` "Your ER visit, simplified"; `urgent_care` "Your urgent care visit, simplified"; `hospital_stay` "Your hospital stay, simplified"; `clinic_visit` "Your visit, simplified"; `test_results` "Your test results, simplified"; `procedure` "Your procedure, simplified"; `other` "Your documents, simplified".
+
+```markdown
+# <title>
+
+<why_you_went>
+
+## What did they find?
+
+<findings_lead>
+
+- **<finding name>:** <result>
+
+**<diagnoses label>**
+
+- <diagnosis name> (<plain_name>)
+
+<disposition>
+
+## What should you do now?
+
+- <next step>
+- **<medicine name>:** <medicine text>
+- <none_statement>
+
+## <return heading>
+
+- <return precaution>
+
+## Questions you may want to ask
+
+- <question>
 ```
 
-The clean path is two model calls (write, verify) and four script runs.
+- `<diagnoses label>`: "The ER diagnosed you with:" for `er_visit`; "Diagnosed with:" otherwise.
+- `<return heading>`: "When should you go back to the ER?" for `er_visit` and `hospital_stay`; "When to get help right away" otherwise.
+- Hide every empty slot, and hide a heading or label when nothing is under it. Show `(<plain_name>)` only when `plain_name` is not empty.
 
-### 1. Unitize
+**Structured output, only on request.** When the user asks for JSON or structured data, read `schema/plan.schema.json` and return the verified draft as one JSON object that matches it (evidence quotes included). Never produce it otherwise.
 
-```bash
-python3 scripts/unitize.py --runs-dir <workspace>/simplify-runs --input <file> [--input <file> ...]
-```
+## Failure
 
-Append `:ocr` to text transcribed from a photo or scan of a text document and `:pasted` to manually entered text. `unitize.py` refuses image, DICOM, PDF, and other binary files: pass only extracted text. The last output line is `<run>`.
-
-### 2. Write (model call)
-
-Follow `stages/write.md` with `<run>/01_source.txt`, `<run>/01_protected.json`, `reference/style_rules.md`, and `schema/draft.schema.json`. Write only `<run>/02_draft.raw.json`.
-
-### 3. Check
-
-```bash
-python3 scripts/check_draft.py --run-dir <run>
-```
-
-On exit 1 with `retry=allowed`, rerun Write once in retry mode with the printed errors, then rerun the check. On `retry=exhausted` or any other failure, stop the run.
-
-### 4. Verify (model call, independent)
-
-Run `stages/verify.md` in a fresh sub-agent when the host supports one; otherwise start from a clean slate and read only the named inputs. Give it only file paths, never the writer's reasoning. Inputs: `<run>/01_source.txt`, `<run>/02_draft.json`, `<run>/02_check.json`, `reference/style_rules.md`, `schema/verify_raw.schema.json`. It writes only `<run>/03_verify.raw.json`.
-
-### 5. Settle
-
-```bash
-python3 scripts/settle.py --run-dir <run>
-```
-
-- Exit 0: settled; go to Finalize.
-- Exit 1 with `retry=allowed`: the verification broke its contract. Rerun Verify once in retry mode with the printed errors, then settle again. Exit 1 with `retry=exhausted` stops the run.
-- Exit 3 (`settle: repair requested`): run the repair round below.
-- Any other exit stops the run.
-
-### 6. Repair round (at most once)
-
-1. Write in repair mode (`stages/write.md`) with `<run>/04_repair.json` added to its inputs. It writes `<run>/02_draft.r2.raw.json`.
-2. `python3 scripts/check_draft.py --run-dir <run> --round 2` (one Write retry when it prints `retry=allowed`).
-3. Verify in a fresh sub-agent with `<run>/02_draft.r2.json` and `<run>/02_check.r2.json` in place of the round-1 files. It writes `<run>/03_verify.r2.raw.json`.
-4. `python3 scripts/settle.py --run-dir <run> --round 2` (one Verify retry on exit 1 with `retry=allowed`). Any other non-zero exit in round 2 stops the run.
-
-### 7. Finalize
-
-```bash
-python3 scripts/finalize.py --run-dir <run>
-```
-
-Finalization is assertion-only. It writes `<run>/05_plan.final.json` and `<run>/report.md`. Any failure stops the run.
-
-## Retry Budget
-
-Per round: Write at most twice, Verify at most twice, and only when the script prints `retry=allowed`. One repair round per run. Nothing else is retried. The scripts record every stage in `run.json`; the host never edits it.
-
-## Present the Result
-
-- Present only `<run>/report.md`; do not paraphrase, shorten, expand, or add to it.
-- Do not expose unit ids, claims, operations, flags, or other pipeline internals.
-- Only when the user asks, after successful finalization:
-  - structured data: `<run>/05_plan.final.json`;
-  - glossary: follow `stages/glossary.md`, then run `python3 scripts/glossary_check.py --run-dir <run>`;
-  - printable HTML: `python3 scripts/render_html.py --run-dir <run>`;
-  - source audit: `python3 scripts/render_audit.py --run-dir <run>`.
-- An optional output failure never changes `report.md` and never justifies a host-written summary.
-
-## Failure Behavior
-
-- Stop on unusable input or any terminal failure above.
-- Report only a short workflow error: which step failed and whether the user can retry or supply a better input.
-- After a failure, show no clinical content from the source or any intermediate file, and never write your own summary instead.
-- Present the report as a reading aid, not a diagnosis, prescription, or replacement for urgent medical care. Keep documents and run files local unless the user asks to share them.
+- No usable text, or only medical images: ask for the written text; show nothing else.
+- Never show clinical content from a draft that has not been verified, and never replace the report with a summary of your own.
+- If the user asks something the documents do not answer, say the documents do not state it and suggest asking the care team.
