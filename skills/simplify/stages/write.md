@@ -15,6 +15,8 @@ only the JSON file named below; never answer the user from this stage.
 3. `reference/style_rules.md` -- PII, NUMERACY, LANGUAGE RULES, SHOW, SKIP.
 4. `schema/draft.schema.json` -- the exact output contract.
 
+These files are your only sources. Do not search the web, open links, use outside tools, or add anything from general medical knowledge (see SOURCES in `reference/style_rules.md`).
+
 Repair mode adds `<run>/04_repair.json` (see Repair mode below).
 
 ## Output

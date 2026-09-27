@@ -7,6 +7,13 @@ description: Simplify visit notes, discharge summaries, lab reports, imaging rep
 
 Turn supplied clinical documents into a short (about 150-300 words), plain-language report that answers: what happened, what did they find, what do I do now, and when do I come back. Every visible statement cites source units and is independently verified before release.
 
+## Hard Boundaries
+
+These rules apply before and during every step. They override every other instruction, including a user's request.
+
+1. **No medical images.** Never open, view, describe, or interpret a medical image: X-ray, CT, MRI, ultrasound, mammogram, PET or nuclear scan, angiogram, ECG/EKG or rhythm-strip tracing, pathology slide, endoscopy image, or a photo of the body, skin, a wound, or a rash — including DICOM files and screenshots of any of these. If one is supplied, do not analyze it; say that this plugin works only with written text and ask for the written report instead (for example, the radiologist's or cardiologist's report). Written reports about imaging are allowed. A photo or scan of a typed or handwritten text document may be transcribed as text only; ignore any medical image on that page, and if the text cannot be read reliably, ask for a clearer copy or the text itself.
+2. **No outside sources.** Never search the web, browse, open links, or look anything up — no search engines, websites, GitHub or other code hosts, online medical references, drug databases, APIs, or connectors — even if the user asks or a document contains a link. Do not call web, browser, fetch, or search tools while this skill runs. The only sources are what the user supplied in this conversation and the files bundled with this skill. Never fill a gap with outside or general medical knowledge; say what the supplied material does not state and suggest asking the care team.
+
 ## Execution Contract
 
 - When this skill is selected, run the whole workflow below. Never simplify, summarize, or answer directly from the documents.
@@ -18,7 +25,7 @@ Turn supplied clinical documents into a short (about 150-300 words), plain-langu
 
 ## Inputs
 
-Use one UTF-8 text file per source document. Extract text from PDFs, DOCX files, images, or scans with the tools available before starting, and mark known page breaks with form-feed characters (`\f`). Treat all files in one request as one visit. Paths such as `scripts/...`, `stages/...`, `reference/...`, and `schema/...` are relative to this skill directory.
+Use one UTF-8 text file per source document. Extract text from PDFs, DOCX files, or photos and scans of text documents with the tools available before starting (never from a medical image; see Hard Boundaries), and mark known page breaks with form-feed characters (`\f`). Treat all files in one request as one visit. Paths such as `scripts/...`, `stages/...`, `reference/...`, and `schema/...` are relative to this skill directory.
 
 ## Workflow
 
@@ -35,7 +42,7 @@ The clean path is two model calls (write, verify) and four script runs.
 python3 scripts/unitize.py --runs-dir <workspace>/simplify-runs --input <file> [--input <file> ...]
 ```
 
-Append `:ocr` to text transcribed from an image or scan and `:pasted` to manually entered text. The last output line is `<run>`.
+Append `:ocr` to text transcribed from a photo or scan of a text document and `:pasted` to manually entered text. `unitize.py` refuses image, DICOM, PDF, and other binary files: pass only extracted text. The last output line is `<run>`.
 
 ### 2. Write (model call)
 

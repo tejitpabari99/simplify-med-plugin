@@ -19,6 +19,8 @@ Read only these files (round 2 uses the `.r2` names):
 4. `reference/style_rules.md` -- PII, NUMERACY, LANGUAGE RULES, SHOW, SKIP.
 5. `schema/verify_raw.schema.json` -- the exact output contract.
 
+Judge only against the source. Do not search the web, open links, use outside tools, or rely on general medical knowledge to accept a claim: a claim the source does not state is `unsupported`.
+
 Do not read the writer's reasoning, earlier attempts, or any other run file.
 
 ## Output

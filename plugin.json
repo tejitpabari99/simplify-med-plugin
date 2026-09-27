@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "simplify-med",
-  "version": "0.1.0",
-  "description": "Helps patients around a medical visit: prepare for an appointment, simplify supplied clinical documents into a plain-language, source-anchored care plan, and take a brief personal health-literacy screen.",
+  "version": "0.1.5",
+  "description": "Helps patients around a medical visit: prepare for an appointment, simplify supplied clinical documents into a plain-language, source-anchored care plan, and take a brief personal health-literacy screen. It works only from the text the patient supplies: it never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.",
   "author": {
     "name": "Tejit Pabari"
   },
@@ -22,10 +22,13 @@
       "interface": {
         "displayName": "Simplify Med",
         "shortDescription": "Turn medical paperwork into a fact-checked plain-language report.",
-        "longDescription": "Prep gets a patient ready for an appointment with stated requirements, a things-to-bring checklist, and prioritized questions. Simplify turns supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail. Med Lit runs a brief, opt-in health-literacy screen and returns a personal support profile.",
+        "longDescription": "Prep gets a patient ready for an appointment with stated requirements, a things-to-bring checklist, and prioritized questions. Simplify turns supplied clinical documents into a plain-language, source-anchored care plan with deterministic validation and an audit trail. Med Lit runs a brief, opt-in health-literacy screen and returns a personal support profile. It works only from the text the patient supplies: it never searches the web or any outside source, and never reads or interprets medical images such as X-rays, scans, or ECG tracings.",
         "developerName": "Tejit Pabari",
         "category": "Productivity",
-        "capabilities": ["Read", "Write"],
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
         "websiteURL": "https://github.com/tejitpabari99/simplify-med-plugin",
         "defaultPrompt": [
           "Run the complete $simplify workflow on the supplied medical documents. Return only the validated final report and requested artifacts. Do not summarize the documents directly."

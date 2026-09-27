@@ -6,5 +6,5 @@ packaged copy. ``runlog.plugin_version()`` reads the packaged manifest when
 available and uses this constant only outside a complete plugin checkout.
 """
 
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.1.5"
 SCHEMA_VERSION = "3.0"

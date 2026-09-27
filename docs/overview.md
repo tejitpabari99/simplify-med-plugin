@@ -23,7 +23,7 @@ Typical inputs include:
 - imaging reports;
 - procedure or follow-up paperwork.
 
-The pipeline accepts one UTF-8 `.txt` file per source document. Text from PDFs, DOCX files, images, or scans must be extracted before the pipeline begins. Known page boundaries can be marked with `\f`.
+The pipeline accepts one UTF-8 `.txt` file per source document. Text from PDFs, DOCX files, or photos and scans of text documents must be extracted before the pipeline begins. Medical images (X-ray, CT, MRI, ultrasound, ECG tracings, body or skin photos) are never read or interpreted, and `unitize.py` refuses image, DICOM, PDF, and other binary files. No skill searches the web or uses any outside source; see the `Hard Boundaries` section of each `SKILL.md`. Known page boundaries can be marked with `\f`.
 
 ## Output
 

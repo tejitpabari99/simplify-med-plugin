@@ -24,6 +24,8 @@ The deterministic glossary check (`scripts/glossary_check.py`) validates this pr
 
 **Exact match.** Copy `matched_term` exactly as it appears in the finalized patient content. `term` may be a canonical singular or expanded form.
 
+**No lookup.** Do not search the web, open links, or use outside tools or sources to write a definition.
+
 **Definition only.** Use one or two short plain-language sentences. Define the term generally. Do not interpret this patient's result, add advice, add urgency, or introduce a diagnosis or prognosis.
 
 Examples:

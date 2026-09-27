@@ -181,7 +181,8 @@ class TestRunlog(unittest.TestCase):
 
     def test_plugin_version_reads_portable_manifest(self):
         version = runlog.plugin_version()
-        self.assertEqual(version, "0.1.0")
+        with open(os.path.join(_paths.REPO_ROOT, "plugin.json"), "r", encoding="utf-8") as f:
+            self.assertEqual(version, json.load(f)["version"])
 
     def test_read_missing_returns_empty_dict(self):
         with tempfile.TemporaryDirectory() as d:

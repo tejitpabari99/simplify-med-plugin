@@ -11,6 +11,9 @@ occurrence is kept). Skipped units are
 left out of `01_source.txt` and of the protected-content scan and are never
 valid citations.
 
+Refuses (before creating a run) any input that is not written text: image
+files by extension or signature, DICOM, PDF, and other binary files.
+
 Writes, inside the run directory:
     01_units.json      every unit, including skipped ones (schema `units`)
     01_source.txt      non-skipped units as "[<id>] <text>", with a
@@ -56,6 +59,43 @@ _REPEAT_MIN_CHARS = 8
 _URL_ONLY = re.compile(r"^[<(\[]?(https?://|www\.)\S+?[>)\].,;]?$", re.IGNORECASE)
 _PAGE_COUNTER = re.compile(r"^[-\u2013\u2014|\s]*(page|pg\.?)\s*\d+(\s*(of|/)\s*\d+)?[-\u2013\u2014|\s]*$",
                            re.IGNORECASE)
+
+
+# Hard boundary: the pipeline reads written text only. Medical images
+# (X-ray, CT, MRI, ultrasound, ECG tracings, photos) are refused, and so is
+# any other binary file, so an image can never be "read" by accident.
+_IMAGE_EXTENSIONS = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp",
+    ".heic", ".heif", ".dcm", ".dicom", ".svg",
+})
+_IMAGE_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", "a PNG image"),
+    (b"\xff\xd8\xff", "a JPEG image"),
+    (b"GIF87a", "a GIF image"),
+    (b"GIF89a", "a GIF image"),
+    (b"II*\x00", "a TIFF image"),
+    (b"MM\x00*", "a TIFF image"),
+)
+
+
+def refusal_reason(path: str, raw_bytes: bytes) -> str | None:
+    """Return why an input is not usable written text, or None when it is."""
+    if os.path.splitext(path)[1].lower() in _IMAGE_EXTENSIONS:
+        return "it is an image file"
+    for signature, label in _IMAGE_SIGNATURES:
+        if raw_bytes.startswith(signature):
+            return f"it is {label}"
+    if raw_bytes[:4] == b"RIFF" and raw_bytes[8:12] == b"WEBP":
+        return "it is a WEBP image"
+    if raw_bytes[4:12] in (b"ftypheic", b"ftypheix", b"ftypmif1", b"ftypheif"):
+        return "it is a HEIC image"
+    if len(raw_bytes) >= 132 and raw_bytes[128:132] == b"DICM":
+        return "it is a DICOM medical image"
+    if raw_bytes.startswith(b"%PDF-"):
+        return "it is a PDF; extract its text first"
+    if b"\x00" in raw_bytes:
+        return "it is a binary file, not text"
+    return None
 
 
 def _input_digest(raw_files) -> str:
@@ -140,6 +180,15 @@ def main(argv: list[str] | None = None) -> int:
             _fatal(
                 f"unitize could not read input file {path!r}: {exc}. "
                 "Check that the path is correct and readable, then try again."
+            )
+            return 1
+        reason = refusal_reason(path, raw_bytes)
+        if reason:
+            _fatal(
+                f"unitize refused input file {path!r}: {reason}. "
+                "This plugin works only with written text and never reads or interprets "
+                "medical images (X-ray, CT, MRI, ultrasound, ECG tracings, photos). "
+                "Provide the written report or the document's extracted text instead."
             )
             return 1
         raw_files.append((path, method, raw_bytes))

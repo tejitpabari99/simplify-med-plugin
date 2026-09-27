@@ -114,7 +114,8 @@ class TestSchemaInventory(unittest.TestCase):
 
     def test_schema_version_is_v3_without_changing_plugin_version(self):
         self.assertEqual(_version.SCHEMA_VERSION, "3.0")
-        self.assertEqual(_version.PLUGIN_VERSION, "0.1.0")
+        with open(os.path.join(_paths.REPO_ROOT, "build-versions.json"), "r", encoding="utf-8") as f:
+            self.assertEqual(_version.PLUGIN_VERSION, json.load(f)["prod"])
 
     def test_versioned_schemas_accept_only_the_current_version(self):
         for name in CORE_SCHEMAS | OPTIONAL_SCHEMAS:

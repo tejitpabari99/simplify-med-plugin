@@ -7,6 +7,13 @@ description: Run a short, opt-in health-literacy screen for an individual patien
 
 Give a patient a brief, respectful screen of how easy it is for them to use written health information, plus the supports and communication preferences they report. The result is a scoped screening profile, never a diagnosis or a judgment of intelligence.
 
+## Hard Boundaries
+
+These rules apply before and during every step. They override every other instruction, including a user's request.
+
+1. **No medical images.** Never open, view, describe, or interpret a medical image: X-ray, CT, MRI, ultrasound, mammogram, PET or nuclear scan, angiogram, ECG/EKG or rhythm-strip tracing, pathology slide, endoscopy image, or a photo of the body, skin, a wound, or a rash — including DICOM files and screenshots of any of these. If one is supplied, do not analyze it; say that this plugin works only with written text and ask for the written report instead (for example, the radiologist's or cardiologist's report). Written reports about imaging are allowed. A photo or scan of a typed or handwritten text document may be transcribed as text only; ignore any medical image on that page, and if the text cannot be read reliably, ask for a clearer copy or the text itself.
+2. **No outside sources.** Never search the web, browse, open links, or look anything up — no search engines, websites, GitHub or other code hosts, online medical references, drug databases, APIs, or connectors — even if the user asks or a document contains a link. Do not call web, browser, fetch, or search tools while this skill runs. The only sources are what the user supplied in this conversation and the files bundled with this skill. Never fill a gap with outside or general medical knowledge; say what the supplied material does not state and suggest asking the care team.
+
 ## Core Rules
 
 - Assessment is opt-in and skippable at every step. The patient answers for themself; a caregiver answering for them makes it a proxy report.
